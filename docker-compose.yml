@@ -11,7 +11,7 @@ x-backend: &backend
     DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-sdwan}:${POSTGRES_PASSWORD:-sdwan}@postgres:5432/${POSTGRES_DB:-sdwan}
     REDIS_URL: redis://redis:6379/0
     INFLUX_URL: http://influxdb:8086
-    HUB_INTERNAL_IP: 172.30.0.10
+    HUB_INTERNAL_IP: "${SDWAN_NET:-172.30.0}.10"
     WG_NETWORK: ${WG_NETWORK:-10.100.0.0/16}
     HUB_TOKEN: ${HUB_TOKEN:-change-me-hub-token}
     INFLUX_TOKEN: ${INFLUX_TOKEN:-sdwan-influx-token}
@@ -32,10 +32,10 @@ services:
     environment:
       <<: *backend-env
       RUN_MIGRATIONS: "true"
-    networks: { sdwan: { ipv4_address: 172.30.0.20 } }
+    networks: { sdwan: { ipv4_address: "${SDWAN_NET:-172.30.0}.20" } }
     ports:
       # API direkt nur lokal (OpenAPI-Doku, Debugging); öffentlich läuft alles über frontend:8080
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 15s
@@ -45,17 +45,17 @@ services:
   worker:
     <<: *backend
     command: ["python", "-m", "app.worker"]
-    networks: { sdwan: { ipv4_address: 172.30.0.21 } }
+    networks: { sdwan: { ipv4_address: "${SDWAN_NET:-172.30.0}.21" } }
     depends_on:
       api: { condition: service_healthy }
 
   remote-proxy:
     <<: *backend
     command: ["python", "-m", "app.remote_proxy"]
-    networks: { sdwan: { ipv4_address: 172.30.0.22 } }
+    networks: { sdwan: { ipv4_address: "${SDWAN_NET:-172.30.0}.22" } }
     ports:
       # Port-Pool für zeitlich begrenzte SSH/Winbox/WebFig-Sessions (Phase 8)
-      - "${REMOTE_PROXY_PORT_RANGE:-40000-40019}:${REMOTE_PROXY_PORT_RANGE:-40000-40019}"
+      - "${REMOTE_PROXY_BIND:-0.0.0.0}:${REMOTE_PROXY_PORT_RANGE:-40000-40019}:${REMOTE_PROXY_PORT_RANGE:-40000-40019}"
     depends_on:
       api: { condition: service_healthy }
 
@@ -71,15 +71,15 @@ services:
       CONTROL_PLANE_URL: http://api:8000
       HUB_TOKEN: ${HUB_TOKEN:-change-me-hub-token}
       WG_HUB_ENDPOINT: ${WG_HUB_ENDPOINT:-localhost}
-      DOCKER_NETWORK: 172.30.0.0/24
+      DOCKER_NETWORK: "${SDWAN_NET:-172.30.0}.0/24"
     volumes: ["hub-data:/data"]
     ports: ["${WG_HUB_PORT:-51820}:${WG_HUB_PORT:-51820}/udp"]
-    networks: { sdwan: { ipv4_address: 172.30.0.10 } }
+    networks: { sdwan: { ipv4_address: "${SDWAN_NET:-172.30.0}.10" } }
 
   frontend:
     build: ./frontend
     restart: unless-stopped
-    ports: ["8080:80"]
+    ports: ["${FRONTEND_BIND:-0.0.0.0}:${FRONTEND_PORT:-8080}:80"]
     networks: [sdwan]
     depends_on: [api]
 
@@ -143,7 +143,7 @@ networks:
   sdwan:
     ipam:
       config:
-        - subnet: 172.30.0.0/24
+        - subnet: "${SDWAN_NET:-172.30.0}.0/24"
 
 volumes:
   pg-data:

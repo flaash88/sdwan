@@ -7,7 +7,7 @@ gebaut für den Einsatz durch MSPs, selbst gehostet per Docker Compose (Hetzner-
 * **Ein Befehl zum Onboarding** im RouterOS-Terminal.
 * Alle RouterOS-API-Zugriffe laufen ausschließlich durch diesen Tunnel.
 
-Details zu Aufbau und Design-Entscheidungen: [ARCHITECTURE.md](ARCHITECTURE.md).
+Installation auf einem Server: [INSTALL.md](INSTALL.md) · Aufbau und Design-Entscheidungen: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Funktionsumfang
 

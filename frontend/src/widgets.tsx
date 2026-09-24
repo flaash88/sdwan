@@ -1,7 +1,11 @@
 import type { ComponentType } from "react";
 import { useRef, useState } from "react";
 import { Sparkline } from "./components/Chart";
-import { Stat } from "./components/ui";
+import { Link } from "react-router-dom";
+import { Badge, Card, Stat } from "./components/ui";
+import type { AlertItem } from "./pages/Alerts";
+import { sevColor } from "./pages/Alerts";
+import { useFetch } from "./lib/useFetch";
 import { fmtBps } from "./lib/format";
 import { useLive } from "./lib/live";
 
@@ -33,5 +37,21 @@ function FleetLive() {
   );
 }
 
+/** Aktive Alarme (live aktualisiert). */
+function ActiveAlerts() {
+  const alerts = useFetch<AlertItem[]>("/alerts?state=open");
+  useLive(() => void alerts.reload(), ["alert.firing", "alert.resolved"]);
+  if (!alerts.data?.length) return null;
+  return (
+    <Card title={<Link to="/alerts" className="hover:underline">Aktive Alarme ({alerts.data.length})</Link>} className="mb-6 border-red-200">
+      <ul className="space-y-1 text-sm">
+        {alerts.data.slice(0, 8).map((a) => (
+          <li key={a.id} className="flex items-center gap-2"><Badge color={sevColor(a.severity)}>{a.severity}</Badge>{a.message}</li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
 /** Zusätzliche Dashboard-Kacheln späterer Phasen. */
-export const dashboardWidgets: ComponentType[] = [FleetLive];
+export const dashboardWidgets: ComponentType[] = [ActiveAlerts, FleetLive];

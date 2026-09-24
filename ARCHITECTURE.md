@@ -296,3 +296,22 @@ eigenen Abschnitt.
   **pausiert** (Fortsetzen akzeptiert die bekannten Fehler). Abbrechen storniert alle wartenden Geräte.
 * Firmware-Jobs können (wie Policy-Deployments) als MSP mandantenübergreifend laufen (`tenant_id NULL`),
   die Job-Items sind jedoch mandantengebunden.
+
+## Phase 10 – Alerts & SLA-Reports
+
+* **Regeltypen:** `device_offline`, `wan_down`, `latency` (WAN-Netwatch-RTT oder Latenz zur Cloud),
+  `mesh_down`, `cpu_high`. Pro Regel: Schwere, Verzögerung (`duration_s`), Geltung (alle / Standorte /
+  Geräte), Empfänger (leer = Kontakt-E-Mail des Mandanten), Entwarnung ja/nein.
+* **Zustandsmaschine** je (Regel, Gerät, Subjekt): `pending` → nach `duration_s` → `firing` (Mail +
+  Live-Event/Toast) → `resolved` (optional Entwarnungs-Mail). Nie gefeuerte `pending`-Einträge werden
+  verworfen, damit kurze Flaps keine Alarme erzeugen. Auswertung minütlich im Worker (nach dem Poll),
+  manuell per API auslösbar. Alarme können quittiert werden (Audit).
+* **E-Mail:** SMTP mit STARTTLS; ohne `SMTP_HOST` werden Mails nur protokolliert (Entwicklung/Demo).
+* **Statusverlauf:** Jeder Wechsel von Gerät (online/offline) und WAN-Link (up/down/degraded) wird als
+  `status_events`-Zeile gespeichert. **Entscheidung:** SLA aus Zustandswechseln (exakt, speicherarm)
+  statt aus Metrik-Stichproben in InfluxDB.
+* **Verfügbarkeit** = online / (online + offline) im Zeitraum; Zeit mit unbekanntem Zustand (vor dem
+  ersten Kontakt) zählt nicht. Zusätzlich Anzahl Ausfälle, längster Ausfall, MTTR, WAN-Verfügbarkeit.
+* **Berichte:** ad hoc als JSON/PDF (reportlab) für beliebige Zeiträume (max. 1 Jahr); gespeichert und
+  optional versendet. **Automatisch** am 1. jedes Monats (06:00 UTC) für den Vormonat an Kontakt +
+  konfigurierbare Empfänger (abschaltbar pro Mandant).

@@ -12,6 +12,7 @@ export interface NavItem {
 export const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: "◧" },
   { to: "/devices", label: "Geräte", icon: "⌁" },
+  { to: "/alerts", label: "Alarme", icon: "⚠" },
   { to: "/ztp", label: "Zero-Touch", icon: "✈", role: "technician" },
   { to: "/sites", label: "Standorte", icon: "⌂" },
   { to: "/mesh", label: "VPN-Mesh", icon: "⬡" },
@@ -19,6 +20,7 @@ export const NAV: NavItem[] = [
   { to: "/content-filter", label: "Content-Filter", icon: "⊘" },
   { to: "/remote", label: "Fernzugriff", icon: "⇄" },
   { to: "/firmware", label: "Firmware", icon: "⟳" },
+  { to: "/reports", label: "SLA-Berichte", icon: "▤" },
   { to: "/users", label: "Benutzer", icon: "☺", role: "admin" },
   { to: "/tenants", label: "Mandanten", icon: "▣", superuser: true },
   { to: "/audit", label: "Audit-Log", icon: "☰", role: "admin" },

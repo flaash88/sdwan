@@ -266,6 +266,10 @@ async def update_wan_status(db: AsyncSession, devices: list[Device]) -> None:
             lk.last_check_at = now
         if old != lk.status:
             lk.last_change_at = now
+            if lk.status in ("up", "down", "degraded"):
+                from app.services.state_log import record_subject_change
+
+                await record_subject_change(db, lk.tenant_id, dev.id, f"wan:{lk.id}", lk.status)
             await events.publish(lk.tenant_id, "wan.link", {
                 "id": str(lk.id), "device_id": str(dev.id), "device": dev.name, "name": lk.name,
                 "status": lk.status, "previous": old,

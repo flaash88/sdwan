@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useLiveConnected } from "../lib/live";
 import { NAV } from "../nav";
+import AlertToasts from "./AlertToasts";
 import { cls } from "./ui";
 
 export default function Layout({ children }: { children: ReactNode }) {
@@ -64,6 +65,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </div>
       </aside>
       <main className="min-w-0 flex-1 p-8">{children}</main>
+      <AlertToasts />
     </div>
   );
 }

@@ -186,3 +186,28 @@ eigenen Abschnitt.
   **Entscheidung:** Grafana selbst ist nicht mandantenfähig isoliert → nur für MSP-Admins verlinkt
   (unter `/grafana`, eigener Login). Tenant-Benutzer sehen Metriken ausschließlich über die
   tenant-geprüfte API im Plattform-Frontend.
+
+## Phase 5 – Firewall & Security Policies
+
+* **Policy-Modell:** `firewall_policies` mit `content = {address_lists, filter, nat}`; `tenant_id NULL`
+  = globale MSP-Policy (für alle Mandanten les- und zuweisbar, nur vom MSP änderbar – durchgesetzt vom
+  `GlobalOrTenantScoped`-Flush-Guard und explizit in der API).
+* **Validierung statt Freitext:** Nur bekannte RouterOS-Felder (Whitelist), erlaubte Chains/Actions je
+  Tabelle, Adressen werden geparst, Werte auf sichere Zeichen beschränkt. Beliebige RouterOS-Befehle
+  können über Policies nicht eingeschleust werden.
+* **Versionierung:** Jede inhaltliche Änderung erzeugt eine unveränderliche `policy_versions`-Zeile.
+  Rollback = neue Version mit dem Inhalt einer alten Version (Historie bleibt linear nachvollziehbar),
+  optional mit sofortigem Push.
+* **Zuweisung:** `policy_assignments` (Gerät ↔ Policy, `position` bestimmt die Reihenfolge bei mehreren
+  Policies). Zuweisen per Gerät, Standort oder Tag (wird beim Zuweisen expandiert).
+  **Entscheidung:** keine dynamischen Tag-Gruppen – explizite Zuweisung ist für Audits nachvollziehbarer.
+* **Push = kompletter Sollzustand pro Gerät:** Alle zugewiesenen Policies werden gerendert
+  (Kommentar `sdwan:fw:<policy>:<f|n|a><idx>`) und per `sync_managed` angewendet: Address-Lists
+  idempotent, Filter/NAT geordnet und **vor** den manuellen/Default-Regeln (`place-before`).
+  Manuelle Regeln bleiben unangetastet.
+* **Deployments:** Push auf mehrere Geräte parallel (max. 10 gleichzeitig) als Hintergrund-Task, Status
+  in `policy_deployments` (`success | partial | failed | rolled_back`), Ergebnis pro Gerät, Live-Event.
+* **Rollback bei Push-Fehlern:** Vor jedem Push wird der verwaltete Firewall-Stand des Geräts gesichert
+  (Snapshot). Scheitert der Push, wird dieser Stand sofort wiederhergestellt. Im Modus **atomar** werden
+  bei einem Fehler auch alle bereits erfolgreichen Geräte des Deployments zurückgesetzt.
+* Entzug einer Zuweisung pusht das Gerät neu (Regeln der Policy verschwinden).

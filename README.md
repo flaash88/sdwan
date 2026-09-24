@@ -17,6 +17,7 @@ Details zu Aufbau und Design-Entscheidungen: [ARCHITECTURE.md](ARCHITECTURE.md).
 | 2 | VPN-Mesh: Hub-and-Spoke / Full-Mesh, PSK pro Link, automatischer Push, Tunnel-Status + Topologie-Ansicht | ✅ |
 | 3 | WAN Failover & Load-Balancing: bis 4 Links, Netwatch-Health-Checks (Ping/HTTP), PCC/ECMP, Recovery-Hysterese | ✅ |
 | 4 | Monitoring: Polling → InfluxDB, Live-Kacheln per WebSocket (5-s-Live-Modus), Verlaufs-Charts, Grafana-Dashboards Mandant/Standort/Gerät | ✅ |
+| 5 | Firewall-Policies: global/pro Mandant, Address-Lists/Filter/NAT, Multi-Device-Push, Versionierung, Snapshot-Rollback (auch atomar) | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

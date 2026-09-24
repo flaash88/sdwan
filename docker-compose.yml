@@ -1,0 +1,141 @@
+name: sdwan
+
+x-backend: &backend
+  build: ./backend
+  env_file:
+    - path: .env
+      required: false
+  restart: unless-stopped
+  cap_add: [NET_ADMIN]   # nur für die Route ins Management-Netz via Hub
+  environment: &backend-env
+    DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-sdwan}:${POSTGRES_PASSWORD:-sdwan}@postgres:5432/${POSTGRES_DB:-sdwan}
+    REDIS_URL: redis://redis:6379/0
+    INFLUX_URL: http://influxdb:8086
+    HUB_INTERNAL_IP: 172.30.0.10
+    WG_NETWORK: ${WG_NETWORK:-10.100.0.0/16}
+    HUB_TOKEN: ${HUB_TOKEN:-change-me-hub-token}
+    INFLUX_TOKEN: ${INFLUX_TOKEN:-sdwan-influx-token}
+    ROUTEROS_BACKEND: ${ROUTEROS_BACKEND:-simulator}
+    PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
+    WG_HUB_ENDPOINT: ${WG_HUB_ENDPOINT:-localhost}
+    GRAFANA_PUBLIC_URL: ${GRAFANA_PUBLIC_URL:-http://localhost:8080/grafana}
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+    influxdb: { condition: service_started }
+
+services:
+  api:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      RUN_MIGRATIONS: "true"
+    networks: { sdwan: { ipv4_address: 172.30.0.20 } }
+    ports:
+      - "8000:8000"
+      # Remote-Access-Proxy (Phase 8): Port-Pool für zeitlich begrenzte SSH/Winbox-Sessions
+      - "${REMOTE_PROXY_PORT_RANGE:-40000-40019}:${REMOTE_PROXY_PORT_RANGE:-40000-40019}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    <<: *backend
+    command: ["python", "-m", "app.worker"]
+    networks: { sdwan: { ipv4_address: 172.30.0.21 } }
+    depends_on:
+      api: { condition: service_healthy }
+
+  wireguard-hub:
+    build: ./hub
+    restart: unless-stopped
+    cap_add: [NET_ADMIN, SYS_MODULE]
+    devices: ["/dev/net/tun:/dev/net/tun"]
+    sysctls:
+      net.ipv4.ip_forward: "1"
+      net.ipv4.conf.all.src_valid_mark: "1"
+    environment:
+      CONTROL_PLANE_URL: http://api:8000
+      HUB_TOKEN: ${HUB_TOKEN:-change-me-hub-token}
+      WG_HUB_ENDPOINT: ${WG_HUB_ENDPOINT:-localhost}
+      DOCKER_NETWORK: 172.30.0.0/24
+    volumes: ["hub-data:/data"]
+    ports: ["${WG_HUB_PORT:-51820}:${WG_HUB_PORT:-51820}/udp"]
+    networks: { sdwan: { ipv4_address: 172.30.0.10 } }
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports: ["8080:80"]
+    networks: [sdwan]
+    depends_on: [api]
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sdwan}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sdwan}
+      POSTGRES_DB: ${POSTGRES_DB:-sdwan}
+    volumes: ["pg-data:/var/lib/postgresql/data"]
+    networks: [sdwan]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sdwan}"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [sdwan]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  influxdb:
+    image: influxdb:2.7-alpine
+    restart: unless-stopped
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_ADMIN_USER:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_ADMIN_PASSWORD:-sdwan-influx-admin}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-sdwan}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-metrics}
+      DOCKER_INFLUXDB_INIT_RETENTION: 90d
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN:-sdwan-influx-token}
+    volumes: ["influx-data:/var/lib/influxdb2"]
+    networks: [sdwan]
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: ${GRAFANA_PUBLIC_URL:-http://localhost:8080/grafana}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      INFLUX_TOKEN: ${INFLUX_TOKEN:-sdwan-influx-token}
+      INFLUX_ORG: ${INFLUX_ORG:-sdwan}
+      INFLUX_BUCKET: ${INFLUX_BUCKET:-metrics}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks: [sdwan]
+    depends_on: [influxdb]
+
+networks:
+  sdwan:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  pg-data:
+  influx-data:
+  grafana-data:
+  hub-data:

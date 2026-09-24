@@ -1,0 +1,84 @@
+"""Geräte-Polling über den Management-Tunnel: Erreichbarkeit + Systeminfos."""
+
+from __future__ import annotations
+
+import asyncio
+import datetime as dt
+import logging
+from typing import Any
+
+from sqlalchemy import select
+
+from app import events
+from app.config import get_settings
+from app.db import system_session, utcnow
+from app.models import Device, DeviceStatus, PairingStatus
+from app.routeros import RouterOSError, connect_device
+
+log = logging.getLogger(__name__)
+
+# Hooks für spätere Phasen (Metriken, WAN-Health, Mesh-Status): async fn(device, api, resource) -> None
+POLL_HOOKS: list[Any] = []
+
+
+async def poll_device(device: Device) -> dict[str, Any]:
+    async with connect_device(device) as api:
+        res = await api.resource()
+        ident = await api.call("/system/identity/print")
+        result: dict[str, Any] = {"resource": res, "identity": ident[0].get("name") if ident else None}
+        for hook in POLL_HOOKS:
+            try:
+                extra = await hook(device, api, res)
+                if extra:
+                    result.update(extra)
+            except RouterOSError as exc:
+                log.info("Poll-Hook %s für %s fehlgeschlagen: %s", getattr(hook, "__name__", hook), device.name, exc)
+        return result
+
+
+async def poll_all() -> None:
+    s = get_settings()
+    async with system_session() as db:
+        devices = list(
+            (await db.execute(select(Device).where(Device.pairing_status == PairingStatus.paired))).scalars()
+        )
+        sem = asyncio.Semaphore(20)
+
+        async def one(dev: Device) -> None:
+            async with sem:
+                old = dev.status
+                try:
+                    data = await asyncio.wait_for(poll_device(dev), timeout=s.routeros_timeout * 3)
+                    res = data["resource"]
+                    dev.status = DeviceStatus.online
+                    dev.last_seen_at = utcnow()
+                    dev.uptime = str(res.get("uptime"))
+                    dev.routeros_version = str(res.get("version", dev.routeros_version))
+                    dev.model = str(res.get("board-name", dev.model))
+                    dev.architecture = str(res.get("architecture-name", dev.architecture))
+                    dev.identity = data.get("identity") or dev.identity
+                    dev.facts = {
+                        **(dev.facts or {}),
+                        "cpu_load": res.get("cpu-load"),
+                        "free_memory": res.get("free-memory"),
+                        "total_memory": res.get("total-memory"),
+                        "cpu_count": res.get("cpu-count"),
+                        **{k: v for k, v in data.items() if k not in ("resource", "identity")},
+                    }
+                except (RouterOSError, TimeoutError, OSError) as exc:
+                    log.info("Device %s (%s) nicht erreichbar: %s", dev.name, dev.tunnel_ip, exc)
+                    grace = dt.timedelta(seconds=s.offline_after_seconds)
+                    if dev.last_seen_at is None or utcnow() - dev.last_seen_at > grace:
+                        dev.status = DeviceStatus.offline
+                if dev.status != old:
+                    await events.publish(dev.tenant_id, "device.status", {"id": str(dev.id), "name": dev.name, "status": dev.status.value, "previous": old.value})
+                    from app.services.state_log import record_state_change
+
+                    await record_state_change(db, dev, old, dev.status)
+                await events.publish(dev.tenant_id, "device.poll", {
+                    "id": str(dev.id), "status": dev.status.value, "uptime": dev.uptime,
+                    "cpu_load": (dev.facts or {}).get("cpu_load"), "last_seen_at": dev.last_seen_at,
+                })
+
+        await asyncio.gather(*(one(d) for d in devices))
+        await db.commit()

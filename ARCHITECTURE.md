@@ -211,3 +211,26 @@ eigenen Abschnitt.
   (Snapshot). Scheitert der Push, wird dieser Stand sofort wiederhergestellt. Im Modus **atomar** werden
   bei einem Fehler auch alle bereits erfolgreichen Geräte des Deployments zurückgesetzt.
 * Entzug einer Zuweisung pusht das Gerät neu (Regeln der Policy verschwinden).
+
+## Phase 6 – Zero-Touch Provisioning
+
+* **Provisioning-Templates** (pro Mandant): Identity-Muster (`{tenant}-{site}-{name}`), Zeitzone, NTP,
+  DNS, WAN-Interface für den ersten Boot, LAN (Bridge-Ports, LAN-IP – Standard: erste Adresse des
+  ersten Standort-LANs –, DHCP-Server), WAN-Vorlage (wie Phase 3) und Liste von Firewall-Policies.
+  Alle Werte werden validiert, bevor sie in ein RouterOS-Script gelangen.
+* **Staging:** Geräte werden mit Seriennummer angelegt (einzeln oder als Liste). Der Pairing-Token ist
+  **an die Seriennummer gebunden** (Pairing mit anderer Hardware wird abgelehnt) und langlebig
+  (Standard 180 Tage, statt 72 h). Tokens werden nur einmal angezeigt (nur Hash in der DB); ein neues
+  Bootstrap-Script invalidiert das alte.
+* **Wie der Router „beim ersten Boot“ zieht:** Das Bootstrap-Script wird im Lager einmalig importiert
+  oder per Netinstall (`netinstall -s sdwan-ztp.rsc`) als Default-Konfiguration eingespielt. Es legt
+  einen DHCP-Client auf dem WAN-Port und einen Scheduler (`start-time=startup`, `interval=1m`) an, der
+  das Onboarding-Script abruft, bis der Hub-Peer existiert, und sich dann selbst entfernt.
+  **Entscheidung:** Kein Mechanismus ohne jede Vorab-Berührung (MikroTik bietet kein herstellerseitiges
+  Cloud-Claiming für Dritte); der Kunde muss aber nichts tun außer Strom und Internet anschließen.
+  Alternativ funktioniert der Token auch mit dem normalen Ein-Befehl-Onboarding.
+* **Zwei Stufen:** (1) Die Pairing-Antwort enthält die Basiskonfiguration (Identity, Zeit, DNS, LAN,
+  DHCP) – sie wirkt also sofort, auch bevor die Cloud das Gerät per API erreicht. (2) Beim ersten
+  erfolgreichen Poll (Post-Poll-Hook) legt die Control-Plane die WAN-Links aus der Vorlage an und
+  pusht sie, weist die Template-Policies zu und deployt sie, und stößt das Mesh an.
+* Zustände: `staged → paired → provisioning → provisioned | failed`, mit Verlauf (`devices.ztp_log`).

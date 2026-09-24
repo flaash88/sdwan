@@ -60,6 +60,9 @@ export interface Device {
   tags: string[];
   notes: string | null;
   facts: Record<string, unknown>;
+  ztp_state: string;
+  ztp_template_id: string | null;
+  ztp_log: { at: string; state: string; msg: string }[];
   created_at: string;
 }
 

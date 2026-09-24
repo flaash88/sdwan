@@ -12,6 +12,7 @@ export interface NavItem {
 export const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: "◧" },
   { to: "/devices", label: "Geräte", icon: "⌁" },
+  { to: "/ztp", label: "Zero-Touch", icon: "✈", role: "technician" },
   { to: "/sites", label: "Standorte", icon: "⌂" },
   { to: "/mesh", label: "VPN-Mesh", icon: "⬡" },
   { to: "/policies", label: "Firewall-Policies", icon: "⛨" },

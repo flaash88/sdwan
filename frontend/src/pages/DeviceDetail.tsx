@@ -100,6 +100,13 @@ function Overview({ device: d, reload }: { device: Device; reload: () => Promise
             )}
           </Card>
         )}
+        {d.ztp_state !== "none" && (
+          <Card title={`Zero-Touch: ${d.ztp_state}`}>
+            <ul className="space-y-1 text-xs">
+              {d.ztp_log.map((l, i) => <li key={i}><span className="text-slate-500">{fmtDate(l.at)}</span> – {l.msg}</li>)}
+            </ul>
+          </Card>
+        )}
         {can("technician") && (
           <Card title="Einstellungen">
             <form

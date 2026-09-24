@@ -21,7 +21,7 @@ import re
 from app.config import get_settings
 from app.models import Device
 
-_SAFE = re.compile(r"^[A-Za-z0-9._:/+=@ -]*$")
+_SAFE = re.compile(r"^[A-Za-z0-9._:/+=@, -]*$")
 
 
 def _q(value: str) -> str:

@@ -200,6 +200,9 @@ class DeviceOut(ORM):
     tags: list[str]
     notes: str | None
     facts: dict[str, Any]
+    ztp_state: str = "none"
+    ztp_template_id: uuid.UUID | None = None
+    ztp_log: list[dict[str, Any]] = []
     created_at: dt.datetime
 
 

@@ -87,7 +87,7 @@ async def complete_pairing(db: AsyncSession, data: PairIn, ip: str | None = None
     device.pairing_expires_at = None
 
     if extra_script is None:
-        from app.services.ztp import ztp_script_for_device  # Phase 6
+        from app.services.ztp import ztp_script_for_device
 
         extra_script = await ztp_script_for_device(db, device)
     script = pair_response_script(device, hub_key, password, extra=extra_script or "")

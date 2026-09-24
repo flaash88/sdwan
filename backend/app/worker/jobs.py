@@ -6,7 +6,7 @@ import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.config import get_settings
-from app.services import mesh, poller
+from app.services import mesh, metrics, poller
 
 log = logging.getLogger(__name__)
 
@@ -22,6 +22,10 @@ def _safe(fn):
     return wrapper
 
 
+async def live_poll() -> None:
+    await poller.poll_all(only=await metrics.live_device_ids())
+
+
 def register_jobs(scheduler: AsyncIOScheduler) -> None:
     s = get_settings()
     now = dt.datetime.now(dt.UTC)
@@ -29,3 +33,4 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
                       next_run_time=now + dt.timedelta(seconds=5), max_instances=1, coalesce=True)
     scheduler.add_job(_safe(mesh.auto_apply_all), "interval", minutes=5, id="mesh_auto_apply",
                       next_run_time=now + dt.timedelta(seconds=30), max_instances=1, coalesce=True)
+    scheduler.add_job(_safe(live_poll), "interval", seconds=5, id="live_poll", max_instances=1, coalesce=True)

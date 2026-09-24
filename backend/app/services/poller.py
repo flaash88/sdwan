@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
+import time
 from typing import Any
 
 from sqlalchemy import select
@@ -22,9 +23,11 @@ log = logging.getLogger(__name__)
 
 async def poll_device(device: Device) -> dict[str, Any]:
     async with connect_device(device) as api:
+        t0 = time.perf_counter()
         res = await api.resource()
+        rtt_ms = round((time.perf_counter() - t0) * 1000, 1)
         ident = await api.call("/system/identity/print")
-        result: dict[str, Any] = {"resource": res, "identity": ident[0].get("name") if ident else None}
+        result: dict[str, Any] = {"resource": res, "identity": ident[0].get("name") if ident else None, "mgmt_rtt_ms": rtt_ms}
         for hook in registry.poll_hooks():
             try:
                 extra = await hook(device, api, res)
@@ -35,13 +38,19 @@ async def poll_device(device: Device) -> dict[str, Any]:
         return result
 
 
-async def poll_all() -> None:
+async def poll_all(only: set[str] | None = None) -> None:
+    """Pollt alle gepairten Geräte (oder nur ``only`` – Live-Modus)."""
     s = get_settings()
     async with system_session() as db:
-        devices = list(
-            (await db.execute(select(Device).where(Device.pairing_status == PairingStatus.paired))).scalars()
-        )
-        sem = asyncio.Semaphore(20)
+        q = select(Device).where(Device.pairing_status == PairingStatus.paired)
+        if only is not None:
+            if not only:
+                return
+            import uuid as _uuid
+
+            q = q.where(Device.id.in_([_uuid.UUID(x) for x in only]))
+        devices = list((await db.execute(q)).scalars())
+        sem = asyncio.Semaphore(50)
 
         async def one(dev: Device) -> None:
             async with sem:

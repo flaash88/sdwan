@@ -163,3 +163,26 @@ eigenen Abschnitt.
 * **Status:** `up` / `down` / `degraded` (Latenz über Schwelle) / `disabled`; `active` = die
   Default-Route dieses WANs ist aktiv. Statuswechsel gehen live an das Dashboard (Basis für Alerts).
 * Slot (1–4) ist stabil pro Link und bestimmt Tabellen-/Kommentarnamen; Priorität ist davon unabhängig.
+
+## Phase 4 – Monitoring & Metriken
+
+* **Erfassung im bestehenden Poll-Zyklus** (Standard 60 s): Poll-Hook liest Interface-Zähler,
+  Raten werden aus der Differenz zum letzten Poll berechnet (Zählerstand in `devices.facts._counters`,
+  Zähler-Reset nach Reboot wird verworfen). CPU/RAM/Uptime aus `/system/resource`, WAN-Latenz/-Verlust
+  aus Netwatch (Phase 3), Mesh-Handshake/Traffic (Phase 2).
+* **Latenz Cloud↔Router** = Round-Trip des API-Calls `/system/resource/print` durch den Tunnel –
+  kostet keinen zusätzlichen Ping und misst genau den Management-Pfad.
+* **InfluxDB 2** (Bucket `metrics`, 90 Tage Retention), Measurements `system`, `interface`, `wan`, `mesh`
+  mit Tags `tenant_id`, `tenant`, `site_id`, `site`, `device_id`, `device`. Keine Metriken in Postgres.
+* **Live-Kacheln:** Nach jedem Poll wird `device.metrics` über Redis → WebSocket verteilt.
+  **Live-Modus:** Öffnet ein Benutzer den Metriken-Tab, setzt das Frontend alle 60 s
+  `POST /devices/{id}/metrics/live` (Redis-Key mit 90 s TTL); ein Worker-Job pollt diese Geräte alle 5 s.
+  So entstehen Echtzeit-Kacheln ohne die ganze Flotte hochfrequent abzufragen.
+* **History-API** `GET /devices/{id}/metrics?measurement=&range=` – Tenant-Prüfung über das Device,
+  Flux-Query nur mit Whitelist-Measurement und UUID (keine Injection). Frontend zeichnet mit eigener
+  SVG-Chart-Komponente (keine Chart-Library).
+* **Grafana:** Datasource und drei Dashboards (Mandant / Standort / Gerät, Template-Variablen auf
+  `tenant_id`, `site_id`, `device_id`) werden provisioniert (`deploy/grafana`, Generator-Script).
+  **Entscheidung:** Grafana selbst ist nicht mandantenfähig isoliert → nur für MSP-Admins verlinkt
+  (unter `/grafana`, eigener Login). Tenant-Benutzer sehen Metriken ausschließlich über die
+  tenant-geprüfte API im Plattform-Frontend.

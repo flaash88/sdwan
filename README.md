@@ -21,6 +21,7 @@ Details zu Aufbau und Design-Entscheidungen: [ARCHITECTURE.md](ARCHITECTURE.md).
 | 6 | Zero-Touch Provisioning: Templates, seriengebundene Langzeit-Tokens, Bootstrap-Script (Staging/Netinstall), Basiskonfig + WAN + Policies automatisch | ✅ |
 | 7 | Content-Filter: NextDNS-Profile (Kategorien, Dienste, Security, Blocklisten), pro Mandant/Standort, DoH auf RouterOS, DNS-Erzwingung | ✅ |
 | 8 | Remote Access: SSH/Winbox/WebFig-Proxy über den Tunnel, zeitlich begrenzt, IP-gebunden, Temp-User pro Session, lückenloses Audit | ✅ |
+| 9 | Backups & Firmware: tägliche Exporte mit Diff-Ansicht, Dedupe, Retention; Fleet-Updates mit Batches, Pause bei Fehlern, Pre-Update-Backup | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

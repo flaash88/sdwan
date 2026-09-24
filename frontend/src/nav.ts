@@ -18,6 +18,7 @@ export const NAV: NavItem[] = [
   { to: "/policies", label: "Firewall-Policies", icon: "⛨" },
   { to: "/content-filter", label: "Content-Filter", icon: "⊘" },
   { to: "/remote", label: "Fernzugriff", icon: "⇄" },
+  { to: "/firmware", label: "Firmware", icon: "⟳" },
   { to: "/users", label: "Benutzer", icon: "☺", role: "admin" },
   { to: "/tenants", label: "Mandanten", icon: "▣", superuser: true },
   { to: "/audit", label: "Audit-Log", icon: "☰", role: "admin" },

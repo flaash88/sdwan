@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     offline_after_seconds: int = 180
     pairing_token_ttl_hours: int = 72
 
+    # --- Backups & Firmware (Phase 9) -----------------------------------------
+    backup_hour_utc: int = 2
+    backup_retention: int = 90  # automatische Backups pro Gerät (manuelle/gepinnte bleiben)
+    ssh_port: int = 22
+    firmware_reboot_timeout_s: int = 900
+
     # --- SMTP (Alerts) -------------------------------------------------------
     smtp_host: str = ""
     smtp_port: int = 587

@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import type { Device } from "./lib/types";
+import BackupsTab from "./tabs/BackupsTab";
 import MetricsTab from "./tabs/MetricsTab";
 import PoliciesTab from "./tabs/PoliciesTab";
 import RemoteTab from "./tabs/RemoteTab";
@@ -18,4 +19,5 @@ export const deviceTabs: DeviceTab[] = [
   { key: "wan", label: "WAN", pairedOnly: true, component: WanTab },
   { key: "policies", label: "Firewall", pairedOnly: true, component: PoliciesTab },
   { key: "remote", label: "Fernzugriff", pairedOnly: true, component: RemoteTab },
+  { key: "backups", label: "Backups", pairedOnly: true, component: BackupsTab },
 ];

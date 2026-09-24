@@ -276,3 +276,23 @@ eigenen Abschnitt.
 * **Audit:** `remote.open`, `remote.connect` (Quell-IP), `remote.disconnect` (Dauer, Bytes),
   `remote.denied`, `remote.close`, `remote.expired`. Nur Techniker/Admins dürfen Sessions öffnen;
   schließen dürfen der Ersteller oder Admins.
+
+## Phase 9 – Backups & Firmware
+
+* **Export per SSH** (`/export terse` via asyncssh, API-Benutzer, nur über den Tunnel): Die RouterOS-API
+  liefert `/export` nicht zuverlässig; `terse` erzeugt eine Zeile pro Objekt → aussagekräftige Diffs.
+* **Keine Secrets in Backups:** RouterOS 7 blendet Passwörter/Keys im Export aus. **Entscheidung:** Die
+  Text-Backups dienen Nachvollziehbarkeit, Diff und Wiederaufbau; binäre `.backup`-Dateien mit Secrets
+  werden bewusst nicht in der Cloud gespeichert.
+* **Speicherung:** Volltext + SHA-256 (ohne Zeitstempel-Kopfzeile) + Diff zum Vorgänger als JSONB
+  (`{previous_id, added, removed, lines}`). Tägliches Backup (Standard 02:00 UTC) wird nur bei Änderung
+  gespeichert; manuelle und Pre-Update-Backups immer (und gepinnt). Retention: letzte 90 automatische
+  Backups pro Gerät. Beliebige Stände lassen sich per API gegeneinander diffen.
+* **Firmware-Jobs:** Geräte werden in Batches (`batch_size`) eingeteilt; ein Worker-Tick (15 s)
+  bearbeitet nur den aktuellen Batch: Pre-Update-Backup → Kanal setzen → `check-for-updates` →
+  `install` (bereits aktuelle Geräte = `skipped`) → nach dem Reboot Verifikation der neuen Version
+  (Timeout 15 min) → optional RouterBOARD-Firmware-Upgrade + Reboot.
+  Zwischen Batches wird `batch_interval_s` gewartet; erreichen die Fehler `max_failures`, wird der Job
+  **pausiert** (Fortsetzen akzeptiert die bekannten Fehler). Abbrechen storniert alle wartenden Geräte.
+* Firmware-Jobs können (wie Policy-Deployments) als MSP mandantenübergreifend laufen (`tenant_id NULL`),
+  die Job-Items sind jedoch mandantengebunden.

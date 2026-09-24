@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import ContentFilter from "./pages/ContentFilter";
+import Firmware from "./pages/Firmware";
 import Mesh from "./pages/Mesh";
 import Policies, { PolicyDetail } from "./pages/Policies";
 import RemoteSessions from "./pages/RemoteSessions";
@@ -13,4 +14,5 @@ export const extraRoutes: { path: string; element: ReactNode }[] = [
   { path: "/ztp", element: <ZeroTouch /> },
   { path: "/content-filter", element: <ContentFilter /> },
   { path: "/remote", element: <RemoteSessions /> },
+  { path: "/firmware", element: <Firmware /> },
 ];

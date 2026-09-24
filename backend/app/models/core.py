@@ -65,6 +65,10 @@ class Site(IdMixin, TenantScoped, Base):
     is_mesh_hub: Mapped[bool] = mapped_column(Boolean, default=False)
     latitude: Mapped[float | None] = mapped_column()
     longitude: Mapped[float | None] = mapped_column()
+    # Content-Filter (Phase 7); NULL = Mandanten-Standard
+    content_filter_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("content_filter_profiles.id", ondelete="SET NULL")
+    )
 
     tenant: Mapped[Tenant] = relationship(back_populates="sites")
     devices: Mapped[list[Device]] = relationship(back_populates="site")

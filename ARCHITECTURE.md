@@ -234,3 +234,26 @@ eigenen Abschnitt.
   erfolgreichen Poll (Post-Poll-Hook) legt die Control-Plane die WAN-Links aus der Vorlage an und
   pusht sie, weist die Template-Policies zu und deployt sie, und stößt das Mesh an.
 * Zustände: `staged → paired → provisioning → provisioned | failed`, mit Verlauf (`devices.ztp_log`).
+
+## Phase 7 – Content Filtering (NextDNS)
+
+* **Profile** (`content_filter_profiles`, pro Mandant): Parental-Control-Kategorien, blockierte Dienste,
+  Security-Optionen, Privacy-Blocklisten, Deny-/Allowlist, SafeSearch/YouTube-Restricted/Block-Bypass,
+  `force_dns`. Jedes Profil entspricht genau einem NextDNS-Profil (`<tenant-slug>-<name>`).
+  Alle Werte werden gegen Kataloge/Domain-Regex validiert.
+* **Synchronisation:** Objekte per `PATCH`, Arrays (Kategorien, Dienste, Blocklisten, Listen) per `PUT`
+  (vollständiges Ersetzen = idempotent). Fehler werden am Profil gespeichert (`sync_status=error`) und
+  können erneut synchronisiert werden; der Rest der Plattform bleibt funktionsfähig.
+* **API-Keys:** globaler MSP-Key (`NEXTDNS_API_KEY`) oder mandanteneigener Key (Fernet-verschlüsselt in
+  `tenant.settings`) – für Kunden mit eigenem NextDNS-Vertrag.
+* **Zuweisung:** Standort-Profil > Mandanten-Standard > kein Filter.
+* **Router-Konfiguration (DoH):** `use-doh-server=https://dns.nextdns.io/<profil>/<gerätename>`
+  (Gerätename erscheint in den NextDNS-Logs), `verify-doh-cert=yes`, `servers=""`, statische
+  Bootstrap-Einträge für `dns.nextdns.io` (45.90.28.0 / 45.90.30.0), Cache-Flush.
+  **Entscheidung:** DoH statt DoT, da RouterOS keinen DoT-Client hat. CA-Vertrauen über
+  `builtin-trust-anchors` (RouterOS ≥ 7.19), sonst einmaliger Import des curl-CA-Bundles.
+* **DNS erzwingen:** optional `dstnat`-Redirect (UDP/TCP 53) aus den LAN-Netzen des Standorts auf den
+  Router, damit Clients den Filter nicht mit eigenem DNS umgehen. „Block Bypass“ bei NextDNS blockiert
+  zusätzlich bekannte DoH-/VPN-Umgehungen.
+* **Rückbau:** Beim Entfernen der Zuweisung werden die vorherigen DNS-Server (bei der ersten Anwendung
+  gesichert) wiederhergestellt und alle `sdwan:dns:`-Objekte entfernt.

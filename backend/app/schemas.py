@@ -149,6 +149,7 @@ class SiteUpdate(BaseModel):
 class SiteOut(ORM):
     id: uuid.UUID
     tenant_id: uuid.UUID
+    content_filter_profile_id: uuid.UUID | None = None
     name: str
     address: str | None
     description: str | None

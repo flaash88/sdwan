@@ -16,6 +16,7 @@ export const NAV: NavItem[] = [
   { to: "/sites", label: "Standorte", icon: "⌂" },
   { to: "/mesh", label: "VPN-Mesh", icon: "⬡" },
   { to: "/policies", label: "Firewall-Policies", icon: "⛨" },
+  { to: "/content-filter", label: "Content-Filter", icon: "⊘" },
   { to: "/users", label: "Benutzer", icon: "☺", role: "admin" },
   { to: "/tenants", label: "Mandanten", icon: "▣", superuser: true },
   { to: "/audit", label: "Audit-Log", icon: "☰", role: "admin" },

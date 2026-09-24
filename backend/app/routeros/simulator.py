@@ -112,6 +112,8 @@ class SimRouter:
             "/interface/monitor-traffic": self._monitor_traffic,
             "/tool/fetch": lambda p: [{"status": "finished"}],
             "/system/script/run": lambda p: [],
+            "/certificate/settings/set": lambda p: [],
+            "/certificate/import": lambda p: [{"certificates-imported": 140}],
         }.get(cmd)
         if handler is None:
             raise RouterOSError(f"unknown command {cmd}")

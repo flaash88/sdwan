@@ -19,6 +19,7 @@ Details zu Aufbau und Design-Entscheidungen: [ARCHITECTURE.md](ARCHITECTURE.md).
 | 4 | Monitoring: Polling → InfluxDB, Live-Kacheln per WebSocket (5-s-Live-Modus), Verlaufs-Charts, Grafana-Dashboards Mandant/Standort/Gerät | ✅ |
 | 5 | Firewall-Policies: global/pro Mandant, Address-Lists/Filter/NAT, Multi-Device-Push, Versionierung, Snapshot-Rollback (auch atomar) | ✅ |
 | 6 | Zero-Touch Provisioning: Templates, seriengebundene Langzeit-Tokens, Bootstrap-Script (Staging/Netinstall), Basiskonfig + WAN + Policies automatisch | ✅ |
+| 7 | Content-Filter: NextDNS-Profile (Kategorien, Dienste, Security, Blocklisten), pro Mandant/Standort, DoH auf RouterOS, DNS-Erzwingung | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

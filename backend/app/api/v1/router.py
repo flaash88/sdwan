@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
-from app.api.v1 import audit, auth, dashboard, devices, internal, mesh, metrics, pairing, policies, sites, tenants, users, wan, ws, ztp
+from app.api.v1 import audit, auth, content_filter, dashboard, devices, internal, mesh, metrics, pairing, policies, sites, tenants, users, wan, ws, ztp
 
 api_router = APIRouter(prefix="/api/v1")
-for mod in (auth, users, tenants, sites, devices, pairing, internal, audit, dashboard, ws, mesh, wan, metrics, policies, ztp):
+for mod in (auth, users, tenants, sites, devices, pairing, internal, audit, dashboard, ws, mesh, wan, metrics, policies, ztp, content_filter):
     api_router.include_router(mod.router)

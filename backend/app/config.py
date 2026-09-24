@@ -86,6 +86,8 @@ class Settings(BaseSettings):
     remote_proxy_host: str = "localhost"  # Hostname, unter dem der Proxy für Techniker erreichbar ist
     remote_proxy_port_range: str = "40000-40099"
     remote_session_max_minutes: int = 240
+    # Nur Tests/Simulator: Proxy-Ziel statt Tunnel-IP (z. B. 127.0.0.1)
+    remote_proxy_target_override: str = ""
 
     @property
     def wg_net(self) -> ipaddress.IPv4Network:

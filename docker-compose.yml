@@ -19,6 +19,8 @@ x-backend: &backend
     PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
     WG_HUB_ENDPOINT: ${WG_HUB_ENDPOINT:-localhost}
     GRAFANA_PUBLIC_URL: ${GRAFANA_PUBLIC_URL:-http://localhost:8080/grafana}
+    REMOTE_PROXY_PORT_RANGE: ${REMOTE_PROXY_PORT_RANGE:-40000-40019}
+    REMOTE_PROXY_HOST: ${REMOTE_PROXY_HOST:-localhost}
   depends_on:
     postgres: { condition: service_healthy }
     redis: { condition: service_healthy }
@@ -33,8 +35,6 @@ services:
     networks: { sdwan: { ipv4_address: 172.30.0.20 } }
     ports:
       - "8000:8000"
-      # Remote-Access-Proxy (Phase 8): Port-Pool für zeitlich begrenzte SSH/Winbox-Sessions
-      - "${REMOTE_PROXY_PORT_RANGE:-40000-40019}:${REMOTE_PROXY_PORT_RANGE:-40000-40019}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 15s
@@ -45,6 +45,16 @@ services:
     <<: *backend
     command: ["python", "-m", "app.worker"]
     networks: { sdwan: { ipv4_address: 172.30.0.21 } }
+    depends_on:
+      api: { condition: service_healthy }
+
+  remote-proxy:
+    <<: *backend
+    command: ["python", "-m", "app.remote_proxy"]
+    networks: { sdwan: { ipv4_address: 172.30.0.22 } }
+    ports:
+      # Port-Pool für zeitlich begrenzte SSH/Winbox/WebFig-Sessions (Phase 8)
+      - "${REMOTE_PROXY_PORT_RANGE:-40000-40019}:${REMOTE_PROXY_PORT_RANGE:-40000-40019}"
     depends_on:
       api: { condition: service_healthy }
 

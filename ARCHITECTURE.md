@@ -257,3 +257,22 @@ eigenen Abschnitt.
   zusätzlich bekannte DoH-/VPN-Umgehungen.
 * **Rückbau:** Beim Entfernen der Zuweisung werden die vorherigen DNS-Server (bei der ersten Anwendung
   gesichert) wiederhergestellt und alle `sdwan:dns:`-Objekte entfernt.
+
+## Phase 8 – Remote Access
+
+* **Eigener Dienst `remote-proxy`** (gleiches Image, `python -m app.remote_proxy`): asyncio-TCP-Proxy mit
+  Port-Pool (`REMOTE_PROXY_PORT_RANGE`, Standard 40000–40019). Er gleicht alle 2 s die aktiven Sessions
+  aus der DB ab, öffnet/schließt Listener und verbindet **ausschließlich** zur Tunnel-IP des Geräts
+  (gleicher Tunnel-Guard wie die RouterOS-API). **Entscheidung:** Plain-TCP-Weiterleitung statt
+  Web-Terminal – funktioniert unverändert mit Winbox, SSH-Clients und WebFig.
+* **Zeitlich begrenzt:** 5 min bis `REMOTE_SESSION_MAX_MINUTES` (Standard 240). Ablauf wird doppelt
+  durchgesetzt: Proxy schließt Listener + laufende Verbindungen, Worker-Job markiert `expired`.
+* **Quell-IP-Bindung:** Standard ist die IP des anfordernden Technikers (per `X-Forwarded-For` hinter
+  dem Reverse-Proxy), optional ein CIDR. Fremde Quellen werden abgewiesen und auditiert (`remote.denied`).
+* **Temporärer RouterOS-Benutzer pro Session** (`sdwan-rs-<id>`, Zufallspasswort, nur einmal angezeigt,
+  Login nur von der Hub-Adresse) – dadurch personalisierte Logs auf dem Gerät, keine geteilten Admin-
+  Passwörter, automatische Entfernung bei Ablauf/Schließen. Ist der Dienst (ssh/winbox/www) deaktiviert
+  oder auf Adressen beschränkt, wird er aktiviert bzw. um die Hub-Adresse ergänzt.
+* **Audit:** `remote.open`, `remote.connect` (Quell-IP), `remote.disconnect` (Dauer, Bytes),
+  `remote.denied`, `remote.close`, `remote.expired`. Nur Techniker/Admins dürfen Sessions öffnen;
+  schließen dürfen der Ersteller oder Admins.

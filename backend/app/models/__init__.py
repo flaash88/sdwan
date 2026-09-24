@@ -16,3 +16,4 @@ from app.models.wan import WanLink  # noqa: F401,E402
 from app.models.policy import FirewallPolicy, PolicyAssignment, PolicyDeployment, PolicyVersion  # noqa: F401,E402
 from app.models.ztp import ProvisioningTemplate  # noqa: F401,E402
 from app.models.content_filter import ContentFilterProfile  # noqa: F401,E402
+from app.models.remote import RemoteSession  # noqa: F401,E402

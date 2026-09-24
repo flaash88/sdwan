@@ -20,6 +20,7 @@ Details zu Aufbau und Design-Entscheidungen: [ARCHITECTURE.md](ARCHITECTURE.md).
 | 5 | Firewall-Policies: global/pro Mandant, Address-Lists/Filter/NAT, Multi-Device-Push, Versionierung, Snapshot-Rollback (auch atomar) | ✅ |
 | 6 | Zero-Touch Provisioning: Templates, seriengebundene Langzeit-Tokens, Bootstrap-Script (Staging/Netinstall), Basiskonfig + WAN + Policies automatisch | ✅ |
 | 7 | Content-Filter: NextDNS-Profile (Kategorien, Dienste, Security, Blocklisten), pro Mandant/Standort, DoH auf RouterOS, DNS-Erzwingung | ✅ |
+| 8 | Remote Access: SSH/Winbox/WebFig-Proxy über den Tunnel, zeitlich begrenzt, IP-gebunden, Temp-User pro Session, lückenloses Audit | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

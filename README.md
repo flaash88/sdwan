@@ -32,8 +32,11 @@ docker compose up -d --build
 ```
 
 * Dashboard: http://localhost:8080 – Login mit `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD`
-* API-Doku (OpenAPI): http://localhost:8000/docs
-* Grafana: http://localhost:8080/grafana
+* API-Doku (OpenAPI): http://localhost:8000/docs (nur lokal gebunden)
+* Grafana: http://localhost:8080/grafana (MSP-Admins, eigener Grafana-Login)
+
+Dienste im Compose-Setup: `api`, `worker`, `remote-proxy`, `wireguard-hub`, `frontend` (nginx),
+`postgres`, `redis`, `influxdb`, `grafana`.
 
 Mit `ROUTEROS_BACKEND=simulator` (Standard in `.env.example`) simuliert die Plattform RouterOS-Geräte:
 Mandant anlegen → Standort anlegen → Gerät anlegen → „Pairing simulieren“.
@@ -52,6 +55,20 @@ Mandant anlegen → Standort anlegen → Gerät anlegen → „Pairing simuliere
 **Proxmox-LXC:** Für den Hub entweder das WireGuard-Kernelmodul auf dem Host laden (`modprobe wireguard`)
 oder den LXC mit `/dev/net/tun` betreiben – der Hub fällt automatisch auf `wireguard-go` zurück.
 
+**Ports:** `8080/tcp` (Web/API über nginx), `51820/udp` (WireGuard-Hub), `40000-40019/tcp`
+(Remote-Access-Proxy, nur wenn Fernzugriff genutzt wird). Port 8000 ist nur an `127.0.0.1` gebunden.
+
+## Sicherheit (Kurzfassung)
+
+* Strikte Mandanten-Isolation im ORM (automatischer `tenant_id`-Filter + Schreibschutz), RBAC pro Endpoint.
+* Jeder Router erzeugt sein WireGuard-Keypair selbst; Pairing-Token sind einmalig, gehasht, befristet
+  (Zero-Touch: zusätzlich an die Seriennummer gebunden).
+* RouterOS-API/SSH-Zugriffe sind technisch auf das Management-Netz beschränkt; der API-Benutzer auf dem
+  Router akzeptiert nur Logins von der Hub-Adresse.
+* Secrets in der DB (API-Passwörter, PSKs, NextDNS-Keys) sind Fernet-verschlüsselt.
+* Audit-Log für alle schreibenden Aktionen inkl. Policy-Pushes und jeder Remote-Access-Verbindung.
+* `/api/v1/internal/*` (Hub-Agent) ist über nginx nicht erreichbar.
+
 ## Entwicklung
 
 ```bash
@@ -59,7 +76,7 @@ oder den LXC mit `/dev/net/tun` betreiben – der Hub fällt automatisch auf `wi
 cd backend
 python3.12 -m venv .venv && . .venv/bin/activate
 pip install -r requirements-dev.txt
-pytest                                   # SQLite, Simulator
+pytest                                   # 43 Tests, SQLite + RouterOS-Simulator
 TEST_DATABASE_URL=postgresql+asyncpg://sdwan:sdwan@localhost/sdwan_test pytest   # gegen PostgreSQL
 DB_AUTO_CREATE=true ROUTEROS_BACKEND=simulator USE_REDIS=false \
   DATABASE_URL=sqlite+aiosqlite:///dev.db uvicorn app.main:app --reload
@@ -74,7 +91,7 @@ Neue Migration: `cd backend && alembic revision --autogenerate -m "..."`.
 ## Projektstruktur
 
 ```
-backend/   FastAPI-App (app/), Worker (app/worker), Alembic, Tests
+backend/   FastAPI-App (app/), Worker (app/worker), Remote-Proxy (app/remote_proxy.py), Alembic, Tests
 hub/       WireGuard-Hub-Agent (Peer-Sync, Handshake-Statistik)
 frontend/  React + TypeScript + Tailwind
 deploy/    Grafana-Provisioning (Datasource, Dashboards)

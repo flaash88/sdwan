@@ -17,7 +17,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if get_settings().db_auto_create:
+    s = get_settings()
+    if s.environment == "production" and (s.secret_key.startswith("change-me") or s.hub_token.startswith("change-me")):
+        logging.getLogger("app").error("SECRET_KEY/HUB_TOKEN sind Standardwerte – bitte in .env ersetzen!")
+    if s.db_auto_create:
         await create_all()
     await ensure_bootstrap_admin()
     yield

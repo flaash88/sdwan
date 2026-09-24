@@ -34,7 +34,8 @@ services:
       RUN_MIGRATIONS: "true"
     networks: { sdwan: { ipv4_address: 172.30.0.20 } }
     ports:
-      - "8000:8000"
+      # API direkt nur lokal (OpenAPI-Doku, Debugging); öffentlich läuft alles über frontend:8080
+      - "127.0.0.1:8000:8000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 15s

@@ -69,8 +69,8 @@ function Topology({ nodes, links }: { nodes: MeshNode[]; links: MeshLink[] }) {
           <g key={n.device_id} transform={`translate(${p.x},${p.y})`}>
             <circle r={n.is_hub ? 26 : 20} fill={n.is_hub ? "#0f766e" : "#fff"} stroke={n.status === "online" ? "#10b981" : "#ef4444"} strokeWidth={3} />
             <text textAnchor="middle" dy="4" fontSize="10" fill={n.is_hub ? "#fff" : "#334155"} fontWeight="600">{n.is_hub ? "HUB" : n.mesh_ip?.split(".").pop()}</text>
-            <text textAnchor="middle" dy={n.is_hub ? 44 : 36} fontSize="11" fill="#0f172a" fontWeight="600">{n.site ?? n.name}</text>
-            <text textAnchor="middle" dy={n.is_hub ? 57 : 49} fontSize="9" fill="#64748b">{n.lan_subnets.join(", ")}</text>
+            <text textAnchor="middle" dy={n.is_hub ? 44 : 36} fontSize="11" fill="#0f172a" fontWeight="600" stroke="#fff" strokeWidth={4} paintOrder="stroke">{n.site ?? n.name}</text>
+            <text textAnchor="middle" dy={n.is_hub ? 57 : 49} fontSize="9" fill="#64748b" stroke="#fff" strokeWidth={3} paintOrder="stroke">{n.lan_subnets.join(", ")}</text>
           </g>
         );
       })}

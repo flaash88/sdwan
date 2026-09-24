@@ -107,3 +107,32 @@ eigenen Abschnitt.
 * Alle von der Plattform verwalteten Einträge tragen einen Kommentar mit Präfix `sdwan:`.
   `DeviceAPI.sync_managed()` gleicht verwaltete Einträge mit dem Sollzustand ab (add/set/remove)
   und lässt manuell gepflegte Einträge unangetastet. Das ist die Grundlage aller Pushes.
+
+## Phase 2 – VPN-Mesh
+
+* **Zweites WireGuard-Interface** `sdwan-mesh` (UDP 13232) je Gerät, getrennt vom Management-
+  Tunnel. Private-Key wird wieder auf dem Router erzeugt, die Control-Plane liest den Public-Key
+  per API aus. Pro Verbindung erzeugt die Control-Plane einen **Preshared-Key** (Fernet-verschlüsselt
+  in `vpn_peers.psk_enc`) – zusätzliche Post-Quantum-Absicherung und kein geteiltes Secret.
+* **Transfernetz:** pro Tenant ein `/24` aus `MESH_NETWORK` (10.200.0.0/16 → 256 Tenants),
+  Mesh-IPs werden stabil pro Gerät vergeben (Hub bekommt die erste Adresse).
+* **Teilnehmer:** ein gepairtes Gerät pro Standort (alphabetisch erstes). **Entscheidung:** HA-Paare
+  pro Standort (VRRP) sind nicht Teil dieses Scopes; weitere Geräte erzeugen eine Warnung.
+* **Hub-and-Spoke (Standard):** Spokes verbinden sich aktiv zum Hub (Endpoint + Keepalive 25 s),
+  der Hub braucht deshalb eine erreichbare Adresse. Spoke-Allowed-IPs = Transfernetz + alle LANs
+  der anderen Standorte → Spoke-zu-Spoke läuft über den Hub. Hub-Allowed-IPs = Mesh-IP + LANs des Spokes.
+* **Full-Mesh:** jede Seite mit bekanntem Endpoint des Gegenübers initiiert. Sind beide Seiten hinter
+  NAT/CGNAT ohne Endpoint, wird die Verbindung konfiguriert, aber als `no_endpoint` markiert.
+  **Entscheidung:** kein Relay über den Cloud-Hub (würde Kunden-Nutzdaten durch die MSP-Cloud leiten).
+* **Endpoint-Ermittlung:** `devices.mesh_endpoint` (manuell) oder automatisch die öffentliche
+  Quell-IP, die der Management-Hub beim Handshake sieht (nur wenn global routbar).
+* **Routen:** WireGuard auf RouterOS legt keine Routen an → für jedes entfernte LAN wird
+  `dst=<LAN> gateway=sdwan-mesh` gesetzt. Firewall: Input-Accept für UDP 13232, Forward-Accept
+  in/out `sdwan-mesh` (vor den Default-Drop-Regeln). Feinere Einschränkungen über Phase-5-Policies.
+* **Push-Ablauf:** (1) Interface + Adresse auf allen Teilnehmern sicherstellen, Public-Keys einsammeln,
+  (2) Peers/Routen/Firewall idempotent über `sync_managed` pushen. Ausgeschiedene Geräte bekommen
+  die Mesh-Konfiguration entfernt. Ergebnis pro Gerät wird im Tenant gespeichert und auditiert.
+* **Automatik:** Worker-Job alle 5 min berechnet einen Fingerprint (Topologie, Hub, Geräte, LANs,
+  Endpoints) und wendet das Mesh nur bei Änderungen an (abschaltbar pro Tenant).
+* **Status:** Poll-Hook liest `last-handshake`/rx/tx der Mesh-Peers; ein Tunnel gilt als `up`, wenn
+  der letzte Handshake ≤ 180 s zurückliegt (WireGuard rekeyt alle 120 s). Wechsel werden live gepusht.

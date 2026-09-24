@@ -160,13 +160,16 @@ class DeviceAPI:
         desired: list[dict[str, Any]],
         key: str = "comment",
         ordered: bool = False,
+        place_first: bool = False,
     ) -> dict[str, int]:
         """Gleicht alle Einträge unter ``path`` mit Kommentar ``sdwan:<tag>...`` an ``desired`` an.
 
         Jeder gewünschte Eintrag MUSS einen eindeutigen ``comment`` haben, der mit
         ``sdwan:<tag>`` beginnt. Nicht verwaltete Einträge (andere Kommentare) bleiben
         unangetastet. Bei ``ordered=True`` werden verwaltete Einträge komplett neu
-        angelegt (Reihenfolge ist z. B. bei Firewall-Regeln relevant).
+        angelegt (Reihenfolge ist z. B. bei Firewall-Regeln relevant). ``place_first``
+        fügt neue Einträge vor dem ersten nicht verwalteten Eintrag ein (Firewall-Regeln
+        müssen vor den Default-Drop-Regeln stehen).
         """
         prefix = MANAGED_PREFIX + tag
         existing = [r for r in await self.print(path) if str(r.get(key, "")).startswith(prefix)]
@@ -174,20 +177,35 @@ class DeviceAPI:
         for d in desired:
             if not str(d.get(key, "")).startswith(prefix):
                 raise ValueError(f"desired entry without managed comment: {d}")
+        async def _first_unmanaged() -> str | None:
+            if not place_first:
+                return None
+            for r in await self.print(path):
+                if not str(r.get(key, "")).startswith(MANAGED_PREFIX) and r.get("dynamic") not in (True, "true"):
+                    return r[".id"]
+            return None
+
         if ordered:
+            same = len(existing) == len(desired) and all(
+                all(_norm(r.get(k)) == _norm(v) for k, v in d.items()) for r, d in zip(existing, desired, strict=True)
+            )
+            if same:
+                return stats  # unverändert – nichts tun (keine Unterbrechung laufender Verbindungen)
             for r in existing:
                 await self.remove(path, r[".id"])
                 stats["removed"] += 1
+            anchor = await _first_unmanaged()
             for d in desired:
-                await self.add(path, **d)
+                await self.add(path, **d, **({"place-before": anchor} if anchor else {}))
                 stats["added"] += 1
             return stats
+        anchor = await _first_unmanaged()
         by_key = {r.get(key): r for r in existing}
         wanted = {d[key] for d in desired}
         for d in desired:
             cur = by_key.get(d[key])
             if cur is None:
-                await self.add(path, **d)
+                await self.add(path, **d, **({"place-before": anchor} if anchor else {}))
                 stats["added"] += 1
             else:
                 diff = {k: v for k, v in d.items() if _norm(cur.get(k)) != _norm(v)}

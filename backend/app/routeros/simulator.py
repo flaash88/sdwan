@@ -131,6 +131,13 @@ class SimRouter:
                     r.setdefault("tx", self.rng.randint(10**5, 10**8))
             return rows
         if action == "add":
+            before = params.pop("place-before", None)
+            if before is not None:
+                item_id = self._insert(path, params)
+                row = self.tables[path].pop()
+                idx = next((i for i, r in enumerate(self.tables[path]) if r[".id"] == before), len(self.tables[path]))
+                self.tables[path].insert(idx, row)
+                return [{"ret": item_id}]
             if path == "/interface/wireguard" and any(r.get("name") == params.get("name") for r in self.tables[path]):
                 raise RouterOSError("failure: already have interface with such name")
             return [{"ret": self._insert(path, params)}]

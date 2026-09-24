@@ -171,6 +171,7 @@ class DeviceCreate(BaseModel):
 class DeviceUpdate(BaseModel):
     name: str | None = None
     site_id: uuid.UUID | None = None
+    mesh_endpoint: str | None = None
     tags: list[str] | None = None
     notes: str | None = None
 
@@ -187,6 +188,8 @@ class DeviceOut(ORM):
     architecture: str | None
     tunnel_ip: str
     wg_public_key: str | None
+    mesh_ip: str | None = None
+    mesh_endpoint: str | None = None
     pairing_status: PairingStatus
     pairing_expires_at: dt.datetime | None
     paired_at: dt.datetime | None

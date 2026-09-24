@@ -11,3 +11,4 @@ from app.models.core import (  # noqa: F401
     Tenant,
     User,
 )
+from app.models.mesh import VpnPeer  # noqa: F401,E402

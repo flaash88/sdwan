@@ -49,6 +49,7 @@ function Overview({ device: d, reload }: { device: Device; reload: () => Promise
   const [name, setName] = useState(d.name);
   const [siteId, setSiteId] = useState(d.site_id ?? "");
   const [tags, setTags] = useState(d.tags.join(", "));
+  const [meshEp, setMeshEp] = useState(d.mesh_endpoint ?? "");
   const { busy, error, run } = useAction();
   const f = d.facts as Record<string, number | undefined>;
   const rows: [string, string][] = [
@@ -60,6 +61,7 @@ function Overview({ device: d, reload }: { device: Device; reload: () => Promise
     ["CPU-Last", f.cpu_load != null ? `${f.cpu_load}%` : "–"],
     ["RAM", f.total_memory ? `${fmtBytes((f.total_memory ?? 0) - (f.free_memory ?? 0))} / ${fmtBytes(f.total_memory)}` : "–"],
     ["Tunnel-IP", d.tunnel_ip],
+    ["Mesh-IP", d.mesh_ip ?? "–"],
     ["WG-Public-Key", d.wg_public_key ?? "–"],
     ["Gepairt", fmtDate(d.paired_at)],
     ["Letzter API-Kontakt", fmtAgo(d.last_seen_at)],
@@ -105,7 +107,7 @@ function Overview({ device: d, reload }: { device: Device; reload: () => Promise
               onSubmit={(e) => {
                 e.preventDefault();
                 void run(async () => {
-                  await api.patch(`/devices/${d.id}`, { name, site_id: siteId || null, tags: tags.split(",").map((t) => t.trim()).filter(Boolean) });
+                  await api.patch(`/devices/${d.id}`, { name, site_id: siteId || null, mesh_endpoint: meshEp || null, tags: tags.split(",").map((t) => t.trim()).filter(Boolean) });
                   await reload();
                 });
               }}
@@ -116,6 +118,7 @@ function Overview({ device: d, reload }: { device: Device; reload: () => Promise
                 {sites.data?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </Select>
               <Input label="Tags" value={tags} onChange={(e) => setTags(e.target.value)} />
+              <Input label="Öffentlicher Mesh-Endpoint (Hostname/IP, optional)" value={meshEp} onChange={(e) => setMeshEp(e.target.value)} placeholder="automatisch erkannt" />
               <div className="flex flex-wrap justify-between gap-2">
                 <Button disabled={busy}>Speichern</Button>
                 {can("admin") && (

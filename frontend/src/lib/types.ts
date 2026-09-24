@@ -48,6 +48,8 @@ export interface Device {
   architecture: string | null;
   tunnel_ip: string;
   wg_public_key: string | null;
+  mesh_ip: string | null;
+  mesh_endpoint: string | null;
   pairing_status: "pending" | "paired" | "revoked";
   pairing_expires_at: string | null;
   paired_at: string | null;

@@ -111,6 +111,12 @@ class Device(IdMixin, TenantScoped, Base):
     last_seen_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
     last_handshake_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
     uptime: Mapped[str | None] = mapped_column(String(64))
+    # Site-to-Site-Mesh (Phase 2)
+    mesh_ip: Mapped[str | None] = mapped_column(String(45))
+    mesh_public_key: Mapped[str | None] = mapped_column(String(64))
+    # Öffentliche Adresse für eingehende Mesh-Verbindungen (leer = vom Hub erkannte Adresse)
+    mesh_endpoint: Mapped[str | None] = mapped_column(String(255))
+
     tags: Mapped[list] = mapped_column(JSONType, default=list)
     notes: Mapped[str | None] = mapped_column(Text)
     # Zuletzt gemeldete Systeminfos (Board, Speicher, ...)

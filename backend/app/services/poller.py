@@ -14,11 +14,10 @@ from app.config import get_settings
 from app.db import system_session, utcnow
 from app.models import Device, DeviceStatus, PairingStatus
 from app.routeros import RouterOSError, connect_device
+from app.services import registry
 
 log = logging.getLogger(__name__)
 
-# Hooks für spätere Phasen (Metriken, WAN-Health, Mesh-Status): async fn(device, api, resource) -> None
-POLL_HOOKS: list[Any] = []
 
 
 async def poll_device(device: Device) -> dict[str, Any]:
@@ -26,7 +25,7 @@ async def poll_device(device: Device) -> dict[str, Any]:
         res = await api.resource()
         ident = await api.call("/system/identity/print")
         result: dict[str, Any] = {"resource": res, "identity": ident[0].get("name") if ident else None}
-        for hook in POLL_HOOKS:
+        for hook in registry.poll_hooks():
             try:
                 extra = await hook(device, api, res)
                 if extra:
@@ -81,4 +80,9 @@ async def poll_all() -> None:
                 })
 
         await asyncio.gather(*(one(d) for d in devices))
+        for post in registry.post_poll_hooks():
+            try:
+                await post(db, devices)
+            except Exception:  # noqa: BLE001
+                log.exception("Post-Poll-Hook %s fehlgeschlagen", getattr(post, "__name__", post))
         await db.commit()

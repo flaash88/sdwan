@@ -14,6 +14,7 @@ Details zu Aufbau und Design-Entscheidungen: [ARCHITECTURE.md](ARCHITECTURE.md).
 | Phase | Funktion | Status |
 |------:|----------|--------|
 | 1 | Auth (JWT), RBAC (Admin/Techniker/Read-Only), Mandanten, Standorte, Device-Pairing, WireGuard-Hub, Dashboard | ✅ |
+| 2 | VPN-Mesh: Hub-and-Spoke / Full-Mesh, PSK pro Link, automatischer Push, Tunnel-Status + Topologie-Ansicht | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

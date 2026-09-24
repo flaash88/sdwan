@@ -12,3 +12,4 @@ from app.models.core import (  # noqa: F401
     User,
 )
 from app.models.mesh import VpnPeer  # noqa: F401,E402
+from app.models.wan import WanLink  # noqa: F401,E402

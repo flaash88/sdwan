@@ -136,3 +136,30 @@ eigenen Abschnitt.
   Endpoints) und wendet das Mesh nur bei Änderungen an (abschaltbar pro Tenant).
 * **Status:** Poll-Hook liest `last-handshake`/rx/tx der Mesh-Peers; ein Tunnel gilt als `up`, wenn
   der letzte Handshake ≤ 180 s zurückliegt (WireGuard rekeyt alle 120 s). Wechsel werden live gepusht.
+
+## Phase 3 – WAN Failover & Load-Balancing
+
+* **Health-Checks laufen auf dem Router** (`/tool netwatch`, ICMP oder HTTP-GET), nicht in der Cloud.
+  Grund: Fällt der primäre WAN aus, ist meist auch die Cloud-Verbindung kurz weg – Failover darf
+  davon nicht abhängen. Die Cloud konfiguriert, beobachtet (Poll-Hook) und alarmiert.
+* **Check-Routen:** Pro WAN eine Host-Route `<check_target>/32 via <gateway>`; dadurch laufen
+  die Probes immer über genau diesen WAN. Deshalb muss jedes Check-Ziel pro Gerät eindeutig sein
+  (validiert). Vorbelegt: 1.1.1.1, 9.9.9.9, 8.8.4.4, 208.67.222.222.
+* **Umschalten:** Netwatch-`down-script` deaktiviert alle Default-Routen des WANs
+  (`comment~"^sdwan:wan:default:<slot>"`, main-Table und PCC-Tabellen). Das `up-script` wartet die
+  **Recovery-Verzögerung** ab und aktiviert nur, wenn der Link dann noch `up` ist (Hysterese).
+* **Modi:**
+  * `failover` – Default-Routen mit `distance = priority`.
+  * `loadbalance_ecmp` – gleiche Distanz, RouterOS 7 verteilt per ECMP; ausgefallene Links werden deaktiviert.
+  * `loadbalance_pcc` – Routing-Tabellen `sdwan-wan<slot>` (eigener WAN + übrige als Fallback),
+    Mangle mit `per-connection-classifier`, gewichtet über mehrere PCC-Slots. Eingehende
+    Verbindungen werden markiert und antworten über denselben WAN. Private Ziele
+    (RFC1918/CGNAT, Adressliste `sdwan-private`) werden nie markiert, damit LAN-/Mesh-Verkehr in
+    der main-Table bleibt. Optional werden bei Ausfall die Verbindungen des WANs gelöscht
+    (`flush_connections`), damit sie neu verteilt werden.
+* **Gateways:** IP, Interface-Name (PPPoE/LTE) oder `dhcp`. Bei `dhcp` wird das Gateway beim Push aus
+  `/ip dhcp-client` gelesen; ändert es sich, erkennt der Poll-Hook das und pusht automatisch neu.
+* Eine NAT-Masquerade-Regel für die Interface-Liste `sdwan-wan` wird angelegt (vor manuellen Regeln).
+* **Status:** `up` / `down` / `degraded` (Latenz über Schwelle) / `disabled`; `active` = die
+  Default-Route dieses WANs ist aktiv. Statuswechsel gehen live an das Dashboard (Basis für Alerts).
+* Slot (1–4) ist stabil pro Link und bestimmt Tabellen-/Kommentarnamen; Priorität ist davon unabhängig.

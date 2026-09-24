@@ -117,6 +117,10 @@ class Device(IdMixin, TenantScoped, Base):
     # Öffentliche Adresse für eingehende Mesh-Verbindungen (leer = vom Hub erkannte Adresse)
     mesh_endpoint: Mapped[str | None] = mapped_column(String(255))
 
+    # WAN (Phase 3): failover | loadbalance_pcc | loadbalance_ecmp
+    wan_mode: Mapped[str] = mapped_column(String(30), default="failover")
+    wan_options: Mapped[dict] = mapped_column(JSONType, default=dict)
+
     tags: Mapped[list] = mapped_column(JSONType, default=list)
     notes: Mapped[str | None] = mapped_column(Text)
     # Zuletzt gemeldete Systeminfos (Board, Speicher, ...)

@@ -15,6 +15,7 @@ Details zu Aufbau und Design-Entscheidungen: [ARCHITECTURE.md](ARCHITECTURE.md).
 |------:|----------|--------|
 | 1 | Auth (JWT), RBAC (Admin/Techniker/Read-Only), Mandanten, Standorte, Device-Pairing, WireGuard-Hub, Dashboard | ✅ |
 | 2 | VPN-Mesh: Hub-and-Spoke / Full-Mesh, PSK pro Link, automatischer Push, Tunnel-Status + Topologie-Ansicht | ✅ |
+| 3 | WAN Failover & Load-Balancing: bis 4 Links, Netwatch-Health-Checks (Ping/HTTP), PCC/ECMP, Recovery-Hysterese | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

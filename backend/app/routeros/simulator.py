@@ -36,6 +36,7 @@ _TABLE_PATHS = {
     "/interface/list",
     "/interface/list/member",
     "/certificate",
+    "/ip/dhcp-client",
 }
 
 
@@ -53,6 +54,7 @@ class SimRouter:
         self._next_id = 1
         self.dns: dict[str, Any] = {"servers": "", "use-doh-server": "", "verify-doh-cert": "no", "allow-remote-requests": "yes"}
         self.fail_next: set[str] = set()  # Tests: Befehle, die einmal fehlschlagen sollen
+        self.down_hosts: set[str] = set()  # Tests: Netwatch-Ziele, die als "down" gelten
         self.counters: dict[str, list[int]] = {}
         for i, name in enumerate(["ether1", "ether2", "ether3", "ether4", "bridge", "sdwan-mgmt"]):
             iface_type = {"bridge": "bridge", "sdwan-mgmt": "wg"}.get(name, "ether")
@@ -124,6 +126,23 @@ class SimRouter:
                     c[0] += self.rng.randint(10**4, 10**7)
                     c[1] += self.rng.randint(10**4, 10**6)
                     r["rx-byte"], r["tx-byte"] = c
+            if path == "/tool/netwatch":
+                for r in rows:
+                    down = r.get("host") in self.down_hosts
+                    r["status"] = "down" if down else "up"
+                    r["rtt-avg"] = f"{self.rng.uniform(8, 35):.1f}ms"
+                    r["loss-percent"] = "100%" if down else "0%"
+            if path == "/ip/route":
+                down_slots = {
+                    str(n.get("comment", "")).rsplit(":", 1)[-1]
+                    for n in self.tables["/tool/netwatch"]
+                    if n.get("host") in self.down_hosts
+                }
+                mains = [r for r in rows if str(r.get("comment", "")).count(":") == 3 and str(r.get("comment", "")).startswith("sdwan:wan:default:")]
+                alive = [r for r in mains if str(r["comment"]).rsplit(":", 1)[1] not in down_slots and r.get("disabled") != "yes"]
+                best = min((int(r.get("distance", 1)) for r in alive), default=None)
+                for r in mains:
+                    r["active"] = "true" if r in alive and int(r.get("distance", 1)) == best else "false"
             if path == "/interface/wireguard/peers":
                 for r in rows:
                     r.setdefault("last-handshake", f"{self.rng.randint(1, 90)}s")
@@ -215,13 +234,15 @@ class SimRouter:
         return []
 
 
-_PERSIST = ("version", "channel", "identity", "board", "tables", "_next_id", "dns", "counters", "boot")
+_PERSIST = ("version", "channel", "identity", "board", "tables", "_next_id", "dns", "counters", "boot", "down_hosts")
 
 
 def _dump(r: SimRouter) -> str:
     import json
 
-    return json.dumps({k: getattr(r, k) for k in _PERSIST})
+    data = {k: getattr(r, k) for k in _PERSIST}
+    data["down_hosts"] = sorted(r.down_hosts)
+    return json.dumps(data)
 
 
 def _load(host: str, raw: str) -> SimRouter:
@@ -230,6 +251,7 @@ def _load(host: str, raw: str) -> SimRouter:
     r = SimRouter(host)
     for k, v in json.loads(raw).items():
         setattr(r, k, v)
+    r.down_hosts = set(r.down_hosts)
     for p in _TABLE_PATHS:
         r.tables.setdefault(p, [])
     return r

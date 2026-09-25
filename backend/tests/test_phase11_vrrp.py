@@ -407,3 +407,29 @@ async def test_alert_webhook_teams_and_generic(client, msp, hub):
         assert r.json()["webhook"] is None
     finally:
         webhook.transport = None
+
+
+async def test_dashboard_fleet_state(client, msp, hub):
+    h, dev = await _setup(client, msp)
+    inst = (await client.put(f"/api/v1/devices/{dev['id']}/vrrp", json={"instances": [VRRP]}, headers=h)).json()["instances"][0]
+    await poll_all()
+    st = (await client.get("/api/v1/dashboard/fleet-state", headers=h)).json()
+    d = st["devices"][dev["id"]]
+    assert d["active_wan"]["slot"] == 1 and d["active_wan"]["backup"] is False and d["vrrp_role"] == "backup"
+    assert d["on_backup"] is False and st["sites_on_backup"] == 0
+    get_router(dev["tunnel_ip"]).down_hosts.add("1.1.1.1")
+    await client.post(f"/api/v1/devices/{dev['id']}/vrrp/{inst['id']}/simulate?master=true", headers=h)
+    await poll_all()
+    st = (await client.get("/api/v1/dashboard/fleet-state", headers=h)).json()
+    d = st["devices"][dev["id"]]
+    assert d["active_wan"]["name"] == "5G" and d["active_wan"]["backup"] is True and d["vrrp_role"] == "master"
+    assert d["on_backup"] is True and d["backup_since"] and st["sites_on_backup"] == 1
+
+
+async def test_vrrp_put_without_id_updates_same_name(client, msp, hub):
+    h, dev = await _setup(client, msp)
+    a = (await client.put(f"/api/v1/devices/{dev['id']}/vrrp", json={"instances": [VRRP]}, headers=h)).json()["instances"][0]
+    r = await client.put(f"/api/v1/devices/{dev['id']}/vrrp", json={"instances": [{**VRRP, "priority": 90}]}, headers=h)
+    assert r.status_code == 200, r.text
+    (b,) = r.json()["instances"]
+    assert b["id"] == a["id"] and b["priority"] == 90

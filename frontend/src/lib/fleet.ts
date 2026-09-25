@@ -53,3 +53,21 @@ export function useDevices() {
 export function useSites() {
   return useFetch<Site[]>("/sites");
 }
+
+export interface DeviceState {
+  wan_mode: string;
+  wan_links: number;
+  active_wan: { slot: number; name: string; interface: string; backup: boolean; latency_ms: number | null } | null;
+  vrrp_role: string | null;
+  vrrp: { id: string; name: string; vrid: number; state: string; enabled: boolean }[];
+  on_backup: boolean;
+  backup_since: string | null;
+}
+export interface FleetState { devices: Record<string, DeviceState>; sites_on_backup: number; sites_total: number }
+
+/** Aktiver WAN / VRRP-Rolle / Backup-Betrieb je Gerät (live bei WAN- und VRRP-Wechseln). */
+export function useFleetState() {
+  const f = useFetch<FleetState>("/dashboard/fleet-state");
+  useLive(() => void f.reload(), ["wan.link", "vrrp.state", "device.status"]);
+  return f;
+}

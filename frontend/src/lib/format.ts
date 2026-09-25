@@ -35,3 +35,42 @@ export function fmtBps(n: number | null | undefined): string {
   }
   return `${v.toFixed(1)} ${u[i]}`;
 }
+
+/** Dauer menschenlesbar: "45 s", "38 min", "2 h 14 min", "1 T 4 h". */
+export function fmtDuration(seconds: number | null | undefined): string {
+  if (seconds == null || !isFinite(seconds)) return "–";
+  const s = Math.max(0, Math.round(seconds));
+  if (s < 60) return `${s} s`;
+  if (s < 3600) return `${Math.floor(s / 60)} min`;
+  if (s < 86400) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return m ? `${h} h ${m} min` : `${h} h`; }
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600);
+  return h ? `${d} T ${h} h` : `${d} T`;
+}
+
+/** Dauer seit ``from`` bis ``to`` (Standard: jetzt). */
+export function fmtSince(from: string | null | undefined, to?: string | null): string {
+  if (!from) return "–";
+  return fmtDuration(((to ? new Date(to).getTime() : Date.now()) - new Date(from).getTime()) / 1000);
+}
+
+/** Kurzform "25.09. 07:48" (heute nur Uhrzeit mit Sekunden, wenn ``seconds``). */
+export function fmtShort(v: string | null | undefined): string {
+  if (!v) return "–";
+  const d = new Date(v);
+  return `${d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} ${d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+/** "25.09.2026, 09:24:11" */
+export function fmtFull(v: string | null | undefined): string {
+  if (!v) return "–";
+  return new Date(v).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+/** RouterOS-Uptime "27d3h47m53s" bzw. "1w2d3h" -> "27 T 3 h". */
+export function fmtUptime(v: string | null | undefined): string {
+  if (!v) return "–";
+  const m = { w: 604800, d: 86400, h: 3600, m: 60, s: 1 } as Record<string, number>;
+  let s = 0;
+  for (const [, n, u] of v.matchAll(/(\d+)([wdhms])/g)) s += Number(n) * m[u];
+  return s ? fmtDuration(s) : v;
+}

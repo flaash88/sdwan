@@ -78,6 +78,8 @@ async def put_vrrp(device_id: uuid.UUID, data: VrrpConfigIn, ctx: Ctx = TechCtx)
     keep: set[uuid.UUID] = set()
     for item in items:
         inst = existing.get(item["id"]) if item.get("id") else None
+        if inst is None:  # ohne ID: bestehende Instanz gleichen Namens übernehmen (statt Unique-Verletzung)
+            inst = next((i for i in existing.values() if i.name == item["name"] and i.id not in keep), None)
         fields = {k: item[k] for k in FIELDS}
         if inst is None:
             inst = VrrpInstance(tenant_id=dev.tenant_id, device_id=dev.id, **fields)

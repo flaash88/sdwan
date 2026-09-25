@@ -286,7 +286,7 @@ eigenen Abschnitt.
   werden bewusst nicht in der Cloud gespeichert.
 * **Speicherung:** Volltext + SHA-256 (ohne Zeitstempel-Kopfzeile) + Diff zum Vorgänger als JSONB
   (`{previous_id, added, removed, lines}`). Tägliches Backup (Standard 02:00 UTC) wird nur bei Änderung
-  gespeichert; manuelle und Pre-Update-Backups immer (und gepinnt). Retention: letzte 90 automatische
+  gespeichert; manuelle und Pre-Update-Backups immer (und gepinnt), seit Phase 13 auch nach Policy-Push. Retention: letzte 90 automatische
   Backups pro Gerät. Beliebige Stände lassen sich per API gegeneinander diffen.
 * **Firmware-Jobs:** Geräte werden in Batches (`batch_size`) eingeteilt; ein Worker-Tick (15 s)
   bearbeitet nur den aktuellen Batch: Pre-Update-Backup → Kanal setzen → `check-for-updates` →
@@ -432,6 +432,81 @@ Fällt die FortiGate bzw. die Glasfaser aus, übernimmt der MikroTik die VIP und
   (nur MSP-Admins) rendert die Mail mit Beispieldaten, ohne DB-Zugriff. Der Betreff steht URL-kodiert
   im Header `X-Mail-Subject`.
 
+## Phase 13 – Labortest-Werkzeuge
+
+Vorbereitung auf den ersten Test mit echter Hardware (L009UiGS-RM, RouterOS 7). Die Plattform wurde bis
+dahin nur gegen den Simulator entwickelt; die folgenden Werkzeuge sollen Abweichungen früh sichtbar machen.
+Die Checkliste für den Test steht in `docs/LABORTEST.md`.
+
+### Hardware-Selbsttest
+
+* **Eine Quelle für Pfade und Felder:** `backend/app/routeros/schema.py` (`PATH_SPECS`) listet jeden
+  RouterOS-Pfad, den die Plattform liest, mit Pflichtfeldern, optionalen Feldern, Nutzern und Hinweisen.
+  Der Selbsttest und der Simulator-Test (`tests/test_selftest.py`) lesen dieselbe Liste. Wer Code ergänzt,
+  der ein neues Feld liest, trägt es dort ein.
+* **Nur lesend:** ausschließlich `print`, `/ping` (1 Paket zum Hub) und der Export über SSH (wie im
+  Echtbetrieb). Kein `check-for-updates`, kein `set`/`add`/`remove`. `/ip/firewall/connection` wird mit
+  `count-only` gezählt und nur bei ≤ 5000 Einträgen mit `.proplist` gelesen.
+* **Ampel je Pfad:** rot = nicht erreichbar oder Pflichtfeld fehlt; orange = leere Pflicht-Tabelle oder
+  fehlendes optionales Feld mit Warnhinweis; grün = in Ordnung (leere, nicht zwingende Tabellen sind grün mit
+  dem Hinweis „Feldprüfung übersprungen“). Pflichtfelder müssen in jeder Zeile stehen, weil RouterOS leere
+  Felder (z. B. `comment`) weglässt; diese sind deshalb optional. Gesamtstatus = schlechtester Einzelwert.
+* **Zusatzprüfungen:** RouterOS ≥ 7, Architektur bekannt, Policies der Gruppe des API-Benutzers
+  (Pflicht: `api, read, write, policy, reboot, test, ssh`; `sensitive` fehlt → orange, weil der Export
+  dann keine Schlüssel/Passwörter enthält), `/ip service` `api` und `ssh` aktiv und für die Hub-Adresse
+  erlaubt (sonst rot, der Export läuft über SSH), Uhrzeitabweichung (> 60 s orange, > 300 s rot).
+  `latest-version` ist erst nach einer Update-Prüfung befüllt und daher nur ein Hinweis.
+* **Speicherung:** letzter Lauf je Gerät in `device_selftests` (eigene Tabelle, damit der Poller ihn nie
+  überschreibt). Die Oberfläche zeigt die Karte „Selbsttest“ in der Übersicht mit JSON-Export.
+
+### Neustart und Alarm-Unterdrückung
+
+* `POST /devices/{id}/reboot` (Techniker): `/system/reboot`, Audit `device.reboot`. Ein Verbindungsabbruch
+  direkt danach gilt als Erfolg. Die Plattform setzt `device.facts.reboot = {at, by, until}` mit
+  `until = at + 5 min`.
+* `alerts.reboot_suppressed()`: Die Bedingung `device_offline` wird bis `until` übersprungen. Andere
+  Alarmtypen bleiben aktiv. Kommt das Gerät bis dahin nicht zurück, greift danach die normale Alarmierung
+  (Test `test_device_not_returning_alarms_after_five_minutes`).
+* Der Poller entfernt die Markierung, sobald das Gerät mit einer Uptime antwortet, die kleiner ist als die
+  seit dem Neustart vergangene Zeit, oder wenn `until` erreicht ist. Bis dahin zeigt die Oberfläche
+  „Neustart läuft“.
+* Die Bestätigung verlangt die Eingabe des Gerätenamens. Firmware-Updates nutzen diese Unterdrückung
+  (noch) nicht.
+
+### VRRP-Gegenstelle
+
+* Pro Instanz optional `peer_address` (IP des Hauptsystems, z. B. FortiGate) und `peer_description`.
+  Die Gegenstelle muss im Netz von `local_address` liegen und sich von VIP und lokaler Adresse
+  unterscheiden. Sie wird nicht auf den Router geschrieben. Die Priorität der Gegenstelle wird bewusst
+  nicht geführt.
+* Bei jeder Abfrage: `/ping address=<peer> src-address=<lokale IP> count=3 interval=200ms timeout=500ms`
+  (auf dem Router ≤ ~1,5 s). Zusätzlich begrenzt `PEER_PING_LIMIT_S = 2` die Wartezeit auf der
+  Plattformseite. Timeout oder Fehler bedeutet „nicht erreichbar“, der restliche Poll läuft weiter. Nach
+  einem Abbruch wird die API-Verbindung verworfen (`LibRouterOSConnection._broken`), weil der Thread sonst
+  weiter vom Socket liest. Der VRRP-Hook läuft deshalb als letzter.
+* Die Ping-Ziele stehen in `device.facts.vrrp_peers`. Sie werden beim Speichern und in jedem Post-Poll
+  aktualisiert, sodass auch per ZTP angelegte Instanzen erfasst werden. „Peer prüfen“ führt
+  `POST /devices/{id}/vrrp/{inst}/ping` aus. Ändert sich die Erreichbarkeit, gibt es das Event `vrrp.peer`.
+
+### Backup-Metadaten
+
+* `config_backups.created_by` (Migration 0018, Altbestand `unbekannt`). Werte: E-Mail des Benutzers
+  (manuell, Firewall-Übernahme), Ersteller des Firmware-Jobs (`pre-update`), Starter des Deployments
+  (`post-policy`) und `system` (geplant).
+* Neuer Auslöser `post-policy`: Nach einem erfolgreichen Policy-Push entsteht je Gerät ein Backup.
+  Das ist best effort: Exportfehler werden nur protokolliert und ändern das Deployment-Ergebnis nicht.
+  Diese Backups unterliegen der Aufbewahrungsgrenze; gepinnt sind nur `manual` und `pre-update`.
+* Die Liste zeigt die SHA-256-Prüfsumme gekürzt auf 12 Zeichen, den vollen Wert im Tooltip und kopierbar.
+
+### IP-Adressen und Sensoren
+
+* Poll-Hook `device_info`: `/ip/address` und `/ip/dhcp-client`. Kennzeichnung: DHCP (dynamisch und
+  DHCP-Client auf dem Interface), dynamisch, deaktiviert, ungültig, von der Plattform verwaltet.
+  `GET /devices/{id}/addresses` liest live, sonst den Stand der letzten Abfrage.
+* `/system/health`: RouterOS-7-Format (`name/value/type`) und flaches Format werden in eine Liste
+  `[{name, value, unit}]` überführt (nur Zahlenwerte in C/V/A/W). Die Kacheln Temperatur (CPU bevorzugt)
+  und Spannung erscheinen nur, wenn Werte vorhanden sind. Es gibt keine Alarmregel darauf.
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,
@@ -477,6 +552,8 @@ Anzeige kommt aus der API. Was das Backend nicht liefert, fehlt in der Oberfläc
   * `GET /dashboard/fleet-state`: aktiver WAN, VRRP-Rolle und Backup-Betrieb je Gerät.
   * `GET /devices/{id}/events`: state_log für Rollenverlauf, Ereignisse und Failover-Markierungen.
   * `GET /devices/{id}/wan/routes`: verwaltete `sdwan:wan`-Routen live vom Router.
+  * Phase 13: `GET/POST /devices/{id}/selftest`, `POST /devices/{id}/reboot`,
+    `GET /devices/{id}/addresses`, `POST /devices/{id}/vrrp/{inst}/ping`.
 
   Bestehende Endpunkte blieben unverändert.
 * **Kontrast:** Badge-Text auf Badge-Grund ≥ 4,5:1 in beiden Themes, Sekundärtext ≥ 4,6:1. Primär-Buttons

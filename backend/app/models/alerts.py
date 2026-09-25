@@ -26,7 +26,7 @@ class AlertRule(IdMixin, TenantScoped, Base):
     __tablename__ = "alert_rules"
 
     name: Mapped[str] = mapped_column(String(200))
-    # device_offline | wan_down | latency | mesh_down | cpu_high
+    # device_offline | wan_down | latency | mesh_down | cpu_high | vrrp_master | wan_backup_active | wan_volume
     type: Mapped[str] = mapped_column(String(30))
     severity: Mapped[str] = mapped_column(String(20), default="warning")  # info | warning | critical
     # {"threshold": 150, "metric": "wan"|"mgmt"}
@@ -37,6 +37,9 @@ class AlertRule(IdMixin, TenantScoped, Base):
     recipients: Mapped[list] = mapped_column(JSONType, default=list)
     notify_resolved: Mapped[bool] = mapped_column(Boolean, default=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Webhook zusätzlich zur E-Mail (Phase 11); URL verschlüsselt, da sie oft eine Signatur enthält
+    webhook_url_enc: Mapped[str | None] = mapped_column(Text)
+    webhook_format: Mapped[str] = mapped_column(String(20), default="generic", server_default="generic")  # generic | teams
 
 
 class Alert(IdMixin, TenantScoped, Base):

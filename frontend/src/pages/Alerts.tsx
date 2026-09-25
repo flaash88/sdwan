@@ -10,7 +10,7 @@ import { useFetch } from "../lib/useFetch";
 import { useMeta } from "../lib/meta";
 
 export interface AlertItem { fires_at: string | null; id: string; device_id: string | null; device: string | null; status: string; severity: string; message: string; started_at: string; fired_at: string | null; resolved_at: string | null; notified: boolean; acknowledged_by: string | null }
-interface Rule { id?: string; name: string; type: string; type_label?: string; severity: string; params: { threshold?: number; metric?: string }; duration_s: number; site_ids: string[]; device_ids: string[]; recipients: string[]; notify_resolved: boolean; enabled: boolean }
+interface Rule { id?: string; name: string; type: string; type_label?: string; severity: string; params: { threshold?: number; metric?: string }; duration_s: number; site_ids: string[]; device_ids: string[]; recipients: string[]; notify_resolved: boolean; enabled: boolean; webhook?: string | null; webhook_url?: string | null; webhook_format?: string }
 
 export const sevColor = (s: string) => (s === "critical" ? "red" : s === "warning" ? "yellow" : "blue");
 
@@ -63,7 +63,7 @@ export default function Alerts() {
                 <td className="px-3 py-2"><Badge color={sevColor(r.severity)}>{r.severity}</Badge></td>
                 <td className="px-3 py-2">{r.duration_s >= 60 ? `${r.duration_s / 60} min` : `${r.duration_s} s`}</td>
                 <td className="px-3 py-2 text-xs">{r.device_ids.length ? `${r.device_ids.length} Geräte` : r.site_ids.length ? `${r.site_ids.length} Standorte` : "alle Geräte"}</td>
-                <td className="px-3 py-2 text-xs">{r.recipients.join(", ") || "Mandanten-Kontakt"}</td>
+                <td className="px-3 py-2 text-xs">{r.recipients.join(", ") || "Mandanten-Kontakt"}{r.webhook ? ` + Webhook (${r.webhook_format === "teams" ? "Teams" : "JSON"})` : ""}</td>
                 <td className="px-3 py-2 text-right">{can("admin") && <Button variant="ghost" onClick={() => setEdit(r)}>Bearbeiten</Button>}</td>
               </tr>
             ))}
@@ -78,11 +78,13 @@ export default function Alerts() {
 function RuleModal({ rule, types, onClose, onSaved }: { rule: Rule; types: Record<string, string>; onClose: () => void; onSaved: () => void }) {
   const [r, setR] = useState<Rule>(structuredClone(rule));
   const [rcpt, setRcpt] = useState(r.recipients.join(", "));
+  const [hook, setHook] = useState("");
+  const [dropHook, setDropHook] = useState(false);
   const sites = useFetch<Site[]>("/sites");
   const devices = useFetch<Device[]>("/devices");
   const { busy, error, run } = useAction();
   const needsThr = r.type === "latency" || r.type === "cpu_high";
-  const body = () => ({ ...r, recipients: rcpt.split(/[\s,;]+/).filter(Boolean) });
+  const body = () => ({ ...r, webhook: undefined, webhook_url: dropHook ? "" : hook.trim() || null, recipients: rcpt.split(/[\s,;]+/).filter(Boolean) });
   return (
     <Modal open onClose={onClose} title={r.id ? "Regel bearbeiten" : "Neue Regel"} wide>
       <ErrorBox error={error} />
@@ -94,6 +96,14 @@ function RuleModal({ rule, types, onClose, onSaved }: { rule: Rule; types: Recor
         {needsThr && <Input label={r.type === "latency" ? "Schwelle (ms)" : "Schwelle (%)"} type="number" value={r.params.threshold ?? ""} onChange={(e) => setR({ ...r, params: { ...r.params, threshold: Number(e.target.value) } })} />}
         {r.type === "latency" && <Select label="Messung" value={r.params.metric ?? "wan"} onChange={(e) => setR({ ...r, params: { ...r.params, metric: e.target.value } })}><option value="wan">WAN-Links (Netwatch)</option><option value="mgmt">Latenz zur Cloud</option></Select>}
         <Input label="Empfänger (leer = Mandanten-Kontakt)" value={rcpt} onChange={(e) => setRcpt(e.target.value)} />
+        <Input label={r.webhook ? `Webhook (gesetzt: ${r.webhook}) – leer lassen = unverändert` : "Webhook-URL (optional, https)"} placeholder="https://…" value={hook} onChange={(e) => setHook(e.target.value)} />
+        <div className="flex items-end gap-3">
+          <Select label="Webhook-Format" value={r.webhook_format ?? "generic"} onChange={(e) => setR({ ...r, webhook_format: e.target.value })}>
+            <option value="generic">Generisch (JSON)</option>
+            <option value="teams">Microsoft Teams (Adaptive Card)</option>
+          </Select>
+          {r.webhook && <Checkbox label="Webhook entfernen" checked={dropHook} onChange={setDropHook} />}
+        </div>
         <div className="space-y-1 pt-6">
           <Checkbox label="Entwarnung senden" checked={r.notify_resolved} onChange={(v) => setR({ ...r, notify_resolved: v })} />
           <Checkbox label="aktiv" checked={r.enabled} onChange={(v) => setR({ ...r, enabled: v })} />
@@ -106,7 +116,7 @@ function RuleModal({ rule, types, onClose, onSaved }: { rule: Rule; types: Recor
       <div className="mt-4 flex justify-between">
         <div className="flex gap-2">
           {r.id && <Button variant="danger" onClick={() => confirm("Regel löschen?") && void run(async () => { await api.del(`/alert-rules/${r.id}`); onSaved(); })}>Löschen</Button>}
-          {r.id && <Button variant="secondary" onClick={() => void run(async () => { const x = await api.post<{ to: string[] }>(`/alert-rules/${r.id}/test`); alert(`Test-Mail an ${x.to.join(", ")} gesendet`); })}>Test-Mail</Button>}
+          {r.id && <Button variant="secondary" onClick={() => void run(async () => { const x = await api.post<{ to: string[]; webhook: boolean | null }>(`/alert-rules/${r.id}/test`); alert(`Test gesendet – E-Mail: ${x.to.join(", ") || "–"}${x.webhook != null ? `, Webhook: ${x.webhook ? "ok" : "fehlgeschlagen"}` : ""}`); })}>Test senden</Button>}
         </div>
         <Button disabled={busy} onClick={() => void run(async () => { if (r.id) await api.put(`/alert-rules/${r.id}`, body()); else await api.post("/alert-rules", body()); onSaved(); })}>Speichern</Button>
       </div>

@@ -153,6 +153,23 @@ async def _notify(rule: AlertRule, alert: Alert, tenant: Tenant | None, resolved
     )
     if await send_mail(to, subject, body):
         alert.notified = True
+    if rule.webhook_url_enc:
+        from app.security import decrypt_secret
+        from app.services import webhook
+
+        payload = webhook.build_payload(
+            rule.webhook_format, title=f"[{tag}] {rule.name}", text=alert.message, severity=alert.severity, resolved=resolved,
+            facts={"Mandant": tenant.name if tenant else "-", "Typ": TYPES.get(rule.type, rule.type), "Status": "behoben" if resolved else "aktiv",
+                   "Beginn": f"{alert.started_at:%d.%m.%Y %H:%M:%S} UTC",
+                   "Ende": f"{alert.resolved_at:%d.%m.%Y %H:%M:%S} UTC" if resolved and alert.resolved_at else ""},
+            link=f"{base}/devices/{alert.device_id}" if alert.device_id else None,
+            extra={"event": "alert.resolved" if resolved else "alert.firing", "alert_id": str(alert.id), "rule": rule.name, "type": rule.type,
+                   "tenant": tenant.name if tenant else None, "device_id": str(alert.device_id) if alert.device_id else None,
+                   "subject": alert.subject, "value": alert.value, "started_at": alert.started_at.isoformat(),
+                   "resolved_at": alert.resolved_at.isoformat() if resolved and alert.resolved_at else None},
+        )
+        if await webhook.send(decrypt_secret(rule.webhook_url_enc), payload):
+            alert.notified = True
 
 
 async def evaluate_tenant(db: AsyncSession, tenant: Tenant) -> dict[str, int]:

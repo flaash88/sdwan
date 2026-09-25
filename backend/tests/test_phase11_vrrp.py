@@ -342,3 +342,68 @@ async def test_sla_report_backup_times(client, msp, hub):
         text = _pdf_text(render_pdf(full))
         assert "Backup-Betrieb" in text and "2 h 0 min" in text and "2 h 45 min" in text
         assert "Backup-WAN 2 h 45 min (2x), VRRP-Master 2 h 0 min (1x)" in _backup_lines(full)  # Text der Monats-Mail
+
+
+async def test_alert_webhook_teams_and_generic(client, msp, hub):
+    import json
+
+    import httpx
+
+    from app.services import webhook
+
+    received: list[tuple[str, dict]] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        received.append((str(req.url), json.loads(req.content)))
+        return httpx.Response(202)
+
+    webhook.transport = httpx.MockTransport(handler)
+    try:
+        h, dev = await _setup(client, msp)
+        inst = (await client.put(f"/api/v1/devices/{dev['id']}/vrrp", json={"instances": [VRRP]}, headers=h)).json()["instances"][0]
+        # Validierung: nur https, keine internen Ziele
+        for bad in ("http://hooks.example.com/x", "https://127.0.0.1/x", "https://10.1.2.3/x", "https://localhost/x", "https://u:p@hooks.example.com/x"):
+            r = await client.post("/api/v1/alert-rules", json={"name": "x", "type": "vrrp_master", "webhook_url": bad}, headers=h)
+            assert r.status_code == 422, bad
+        url = "https://prod.westeurope.logic.azure.com/workflows/abc/triggers/manual/paths/invoke?sig=GEHEIM"
+        teams = (await client.post("/api/v1/alert-rules", json={"name": "VRRP Teams", "type": "vrrp_master", "duration_s": 0,
+                                                                "webhook_url": url, "webhook_format": "teams"}, headers=h)).json()
+        assert teams["webhook"] == "https://prod.westeurope.logic.azure.com/…" and "GEHEIM" not in json.dumps(teams)
+        await client.post("/api/v1/alert-rules", json={"name": "Backup generisch", "type": "wan_backup_active", "duration_s": 0,
+                                                       "webhook_url": "https://hooks.example.com/sdwan"}, headers=h)
+        audit = (await client.get("/api/v1/audit?action=alert_rule.", headers=h)).json()
+        assert audit and "GEHEIM" not in json.dumps(audit)
+        # Update ohne webhook_url behält die URL
+        r = await client.put(f"/api/v1/alert-rules/{teams['id']}", json={"name": "VRRP Teams", "type": "vrrp_master", "duration_s": 0,
+                                                                          "webhook_format": "teams"}, headers=h)
+        assert r.json()["webhook"]
+
+        get_router(dev["tunnel_ip"]).down_hosts.add("1.1.1.1")
+        await client.post(f"/api/v1/devices/{dev['id']}/vrrp/{inst['id']}/simulate?master=true", headers=h)
+        await poll_all()
+        await evaluate_all()
+        by_url = {u.split("?")[0]: p for u, p in received}
+        card = by_url["https://prod.westeurope.logic.azure.com/workflows/abc/triggers/manual/paths/invoke"]
+        assert card["type"] == "message"
+        att = card["attachments"][0]
+        assert att["contentType"] == "application/vnd.microsoft.card.adaptive" and att["content"]["type"] == "AdaptiveCard"
+        assert "Master" in json.dumps(att["content"]) and att["content"]["actions"][0]["type"] == "Action.OpenUrl"
+        gen = by_url["https://hooks.example.com/sdwan"]
+        assert gen["event"] == "alert.firing" and gen["type"] == "wan_backup_active" and "5G" in gen["text"] and gen["status"] == "firing"
+        alerts = (await client.get("/api/v1/alerts", headers=h)).json()
+        assert all(a["notified"] for a in alerts)  # ohne E-Mail-Empfänger, aber per Webhook benachrichtigt
+
+        # Entwarnung
+        received.clear()
+        get_router(dev["tunnel_ip"]).down_hosts.clear()
+        await client.post(f"/api/v1/devices/{dev['id']}/vrrp/{inst['id']}/simulate?master=false", headers=h)
+        await poll_all()
+        await evaluate_all()
+        assert {p.get("event") for _, p in received} >= {"alert.resolved"}
+        # Test-Knopf und Entfernen
+        t = (await client.post(f"/api/v1/alert-rules/{teams['id']}/test", headers=h)).json()
+        assert t["webhook"] is True
+        r = await client.put(f"/api/v1/alert-rules/{teams['id']}", json={"name": "VRRP Teams", "type": "vrrp_master", "webhook_url": ""}, headers=h)
+        assert r.json()["webhook"] is None
+    finally:
+        webhook.transport = None

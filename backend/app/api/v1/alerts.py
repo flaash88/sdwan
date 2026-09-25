@@ -33,6 +33,18 @@ class RuleIn(BaseModel):
     recipients: list[EmailStr] = []
     notify_resolved: bool = True
     enabled: bool = True
+    # None = unverändert lassen, "" = entfernen
+    webhook_url: str | None = Field(default=None, max_length=2000)
+    webhook_format: Literal["generic", "teams"] = "generic"
+
+    @field_validator("webhook_url")
+    @classmethod
+    def v_webhook(cls, v: str | None) -> str | None:
+        if v:
+            from app.services.webhook import validate_url
+
+            return validate_url(v)
+        return v
 
     @field_validator("type")
     @classmethod
@@ -51,13 +63,26 @@ class RuleIn(BaseModel):
             if v["metric"] not in ("wan", "mgmt"):
                 raise ValueError("metric: wan | mgmt")
             out["metric"] = v["metric"]
+        if "thresholds" in v:  # wan_volume: Prozent-Schwellen
+            ths = sorted({float(x) for x in v["thresholds"]})
+            if not ths or any(not 1 <= x <= 1000 for x in ths):
+                raise ValueError("thresholds: 1–1000 %")
+            out["thresholds"] = ths
         return out
 
 
 def _rule_out(r: AlertRule) -> dict:
     return {"id": str(r.id), "name": r.name, "type": r.type, "type_label": TYPES.get(r.type), "severity": r.severity, "params": r.params,
             "duration_s": r.duration_s, "site_ids": r.site_ids, "device_ids": r.device_ids, "recipients": r.recipients,
-            "notify_resolved": r.notify_resolved, "enabled": r.enabled}
+            "notify_resolved": r.notify_resolved, "enabled": r.enabled, "webhook_format": r.webhook_format,
+            "webhook": _webhook_masked(r)}
+
+
+def _webhook_masked(r: AlertRule) -> str | None:
+    from app.security import decrypt_secret
+    from app.services.webhook import mask
+
+    return mask(decrypt_secret(r.webhook_url_enc)) if r.webhook_url_enc else None
 
 
 def _alert_out(a: Alert, names: dict | None = None, durations: dict | None = None) -> dict:
@@ -70,7 +95,20 @@ def _alert_out(a: Alert, names: dict | None = None, durations: dict | None = Non
 
 
 def _rule_data(data: RuleIn) -> dict:
+    from app.security import encrypt_secret
+
     d = data.model_dump(mode="json")
+    url = d.pop("webhook_url")
+    if url is not None:
+        d["webhook_url_enc"] = encrypt_secret(url) if url else None
+    return d
+
+
+def _audit_data(data: RuleIn) -> dict:
+    from app.services.webhook import mask
+
+    d = data.model_dump(mode="json")
+    d["webhook_url"] = mask(d["webhook_url"]) if d["webhook_url"] else d["webhook_url"]  # Signatur nie ins Audit-Log
     return d
 
 
@@ -89,7 +127,7 @@ async def create_rule(data: RuleIn, ctx: Ctx = AdminCtx) -> dict:
     r = AlertRule(tenant_id=ctx.require_tenant(), **_rule_data(data))
     ctx.db.add(r)
     await ctx.db.flush()
-    await ctx.audit("alert_rule.create", target_type="alert_rule", target_id=r.id, details=_rule_data(data))
+    await ctx.audit("alert_rule.create", target_type="alert_rule", target_id=r.id, details=_audit_data(data))
     await ctx.db.commit()
     return _rule_out(r)
 
@@ -107,7 +145,7 @@ async def update_rule(rule_id: uuid.UUID, data: RuleIn, ctx: Ctx = AdminCtx) -> 
     r = await get_or_404(ctx.db, AlertRule, rule_id, "Regel")
     for k, v in _rule_data(data).items():
         setattr(r, k, v)
-    await ctx.audit("alert_rule.update", target_type="alert_rule", target_id=r.id, details=_rule_data(data))
+    await ctx.audit("alert_rule.update", target_type="alert_rule", target_id=r.id, details=_audit_data(data))
     await ctx.db.commit()
     return _rule_out(r)
 
@@ -125,10 +163,18 @@ async def test_rule(rule_id: uuid.UUID, ctx: Ctx = AdminCtx) -> dict:
     r = await get_or_404(ctx.db, AlertRule, rule_id, "Regel")
     tenant = await get_or_404(ctx.db, Tenant, r.tenant_id, "Tenant")
     to = r.recipients or ([tenant.contact_email] if tenant.contact_email else [])
-    if not to:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Keine Empfänger (Regel oder Mandanten-Kontakt)")
-    ok = await send_mail(to, f"[SD-WAN][TEST] {r.name}", f"Test-Benachrichtigung der Alert-Regel '{r.name}' für {tenant.name}.")
-    return {"sent": ok, "to": to}
+    if not to and not r.webhook_url_enc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Keine Empfänger (Regel oder Mandanten-Kontakt) und kein Webhook")
+    ok = await send_mail(to, f"[SD-WAN][TEST] {r.name}", f"Test-Benachrichtigung der Alert-Regel '{r.name}' für {tenant.name}.") if to else False
+    hook: bool | None = None
+    if r.webhook_url_enc:
+        from app.security import decrypt_secret
+        from app.services import webhook
+
+        payload = webhook.build_payload(r.webhook_format, title=f"[TEST] {r.name}", text=f"Test-Benachrichtigung der Alert-Regel '{r.name}' für {tenant.name}.",
+                                        severity=r.severity, resolved=False, facts={"Mandant": tenant.name}, link=None, extra={"event": "test"})
+        hook = await webhook.send(decrypt_secret(r.webhook_url_enc), payload)
+    return {"sent": ok, "to": to, "webhook": hook}
 
 
 @router.post("/alerts/evaluate")

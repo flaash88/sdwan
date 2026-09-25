@@ -244,6 +244,12 @@ export default function Layout({ children }: { children: ReactNode }) {
   const devices = useDevices();
   const sites = useSites();
   useEffect(() => setMobile(false), [loc.pathname]);
+  useEffect(() => {
+    if (!mobile) return;
+    const k = (e: KeyboardEvent) => e.key === "Escape" && setMobile(false);
+    document.addEventListener("keydown", k);
+    return () => document.removeEventListener("keydown", k);
+  }, [mobile]);
   useEffect(() => { try { localStorage.setItem(SIDEBAR_KEY, collapsed ? "1" : "0"); } catch { /* ignore */ } }, [collapsed]);
   if (!me) return null;
   const alarmCount = activeAlarmCount(alerts.data);

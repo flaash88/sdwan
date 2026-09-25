@@ -34,7 +34,7 @@ export default function Policies() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <PageHeader title="Firewall-Policies" subtitle="Zentral definierte Address-Lists, Filter- und NAT-Regeln – versioniert und mit Rollback" actions={can("technician") && <Button onClick={() => setOpen(true)}>+ Policy</Button>} />
+      <PageHeader title="Firewall-Policies" subtitle="Zentral definierte Address-Lists, Filter- und NAT-Regeln – versioniert und mit Rollback" actions={can("technician") && <Button onClick={() => setOpen(true)} icon="plus">Policy</Button>} />
       <p className="-mt-3 mb-4 text-sm text-slate-500">Bestehende Regeln eines Routers anzeigen oder übernehmen: <b>Geräte → Gerät → Firewall → „Als Policy übernehmen“</b>.</p>
       <Card>
         <ErrorBox error={pols.error} />
@@ -52,12 +52,12 @@ export default function Policies() {
         </Table>
       </Card>
       <DeploymentsCard deps={deps.data ?? []} policies={pols.data ?? []} />
-      <Modal open={open} onClose={() => setOpen(false)} title="Neue Policy">
+      <Modal open={open} onClose={() => setOpen(false)} title="Neue Policy"
+        footer={<><Button variant="secondary" onClick={() => setOpen(false)}>Abbrechen</Button><Button form="new-policy" disabled={busy}>Anlegen</Button></>}>
         <ErrorBox error={error} />
-        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); void run(async () => { const p = await api.post<Policy>("/policies", { name, content: empty() }); nav(`/policies/${p.id}`); }); }}>
+        <form id="new-policy" className="space-y-3" onSubmit={(e) => { e.preventDefault(); void run(async () => { const p = await api.post<Policy>("/policies", { name, content: empty() }); nav(`/policies/${p.id}`); }); }}>
           <Input label="Name" value={name} required onChange={(e) => setName(e.target.value)} />
-          <p className="text-xs text-slate-500">Als MSP-Admin ohne gewählten Mandanten entsteht eine globale Policy, die alle Mandanten nutzen können.</p>
-          <div className="flex justify-end"><Button disabled={busy}>Anlegen</Button></div>
+          <p className="text-xs text-fg3">Als MSP-Admin ohne gewählten Mandanten entsteht eine globale Policy, die alle Mandanten nutzen können.</p>
         </form>
       </Modal>
     </>
@@ -68,7 +68,7 @@ function DeploymentsCard({ deps, policies }: { deps: Deployment[]; policies: Pol
   const [sel, setSel] = useState<Deployment | null>(null);
   const pname = (id: string | null) => policies.find((p) => p.id === id)?.name ?? (id ? id.slice(0, 8) : "Entzug");
   return (
-    <Card title="Letzte Pushes" className="mt-6">
+    <Card title="Letzte Pushes" className="mt-4">
       <Table head={["Zeit", "Policy", "Version", "Status", "Geräte", "Von"]} empty={deps.length === 0}>
         {deps.map((d) => {
           const r = Object.values(d.results);
@@ -84,11 +84,11 @@ function DeploymentsCard({ deps, policies }: { deps: Deployment[]; policies: Pol
           );
         })}
       </Table>
-      <Modal open={!!sel} onClose={() => setSel(null)} title="Push-Ergebnis" wide>
+      <Modal open={!!sel} onClose={() => setSel(null)} title="Push-Ergebnis" wide footer={<Button onClick={() => setSel(null)}>Schließen</Button>}>
         {sel && (
           <ul className="space-y-2 text-sm">
             {Object.entries(sel.results).map(([id, r]) => (
-              <li key={id} className="flex justify-between gap-4 border-b pb-2">
+              <li key={id} className="flex justify-between gap-4 border-b border-line pb-2">
                 <span className="font-medium">{r.name}</span>
                 <span className="text-right">{r.ok ? <Badge color="green">ok</Badge> : <><Badge color="red">Fehler</Badge>{r.rolled_back && <Badge color="yellow">zurückgerollt</Badge>}<div className="text-xs text-red-600">{r.error}</div></>}</span>
               </li>
@@ -134,7 +134,7 @@ function RuleTable({ kind, rules, onChange, readOnly }: { kind: "filter" | "nat"
           ))}
         </tbody>
       </table>
-      {!readOnly && <Button variant="ghost" className="mt-2" onClick={() => onChange([...rules, { chain: CHAINS[kind][0], action: ACTIONS[kind][0] }])}>+ Regel</Button>}
+      {!readOnly && <Button variant="ghost" className="mt-2" onClick={() => onChange([...rules, { chain: CHAINS[kind][0], action: ACTIONS[kind][0] }])} icon="plus">Regel</Button>}
     </div>
   );
 }
@@ -175,7 +175,7 @@ export function PolicyDetail() {
       />
       <ErrorBox error={error} />
       {msg && <div className="mb-4 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{msg}</div>}
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2" title={
           <div className="flex gap-1">
             {([["filter", `Filter (${content.filter.length})`], ["nat", `NAT (${content.nat.length})`], ["address_lists", `Address-Lists (${content.address_lists.length})`], ["json", "JSON"]] as const).map(([k, l]) => (
@@ -195,7 +195,7 @@ export function PolicyDetail() {
                   {!readOnly && <button className="text-red-400" onClick={() => setDraft({ ...content, address_lists: content.address_lists.filter((_, j) => j !== i) })}>✕</button>}
                 </div>
               ))}
-              {!readOnly && <Button variant="ghost" onClick={() => setDraft({ ...content, address_lists: [...content.address_lists, { list: "", address: "" }] })}>+ Eintrag</Button>}
+              {!readOnly && <Button variant="ghost" onClick={() => setDraft({ ...content, address_lists: [...content.address_lists, { list: "", address: "" }] })} icon="plus">Eintrag</Button>}
             </div>
           )}
           {tab === "json" && <JsonEditor value={content} readOnly={readOnly} onChange={setDraft} />}
@@ -207,7 +207,7 @@ export function PolicyDetail() {
             </div>
           )}
         </Card>
-        <div className="space-y-6">
+        <div className="space-y-4">
           <Card title="Zugewiesene Geräte">
             <ul className="space-y-2 text-sm">
               {p.assignments?.map((a) => (
@@ -261,7 +261,15 @@ function AssignModal({ open, onClose, policyId, devices, sites, onDone }: { open
   const { busy, error, run } = useAction();
   const toggle = (id: string) => setSel(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]);
   return (
-    <Modal open={open} onClose={onClose} title="Policy zuweisen">
+    <Modal open={open} onClose={onClose} title="Policy zuweisen"
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Abbrechen</Button>
+        <Button disabled={busy} onClick={() => void run(async () => {
+          await api.post(`/policies/${policyId}/assign`, mode === "devices" ? { device_ids: sel } : mode === "sites" ? { site_ids: sel } : { tags: tags.split(",").map((t) => t.trim()).filter(Boolean) });
+          onDone();
+          onClose();
+        })}>Zuweisen</Button>
+      </>}>
       <ErrorBox error={error} />
       <Select label="Ziel" value={mode} onChange={(e) => { setMode(e.target.value as typeof mode); setSel([]); }}>
         <option value="devices">Einzelne Geräte</option>
@@ -272,13 +280,6 @@ function AssignModal({ open, onClose, policyId, devices, sites, onDone }: { open
         {mode === "devices" && devices.filter((d) => d.pairing_status !== "revoked").map((d) => <Checkbox key={d.id} label={d.name} checked={sel.includes(d.id)} onChange={() => toggle(d.id)} />)}
         {mode === "sites" && sites.map((s) => <Checkbox key={s.id} label={s.name} checked={sel.includes(s.id)} onChange={() => toggle(s.id)} />)}
         {mode === "tags" && <Input label="Tags (kommagetrennt)" value={tags} onChange={(e) => setTags(e.target.value)} />}
-      </div>
-      <div className="mt-4 flex justify-end">
-        <Button disabled={busy} onClick={() => void run(async () => {
-          await api.post(`/policies/${policyId}/assign`, mode === "devices" ? { device_ids: sel } : mode === "sites" ? { site_ids: sel } : { tags: tags.split(",").map((t) => t.trim()).filter(Boolean) });
-          onDone();
-          onClose();
-        })}>Zuweisen</Button>
       </div>
     </Modal>
   );

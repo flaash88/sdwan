@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Card, Checkbox, ErrorBox, Input, PageHeader, Stat, Table, useAction } from "../components/ui";
+import { Button, Card, Checkbox, ErrorBox, Input, PageHeader, Stat, Table, useAction, EmptyState } from "../components/ui";
 import { api, download } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { fmtDate } from "../lib/format";
@@ -23,16 +23,16 @@ export default function Reports() {
   const stored = useFetch<Stored>(me?.active_tenant_id ? "/reports" : null);
   const [rcpt, setRcpt] = useState<string | null>(null);
   const { busy, error, run } = useAction();
-  if (!me?.active_tenant_id) return <><PageHeader title="SLA-Berichte" /><Card><p className="text-sm text-slate-500">Bitte links einen Mandanten wählen.</p></Card></>;
+  if (!me?.active_tenant_id) return <><PageHeader title="SLA-Berichte" /><Card><EmptyState icon="building" title="Bitte einen Mandanten wählen" text="Diese Ansicht gilt je Mandant – oben links auswählen." /></Card></>;
   const r = rep.data;
   const st = stored.data?.settings;
   return (
     <>
       <PageHeader title="SLA-Berichte" subtitle="Verfügbarkeit je Gerät und WAN-Link, berechnet aus allen Statuswechseln"
         actions={<>
-          <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
-          <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
-          <Button variant="secondary" onClick={() => void download(`/reports/sla?${q}&format=pdf`, `sla-${start}-${end}.pdf`)}>PDF</Button>
+          <Input type="date" aria-label="Von" value={start} onChange={(e) => setStart(e.target.value)} className="w-[150px]" />
+          <span className="text-fg3">bis</span><Input type="date" aria-label="Bis" value={end} onChange={(e) => setEnd(e.target.value)} className="w-[150px]" />
+          <Button variant="secondary" icon="download" onClick={() => void download(`/reports/sla?${q}&format=pdf`, `sla-${start}-${end}.pdf`)}>PDF</Button>
           {can("technician") && <Button disabled={busy} onClick={() => void run(async () => { await api.post(`/reports?${q}&send=true`); await stored.reload(); })}>Speichern & versenden</Button>}
         </>} />
       <ErrorBox error={error ?? rep.error} />
@@ -60,7 +60,7 @@ export default function Reports() {
           ))}
         </Table>
       </Card>
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+      <div className="mt-6 grid gap-4 xl:grid-cols-2">
         <Card title="Gespeicherte Berichte">
           <Table head={["Zeitraum", "Verfügbarkeit", "Versendet an", ""]} empty={stored.data?.reports.length === 0}>
             {stored.data?.reports.map((x) => (

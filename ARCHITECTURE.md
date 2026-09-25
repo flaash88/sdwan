@@ -431,3 +431,53 @@ Fällt die FortiGate bzw. die Glasfaser aus, übernimmt der MikroTik die VIP und
 * **Vorschau:** `GET /api/v1/alerts/mail-preview?type=<typ>&state=firing|resolved[&format=text]`
   (nur MSP-Admins) rendert die Mail mit Beispieldaten, ohne DB-Zugriff. Der Betreff steht URL-kodiert
   im Header `X-Mail-Subject`.
+
+## Frontend-Designsystem
+
+Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,
+Komponenten, Farben, Typografie und Interaktionen, **nicht** der Code und nicht die Beispieldaten: Jede
+Anzeige kommt aus der API. Was das Backend nicht liefert, fehlt in der Oberfläche; es gibt keine Platzhalter.
+
+* **Tokens:** `frontend/src/index.css` übernimmt die CSS-Variablen 1:1 aus den Blöcken `[data-fm]` (hell)
+  und `[data-fm-theme="dark"]` (`--bg`, `--panel`, `--panel2`, `--sunken`, `--hover`, `--border`,
+  `--border-strong`, `--text*`, `--blue*`/`--green*`/`--orange*`/`--red*`/`--gray*`, `--c2`, `--code`,
+  `--shadow`, `--overlay`). Über `@theme inline` sind sie als Tailwind-Klassen nutzbar: `bg-panel`,
+  `text-fg2`, `border-line`, `bg-orange-bg`, `text-red-text` usw. Ältere Klassen (`slate-*`, `emerald-*`,
+  `amber-*`, `brand-*`) zeigen übergangsweise auf dieselben Tokens, damit nichts im Dunkelmodus hell bleibt.
+  Die Standard-Rahmenfarbe ist `--border`, weil Tailwind 4 sonst `currentColor` nimmt.
+* **Theme:** `data-theme="light|dark"` am `<html>`. Auswahl Hell/Dunkel/System im Kopf und auf der
+  Login-Seite, gespeichert in `localStorage` (`fm.theme`). „System“ folgt `prefers-color-scheme` live
+  (`lib/theme.ts`). Ein Inline-Script in `index.html` setzt das Theme vor dem ersten Rendern, damit es
+  nicht aufblitzt. Tailwind-`dark:` hängt am Attribut (`@custom-variant`).
+* **Schrift:** Geist und Geist Mono werden lokal über `@fontsource/geist-sans` und `@fontsource/geist-mono`
+  ausgeliefert; es gibt keine Anfragen an Google Fonts oder andere CDNs. Global gilt
+  `font-variant-numeric: tabular-nums`. Monospace nutzen IPs, Interfaces, Seriennummern, Befehle, Hashes
+  und Zeitstempel in Tabellen.
+* **Icons:** `components/Icon.tsx` enthält die SVG-Pfade aus dem Prototyp (Lucide-Stil), ohne zusätzliche
+  Abhängigkeit.
+* **Rahmen (`components/Layout.tsx`):** Seitenleiste 232 px, einklappbar auf 60 px (Zustand in
+  `localStorage`), Bereich „Verwaltung“. Zähler-Badges: aktive Alarme (rot) und ausstehende
+  Firmware-Updates. Unter 1024 px wird die Seitenleiste zum Overlay-Menü (Esc schließt). Kopfzeile mit
+  Mandanten-Wechsel (nur MSP-Admins), globaler Suche (Strg/⌘+K; Gerät, Tunnel-/Mesh-IP, Seriennummer,
+  Standort, Tag), Alarm-Glocke, Theme-Umschalter und Benutzermenü (Live-Status, Abmelden). Der
+  Produktname kommt aus `/api/v1/meta`.
+* **Komponenten (`components/ui.tsx`):** `Card`, `PageHeader`, `Button` (primary/secondary/ghost/danger),
+  Formularfelder mit Hinweis per `aria-describedby`, `Toggle`, `Pill`/`StatusBadge`/`SeverityBadge`
+  (immer Icon + Text, nie nur Farbe), `KpiTile`, `Segment`, `Tabs` mit Zähler, `Table` (Kopf `panel2`,
+  in Karten randlos), `RowCheck` + `SelectionBar` für Mehrfachauswahl, `Modal`/`Dialog` (max. 88vh,
+  Inhalt scrollt, Footer bleibt sichtbar, Esc, Fokusfalle, Fokus-Rückgabe), `CodeBlock` mit
+  Kopieren-Button (entfernt Leerzeilen zwischen Befehlen), `EmptyState`, `Loading`, `Notice`.
+  Fachliche Bausteine (aktiver WAN, VRRP-Rolle, CPU-Balken) liegen in `components/fleet.tsx`.
+* **Diagramme:** Die vorhandene `components/Chart.tsx` wurde erweitert (Token-Farben, 5 Zeitmarken,
+  gestrichelte Markierungen mit schattiertem Bereich für Backup-Betrieb, verzerrungsfreie Beschriftung
+  über `ResizeObserver`). Es gibt keine Chart-Bibliothek.
+* **Einheitliche Alarm-Definition (`lib/fleet.ts`):** aktiv = ausgelöst, nicht behoben, nicht quittiert.
+  Glocke, Seitenleiste, Dashboard und der Filter „Aktiv“ nutzen dieselbe Funktion `alarmState()`.
+* **Neue Lese-Endpunkte für das Frontend:**
+  * `GET /dashboard/fleet-state`: aktiver WAN, VRRP-Rolle und Backup-Betrieb je Gerät.
+  * `GET /devices/{id}/events`: state_log für Rollenverlauf, Ereignisse und Failover-Markierungen.
+  * `GET /devices/{id}/wan/routes`: verwaltete `sdwan:wan`-Routen live vom Router.
+
+  Bestehende Endpunkte blieben unverändert.
+* **Kontrast:** Badge-Text auf Badge-Grund ≥ 4,5:1 in beiden Themes, Sekundärtext ≥ 4,6:1. Ausnahme ist
+  weißer Text auf `--blue` im Dunkelmodus mit 4,4:1 (Token-Wert aus dem Design unverändert übernommen).

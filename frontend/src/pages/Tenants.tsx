@@ -16,7 +16,7 @@ export default function Tenants() {
   const { busy, error, run } = useAction();
   return (
     <>
-      <PageHeader title="Mandanten" subtitle="Kunden des MSP – strikt voneinander isoliert" actions={<Button onClick={() => setOpen(true)}>+ Mandant</Button>} />
+      <PageHeader title="Mandanten" subtitle="Kunden des MSP – strikt voneinander isoliert" actions={<Button onClick={() => setOpen(true)} icon="plus">Mandant</Button>} />
       <Card>
         <Table head={["Name", "Slug", "Kontakt", "Mesh", "Zeitzone", "Status", "Angelegt", ""]} empty={tenants.data?.length === 0}>
           {tenants.data?.map((t) => (
@@ -26,7 +26,7 @@ export default function Tenants() {
               <td className="px-3 py-2">{t.contact_email ?? "–"}</td>
               <td className="px-3 py-2">{t.mesh_topology}</td>
               <td className="px-3 py-2">
-                <select className="rounded border border-slate-300 px-1 py-0.5 text-xs" value={t.timezone} onChange={(e) => void run(async () => { await api.patch(`/tenants/${t.id}`, { timezone: e.target.value }); await tenants.reload(); })}>
+                <select aria-label={`Zeitzone ${t.name}`} className="h-7 cursor-pointer rounded-md border border-line-strong bg-panel px-1.5 text-xs" value={t.timezone} onChange={(e) => void run(async () => { await api.patch(`/tenants/${t.id}`, { timezone: e.target.value }); await tenants.reload(); })}>
                   {(ZONES.includes(t.timezone) ? ZONES : [t.timezone, ...ZONES]).map((z) => <option key={z} value={z}>{z}</option>)}
                 </select>
               </td>
@@ -42,8 +42,10 @@ export default function Tenants() {
           ))}
         </Table>
       </Card>
-      <Modal open={open} onClose={() => setOpen(false)} title="Neuer Mandant">
+      <Modal open={open} onClose={() => setOpen(false)} title="Neuer Mandant"
+        footer={<><Button variant="secondary" onClick={() => setOpen(false)}>Abbrechen</Button><Button form="tenant-form" disabled={busy}>Anlegen</Button></>}>
         <form
+          id="tenant-form"
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
@@ -67,7 +69,6 @@ export default function Tenants() {
           <Select label="Zeitzone (Zeiten in Mails und Berichten)" value={f.timezone} onChange={(e) => setF({ ...f, timezone: e.target.value })}>
             {ZONES.map((z) => <option key={z} value={z}>{z}</option>)}
           </Select>
-          <div className="flex justify-end gap-2"><Button disabled={busy}>Anlegen</Button></div>
         </form>
       </Modal>
     </>

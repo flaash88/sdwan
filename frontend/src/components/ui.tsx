@@ -30,7 +30,7 @@ export function Card({ title, subtitle, actions, children, className, flush, bod
           {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </header>
       )}
-      <div className={cls(!flush && "p-4", bodyClassName)}>{children}</div>
+      <div className={cls(!flush && "p-4 [&>[data-table]]:-mx-4 [&>[data-table]:first-child]:-mt-4 [&>[data-table]:last-child]:-mb-4", bodyClassName)}>{children}</div>
     </section>
   );
 }
@@ -279,7 +279,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, className }: {
 /** Tabelle mit Kopfzeile im Design (panel2, 12 px). Zeilen/Zellen liefert der Aufrufer (<tr><td className="px-3 py-2">). */
 export function Table({ head, children, empty, emptyText, className }: { head: ReactNode[]; children: ReactNode; empty?: boolean; emptyText?: ReactNode; className?: string }) {
   return (
-    <div className={cls("overflow-x-auto", className)}>
+    <div data-table="" className={cls("overflow-x-auto [&_td:first-child]:pl-4 [&_td:last-child]:pr-4 [&_th:first-child]:pl-4 [&_th:last-child]:pr-4", className)}>
       <table className="w-full border-collapse text-left">
         <thead className="bg-panel2 text-xs text-fg3">
           <tr className="border-b border-line">{head.map((h, i) => <th key={i} className="whitespace-nowrap px-3 py-2 font-medium">{h}</th>)}</tr>

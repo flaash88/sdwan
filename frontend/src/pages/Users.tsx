@@ -15,7 +15,7 @@ export default function Users() {
   const tenantName = (id: string | null) => (id ? me?.tenants.find((t) => t.id === id)?.name ?? id.slice(0, 8) : "MSP");
   return (
     <>
-      <PageHeader title="Benutzer" subtitle="Rollen: Admin · Techniker · Read-Only" actions={<Button onClick={() => setOpen(true)}>+ Benutzer</Button>} />
+      <PageHeader title="Benutzer" subtitle="Rollen: Admin · Techniker · Read-Only" actions={<Button onClick={() => setOpen(true)} icon="plus">Benutzer</Button>} />
       <Card>
         <ErrorBox error={error ?? users.error} />
         <Table head={["E-Mail", "Name", "Mandant", "Rolle", "Status", "Letzter Login", ""]} empty={users.data?.length === 0}>
@@ -39,8 +39,10 @@ export default function Users() {
           ))}
         </Table>
       </Card>
-      <Modal open={open} onClose={() => setOpen(false)} title="Neuer Benutzer">
+      <Modal open={open} onClose={() => setOpen(false)} title="Neuer Benutzer"
+        footer={<><Button variant="secondary" onClick={() => setOpen(false)}>Abbrechen</Button><Button form="user-form" disabled={busy}>Anlegen</Button></>}>
         <form
+          id="user-form"
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
@@ -54,7 +56,7 @@ export default function Users() {
           <ErrorBox error={error} />
           <Input label="E-Mail" type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
           <Input label="Name" value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.target.value })} />
-          <Input label="Initiales Passwort (min. 8 Zeichen)" type="password" required minLength={8} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
+          <Input label="Initiales Passwort" hint="Mindestens 8 Zeichen" type="password" required minLength={8} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
           <Select label="Rolle" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>
             <option value="admin">Admin</option>
             <option value="technician">Techniker</option>
@@ -65,8 +67,7 @@ export default function Users() {
               <input type="checkbox" checked={f.is_superuser} onChange={(e) => setF({ ...f, is_superuser: e.target.checked })} /> MSP-Admin (Zugriff auf alle Mandanten)
             </label>
           )}
-          {me?.user.is_superuser && !f.is_superuser && !me.active_tenant_id && <p className="text-xs text-amber-600">Bitte links zuerst einen Mandanten wählen – der Benutzer wird diesem zugeordnet.</p>}
-          <div className="flex justify-end"><Button disabled={busy}>Anlegen</Button></div>
+          {me?.user.is_superuser && !f.is_superuser && !me.active_tenant_id && <p className="text-xs text-amber-600">Bitte oben zuerst einen Mandanten wählen – der Benutzer wird diesem zugeordnet.</p>}
         </form>
       </Modal>
     </>

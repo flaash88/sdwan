@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Badge, Button, Card, Checkbox, ErrorBox, Input, Modal, PageHeader, Select, StatusBadge, StatusDot, Table, useAction } from "../components/ui";
+import { Badge, Button, Card, Checkbox, ErrorBox, Input, Modal, PageHeader, Select, StatusBadge, Table, useAction } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { fmtDate } from "../lib/format";
@@ -33,7 +33,7 @@ export default function Firmware() {
           {rows.data?.map((r) => (
             <tr key={r.device_id}>
               <td className="px-3 py-2"><input type="checkbox" checked={sel.includes(r.device_id)} onChange={(e) => setSel(e.target.checked ? [...sel, r.device_id] : sel.filter((x) => x !== r.device_id))} /></td>
-              <td className="px-3 py-2"><StatusDot status={r.status} /></td>
+              <td className="px-3 py-2"><StatusBadge status={r.status} /></td>
               <td className="px-3 py-2 font-medium"><Link to={`/devices/${r.device_id}`} className="text-brand-700 hover:underline">{r.device}</Link></td>
               <td className="px-3 py-2">{r.model ?? "–"}</td>
               <td className="px-3 py-2 font-mono text-xs">{r.update?.installed ?? r.routeros_version ?? "–"}</td>
@@ -44,7 +44,7 @@ export default function Firmware() {
           ))}
         </Table>
       </Card>
-      <Card title="Update-Jobs" className="mt-6">
+      <Card title="Update-Jobs" className="mt-4">
         <Table head={["Erstellt", "Name", "Kanal", "Batches", "Status", "Fortschritt", ""]} empty={jobs.data?.length === 0}>
           {jobs.data?.map((j) => {
             const s = j.summary ?? {};
@@ -81,7 +81,8 @@ function JobModal({ ids, onClose, onCreated }: { ids: string[]; onClose: () => v
   const [f, setF] = useState({ name: `RouterOS-Update ${new Date().toLocaleDateString("de-DE")}`, channel: "stable", batch_size: 5, batch_interval_s: 300, max_failures: 1, upgrade_routerboard: true });
   const { busy, error, run } = useAction();
   return (
-    <Modal open onClose={onClose} title={`${ids.length} Geräte aktualisieren`}>
+    <Modal open onClose={onClose} title={`${ids.length} Geräte aktualisieren`}
+      footer={<><Button variant="secondary" onClick={onClose}>Abbrechen</Button><Button disabled={busy} onClick={() => void run(async () => { await api.post("/firmware/jobs", { ...f, device_ids: ids }); onCreated(); })}>Job starten</Button></>}>
       <ErrorBox error={error} />
       <div className="space-y-3">
         <Input label="Name" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
@@ -96,7 +97,6 @@ function JobModal({ ids, onClose, onCreated }: { ids: string[]; onClose: () => v
         <Checkbox label="Danach RouterBOARD-Firmware aktualisieren (zusätzlicher Reboot)" checked={f.upgrade_routerboard} onChange={(v) => setF({ ...f, upgrade_routerboard: v })} />
         <p className="text-xs text-slate-500">Vor jedem Update wird ein Konfigurations-Backup erstellt. Geräte rebooten während des Updates.</p>
       </div>
-      <div className="mt-4 flex justify-end"><Button disabled={busy} onClick={() => void run(async () => { await api.post("/firmware/jobs", { ...f, device_ids: ids }); onCreated(); })}>Job starten</Button></div>
     </Modal>
   );
 }
@@ -106,14 +106,14 @@ function JobDetail({ id, onClose }: { id: string; onClose: () => void }) {
   useLive(() => void job.reload(), ["firmware.item", "firmware.job"]);
   const j = job.data;
   return (
-    <Modal open onClose={onClose} title={j?.name ?? "Job"} wide>
+    <Modal open onClose={onClose} title={j?.name ?? "Job"} wide footer={<Button onClick={onClose}>Schließen</Button>}>
       {j && (
         <Table head={["Batch", "Gerät", "Status", "Version", "Fehler"]}>
           {j.items?.map((i) => (
             <tr key={i.device_id}>
-              <td className="px-3 py-2">{i.batch_no + 1}{i.batch_no === j.current_batch && j.status === "running" && <span className="ml-1 text-xs text-sky-600">aktuell</span>}</td>
+              <td className="px-3 py-2">{i.batch_no + 1}{i.batch_no === j.current_batch && j.status === "running" && <span className="ml-1 text-xs text-blue-text">aktuell</span>}</td>
               <td className="px-3 py-2">{i.device}</td>
-              <td className="px-3 py-2"><StatusBadge status={i.status === "rebooting" || i.status === "updating" ? "running" : i.status} /> <span className="text-xs">{i.status}</span></td>
+              <td className="px-3 py-2"><StatusBadge status={i.status} /></td>
               <td className="px-3 py-2 font-mono text-xs">{i.from_version ?? "?"} → {i.to_version ?? "?"}</td>
               <td className="px-3 py-2 text-xs text-red-600">{i.error}</td>
             </tr>

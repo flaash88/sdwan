@@ -121,6 +121,8 @@
 }
 
 @layer base {
+/* Tailwind 4 nimmt sonst currentColor als Rahmenfarbe */
+*, ::after, ::before, ::backdrop, ::file-selector-button { border-color: var(--border); }
 html, body { background: var(--bg); color: var(--text); }
 body {
   margin: 0;

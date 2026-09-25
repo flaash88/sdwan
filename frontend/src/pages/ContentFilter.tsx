@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Badge, Button, Card, Checkbox, ErrorBox, Input, Modal, PageHeader, Select, StatusBadge, Table, Textarea, cls, useAction } from "../components/ui";
+import { Badge, Button, Card, Checkbox, ErrorBox, Input, Modal, PageHeader, Select, StatusBadge, Table, Textarea, cls, useAction, EmptyState } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { fmtDate } from "../lib/format";
@@ -24,7 +24,7 @@ export default function ContentFilter() {
   const [edit, setEdit] = useState<Profile | null>(null);
   const [keyOpen, setKeyOpen] = useState(false);
   const { busy, error, run } = useAction();
-  if (!tenant) return <><PageHeader title="Content-Filter" /><Card><p className="text-sm text-slate-500">Bitte links einen Mandanten wählen.</p></Card></>;
+  if (!tenant) return <><PageHeader title="Content-Filter" /><Card><EmptyState icon="building" title="Bitte einen Mandanten wählen" text="Diese Ansicht gilt je Mandant – oben links auswählen." /></Card></>;
   const a = assign.data;
   const newProfile = (): Profile => ({ name: "", categories: [], services: [], security: { ...(catalog.data?.default_security ?? {}) }, blocklists: ["nextdns-recommended"], denylist: [], allowlist: [], safe_search: false, youtube_restricted: false, block_bypass: true, force_dns: true });
   const saveAssign = (patch: Partial<{ default_profile_id: string | null; sites: Record<string, string | null> }>) =>
@@ -35,10 +35,10 @@ export default function ContentFilter() {
       <PageHeader title="Content-Filter" subtitle="DNS-Filterung über NextDNS – verschlüsselt per DNS-over-HTTPS direkt auf dem Router"
         actions={<>
           {can("admin") && <Button variant="secondary" onClick={() => setKeyOpen(true)}>NextDNS-API-Key {a?.api_key_configured ? "✓" : ""}</Button>}
-          {can("admin") && <Button onClick={() => setEdit(newProfile())}>+ Filterprofil</Button>}
+          {can("admin") && <Button onClick={() => setEdit(newProfile())} icon="plus">Filterprofil</Button>}
         </>} />
       <ErrorBox error={error} />
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-2">
         <Card title="Filterprofile">
           <Table head={["Name", "NextDNS", "Blockiert", "Sync", ""]} empty={profiles.data?.length === 0}>
             {profiles.data?.map((p) => (
@@ -70,7 +70,7 @@ export default function ContentFilter() {
           </div>
         </Card>
       </div>
-      <Card title="Status auf den Routern" className="mt-6">
+      <Card title="Status auf den Routern" className="mt-4">
         <Table head={["Gerät", "Profil", "DoH-Endpoint", "DNS erzwungen", "Angewendet"]} empty={a?.devices.length === 0}>
           {a?.devices.map((d) => (
             <tr key={d.id}>
@@ -101,7 +101,17 @@ function ProfileModal({ profile, catalog, onClose, onSaved }: { profile: Profile
   const toggle = (k: "categories" | "services" | "blocklists", v: string) => setP({ ...p, [k]: p[k].includes(v) ? p[k].filter((x) => x !== v) : [...p[k], v] });
   const lines = (s: string) => s.split(/\s+/).map((x) => x.trim()).filter(Boolean);
   return (
-    <Modal open onClose={onClose} title={p.id ? `Profil ${p.name}` : "Neues Filterprofil"} wide>
+    <Modal open onClose={onClose} title={p.id ? `Profil ${p.name}` : "Neues Filterprofil"} size="xl"
+      footer={<>
+        {p.id && <Button variant="danger-outline" icon="trash" className="mr-auto" onClick={() => confirm("Profil löschen (auch bei NextDNS)?") && void run(async () => { await api.del(`/content-filter/profiles/${p.id}`); onSaved(); })}>Löschen</Button>}
+        <Button variant="secondary" onClick={onClose}>Abbrechen</Button>
+        <Button disabled={busy} onClick={() => void run(async () => {
+          const body = { ...p, denylist: lines(deny), allowlist: lines(allow) };
+          if (p.id) await api.put(`/content-filter/profiles/${p.id}`, body);
+          else await api.post("/content-filter/profiles", body);
+          onSaved();
+        })}>Speichern & zu NextDNS synchronisieren</Button>
+      </>}>
       <ErrorBox error={error} />
       <div className="space-y-4">
         <Input label="Name" value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} />
@@ -124,15 +134,6 @@ function ProfileModal({ profile, catalog, onClose, onSaved }: { profile: Profile
           <Textarea label="Allowlist" rows={4} value={allow} onChange={(e) => setAllow(e.target.value)} />
         </div>
       </div>
-      <div className="mt-4 flex justify-between">
-        {p.id ? <Button variant="danger" onClick={() => confirm("Profil löschen (auch bei NextDNS)?") && void run(async () => { await api.del(`/content-filter/profiles/${p.id}`); onSaved(); })}>Löschen</Button> : <span />}
-        <Button disabled={busy} onClick={() => void run(async () => {
-          const body = { ...p, denylist: lines(deny), allowlist: lines(allow) };
-          if (p.id) await api.put(`/content-filter/profiles/${p.id}`, body);
-          else await api.post("/content-filter/profiles", body);
-          onSaved();
-        })}>Speichern & zu NextDNS synchronisieren</Button>
-      </div>
     </Modal>
   );
 }
@@ -141,11 +142,11 @@ function ApiKeyModal({ open, onClose }: { open: boolean; onClose: () => void }) 
   const [key, setKey] = useState("");
   const { busy, error, run } = useAction();
   return (
-    <Modal open={open} onClose={onClose} title="NextDNS-API-Key des Mandanten">
+    <Modal open={open} onClose={onClose} title="NextDNS-API-Key des Mandanten"
+      footer={<><Button variant="secondary" onClick={onClose}>Abbrechen</Button><Button disabled={busy} onClick={() => void run(async () => { await api.put("/content-filter/api-key", { api_key: key }); onClose(); })}>Prüfen & speichern</Button></>}>
       <ErrorBox error={error} />
       <p className="mb-3 text-sm text-slate-600">Optional: eigener NextDNS-Account des Kunden. Ohne Key wird der globale MSP-Key (<code>NEXTDNS_API_KEY</code>) verwendet. Der Key wird verschlüsselt gespeichert.</p>
       <Input label="API-Key (my.nextdns.io → Account)" type="password" value={key} onChange={(e) => setKey(e.target.value)} />
-      <div className="mt-4 flex justify-end"><Button disabled={busy} onClick={() => void run(async () => { await api.put("/content-filter/api-key", { api_key: key }); onClose(); })}>Prüfen & speichern</Button></div>
     </Modal>
   );
 }

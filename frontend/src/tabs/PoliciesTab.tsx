@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Badge, Button, Card, Checkbox, ErrorBox, Input, Modal, StatusBadge, Table, cls, useAction } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -31,7 +31,7 @@ export default function PoliciesTab({ device }: { device: Device }) {
   const manualCount = fw.data ? fw.data.filter.filter((r) => !r.managed).length + fw.data.nat.filter((r) => !r.managed).length : 0;
   const rows = fw.data?.[tab] ?? [];
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Card title="Zugewiesene Firewall-Policies (in Push-Reihenfolge)">
         <Table head={["Policy", "Geltung", "Stand", "Status", "Gepusht"]} empty={list.data?.length === 0}>
           {list.data?.map((p) => (
@@ -102,9 +102,17 @@ function ImportModal({ device, onClose, onDone }: { device: Device; onClose: () 
   const [replace, setReplace] = useState(false);
   const [res, setRes] = useState<ImportResult | null>(null);
   const { busy, error, run } = useAction();
+  const nav = useNavigate();
   const toggle = (s: string) => setSections(sections.includes(s) ? sections.filter((x) => x !== s) : [...sections, s]);
   return (
-    <Modal open onClose={onClose} title="Bestehende Regeln als Policy übernehmen" wide>
+    <Modal open onClose={onClose} title="Bestehende Regeln als Policy übernehmen" wide
+      footer={res ? <>
+        <Button variant="secondary" onClick={() => nav(`/policies/${res.policy_id}`)}>Policy öffnen</Button>
+        <Button onClick={() => { onDone(); onClose(); }}>Fertig</Button>
+      </> : <>
+        <Button variant="secondary" onClick={onClose}>Abbrechen</Button>
+        <Button disabled={busy || !sections.length} onClick={() => void run(async () => setRes(await api.post<ImportResult>(`/devices/${device.id}/firewall/import`, { name, sections, replace })))}>{busy ? "Übernehme …" : "Übernehmen"}</Button>
+      </>}>
       <ErrorBox error={error} />
       {res ? (
         <div className="space-y-3 text-sm">
@@ -116,10 +124,6 @@ function ImportModal({ device, onClose, onDone }: { device: Device; onClose: () 
               <ul className="mt-1 list-disc pl-4">{res.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
             </div>
           )}
-          <div className="flex justify-end gap-2">
-            <Link to={`/policies/${res.policy_id}`}><Button variant="secondary">Policy öffnen</Button></Link>
-            <Button onClick={() => { onDone(); onClose(); }}>Fertig</Button>
-          </div>
         </div>
       ) : (
         <div className="space-y-4">
@@ -129,12 +133,11 @@ function ImportModal({ device, onClose, onDone }: { device: Device; onClose: () 
             <Checkbox label="NAT-Regeln" checked={sections.includes("nat")} onChange={() => toggle("nat")} />
             <Checkbox label="Address-Lists" checked={sections.includes("address_lists")} onChange={() => toggle("address_lists")} />
           </div>
-          <div className="space-y-2 rounded-lg border p-3 text-sm">
+          <div className="space-y-2 rounded-lg border border-line p-3">
             <label className="flex gap-2"><input type="radio" checked={!replace} onChange={() => setReplace(false)} /> <span><b>Nur als Policy anlegen</b> – Router bleibt unverändert. Die Policy kann danach bearbeitet und anderen Geräten zugewiesen werden.</span></label>
             <label className="flex gap-2"><input type="radio" checked={replace} onChange={() => setReplace(true)} /> <span><b>Übernehmen und ersetzen</b> – Policy wird diesem Router zugewiesen und gepusht, danach werden die Original-Regeln entfernt. Ab dann werden sie zentral verwaltet. Vorher wird automatisch ein Backup erstellt.</span></label>
           </div>
           <p className="text-xs text-slate-500">Regeln in eigenen Chains oder mit nicht unterstützten Feldern werden übersprungen und angezeigt. Beim Ersetzen bleiben diese unverändert auf dem Router.</p>
-          <div className="flex justify-end"><Button disabled={busy || !sections.length} onClick={() => void run(async () => setRes(await api.post<ImportResult>(`/devices/${device.id}/firewall/import`, { name, sections, replace })))}>{busy ? "Übernehme …" : "Übernehmen"}</Button></div>
         </div>
       )}
     </Modal>

@@ -27,7 +27,7 @@ READ_ONLY = {".id", "bytes", "packets", "dynamic", "invalid", "creation-time", "
 
 CHAINS = {"filter": {"input", "forward", "output"}, "nat": {"srcnat", "dstnat"}}
 ACTIONS = {
-    "filter": {"accept", "drop", "reject", "fasttrack-connection", "log", "passthrough", "return", "add-src-to-address-list", "add-dst-to-address-list", "tarpit"},
+    "filter": {"accept", "drop", "reject", "fasttrack-connection", "log", "passthrough", "return", "add-src-to-address-list", "add-dst-to-address-list", "tarpit", "jump"},
     "nat": {"accept", "masquerade", "src-nat", "dst-nat", "redirect", "netmap", "same", "return", "passthrough"},
 }
 RULE_KEYS = {
@@ -36,6 +36,8 @@ RULE_KEYS = {
     "connection-state", "connection-nat-state", "icmp-options", "tcp-flags", "src-address-type", "dst-address-type",
     "to-addresses", "to-ports", "address-list", "address-list-timeout", "reject-with", "log", "log-prefix",
     "limit", "connection-limit", "layer7-protocol", "content", "disabled", "comment", "hw-offload",
+    "jump-target", "ipsec-policy", "connection-mark", "packet-mark", "routing-mark", "new-connection-mark",
+    "src-mac-address", "in-bridge-port", "out-bridge-port", "ttl", "packet-size", "dscp", "psd", "nth",
 }
 _SAFE_VALUE = re.compile(r"^[\w .:/,!\-+*=@]{0,200}$")
 _NAME = re.compile(r"^[A-Za-z0-9._\-]{1,64}$")
@@ -128,8 +130,15 @@ async def snapshot(api: DeviceAPI) -> dict[str, list[dict[str, Any]]]:
 
 async def push(api: DeviceAPI, cfg: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
     stats = {}
-    # Regeln vor Address-Lists entfernen/aktualisieren, Address-Lists zuerst anlegen
-    stats[PATHS["address_lists"]] = await api.sync_managed(PATHS["address_lists"], "fw:", cfg[PATHS["address_lists"]])
+    # Address-List-Einträge, die manuell schon existieren, nicht doppelt anlegen (RouterOS lehnt Duplikate ab)
+    manual = {
+        (str(r.get("list")), str(r.get("address")))
+        for r in await api.print(PATHS["address_lists"])
+        if not str(r.get("comment", "")).startswith("sdwan:") and str(r.get("dynamic", "false")).lower() not in ("true", "yes")
+    }
+    wanted_al = [e for e in cfg[PATHS["address_lists"]] if (e["list"], e["address"]) not in manual]
+    # Address-Lists zuerst anlegen (Regeln referenzieren sie)
+    stats[PATHS["address_lists"]] = await api.sync_managed(PATHS["address_lists"], "fw:", wanted_al)
     for path in (PATHS["filter"], PATHS["nat"]):
         stats[path] = await api.sync_managed(path, "fw:", cfg[path], ordered=True, place_first=True)
     return stats
@@ -222,3 +231,73 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
                     success=dep.status == "success", details={"status": dep.status, "devices": len(devices), "failed": len(failed)})
         await db.commit()
         await events.publish(dep.tenant_id, "policy.deployment", {"id": str(dep.id), "status": dep.status})
+
+
+# ----------------------------------------------------------------------------- Bestehende Router-Regeln
+def _is_dynamic(r: dict[str, Any]) -> bool:
+    return str(r.get("dynamic", "false")).lower() in ("true", "yes")
+
+
+async def read_router_firewall(api: DeviceAPI) -> dict[str, list[dict[str, Any]]]:
+    """Aktuelle Filter-/NAT-Regeln und Address-Lists des Routers (ohne dynamische Einträge)."""
+    out: dict[str, list[dict[str, Any]]] = {}
+    for key, path in PATHS.items():
+        rows = []
+        for r in await api.print(path):
+            if _is_dynamic(r):
+                continue
+            comment = str(r.get("comment", "") or "")
+            rows.append({
+                **{k: v for k, v in r.items() if k not in READ_ONLY or k == ".id"},
+                "managed": comment.startswith("sdwan:"),
+                "managed_by": comment.split(":")[1] if comment.startswith("sdwan:") and comment.count(":") >= 1 else None,
+            })
+        out[key] = rows[:2000]
+    return out
+
+
+def import_rules(fw: dict[str, list[dict[str, Any]]], sections: list[str]) -> tuple[dict[str, Any], list[str], dict[str, list[str]]]:
+    """Wandelt manuelle Router-Regeln in einen Policy-Inhalt um.
+
+    Rückgabe: (content, Warnungen, übernommene .ids je Abschnitt). Nicht übertragbare Regeln
+    (unbekannte Felder/Chains/Actions) werden übersprungen und als Warnung gemeldet.
+    """
+    content: dict[str, list[dict[str, Any]]] = {"address_lists": [], "filter": [], "nat": []}
+    warnings: list[str] = []
+    ids: dict[str, list[str]] = {"address_lists": [], "filter": [], "nat": []}
+    for key in ("address_lists", "filter", "nat"):
+        if key not in sections:
+            continue
+        for idx, r in enumerate(fw.get(key, [])):
+            if r.get("managed"):
+                continue
+            if key == "address_lists":
+                if r.get("timeout"):
+                    continue  # temporäre Einträge nicht übernehmen
+                item = {"list": r.get("list"), "address": r.get("address")}
+                if r.get("comment"):
+                    item["comment"] = r["comment"]
+                cand = {"address_lists": [item]}
+            else:
+                rule = {k: v for k, v in r.items() if k in RULE_KEYS and v not in (None, "")}
+                dropped = sorted(k for k in r if k not in RULE_KEYS and k not in READ_ONLY and k not in (".id", "managed", "managed_by"))
+                if dropped:
+                    warnings.append(f"{key} #{idx}: Felder ignoriert: {', '.join(dropped)}")
+                cand = {key: [rule]}
+            try:
+                norm = validate_content(cand)
+            except PolicyError as exc:
+                if key != "address_lists" and "comment" in str(exc):
+                    # Kommentar mit Sonderzeichen -> ohne Kommentar übernehmen
+                    cand[key][0].pop("comment", None)
+                    try:
+                        norm = validate_content(cand)
+                    except PolicyError as exc2:
+                        warnings.append(f"{key} #{idx} übersprungen: {exc2}")
+                        continue
+                else:
+                    warnings.append(f"{key} #{idx} übersprungen: {exc}")
+                    continue
+            content[key] += norm[key]
+            ids[key].append(str(r[".id"]))
+    return content, warnings, ids

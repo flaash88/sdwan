@@ -131,3 +131,68 @@ async def test_global_policy_scope(client, msp, hub):
     r = await client.delete(f"/api/v1/policies/{gid}/assign/{devs[0]['id']}", headers=h)
     assert r.status_code == 200
     assert fw(devs[0]) == []
+
+
+def _defconf(rt):
+    f = rt.tables["/ip/firewall/filter"]
+    f += [
+        {".id": "*101", "chain": "input", "action": "accept", "connection-state": "established,related,untracked", "comment": "defconf: accept established,related,untracked"},
+        {".id": "*102", "chain": "input", "action": "drop", "in-interface-list": "!LAN", "comment": "defconf: drop all not coming from LAN"},
+        {".id": "*103", "chain": "forward", "action": "fasttrack-connection", "connection-state": "established,related", "hw-offload": "true"},
+        {".id": "*104", "chain": "forward", "action": "accept", "ipsec-policy": "in,ipsec"},
+        {".id": "*105", "chain": "customchain", "action": "drop"},
+        {".id": "*106", "chain": "forward", "action": "drop", "bytes": "123", "packets": "4", "dynamic": "true"},
+    ]
+    rt.tables["/ip/firewall/nat"].append({".id": "*201", "chain": "srcnat", "action": "masquerade", "out-interface-list": "WAN", "ipsec-policy": "out,none"})
+    rt.tables["/ip/firewall/address-list"].append({".id": "*301", "list": "admins", "address": "198.51.100.7"})
+
+
+async def test_read_and_import_router_firewall(client, msp, hub):
+    _t, h, (dev,) = await _setup(client, msp, n=1)
+    rt = get_router(dev["tunnel_ip"])
+    _defconf(rt)
+    fw = (await client.get(f"/api/v1/devices/{dev['id']}/firewall", headers=h)).json()
+    assert len(fw["filter"]) == 5  # dynamische Regel ausgeblendet
+    assert all(not r["managed"] for r in fw["filter"])
+    # Nur als Policy anlegen
+    r = await client.post(f"/api/v1/devices/{dev['id']}/firewall/import", json={"name": "Bestand"}, headers=h)
+    assert r.status_code == 201, r.text
+    res = r.json()
+    assert res["counts"] == {"address_lists": 1, "filter": 4, "nat": 1}
+    assert any("customchain" in w or "chain" in w for w in res["warnings"])
+    assert res["replaced"] is False
+    assert len(rt.tables["/ip/firewall/filter"]) == 6  # Router unverändert
+
+
+async def test_import_and_replace(client, msp, hub):
+    _t, h, (dev,) = await _setup(client, msp, n=1)
+    rt = get_router(dev["tunnel_ip"])
+    _defconf(rt)
+    r = await client.post(f"/api/v1/devices/{dev['id']}/firewall/import", json={"name": "Bestand", "replace": True}, headers=h)
+    res = r.json()
+    assert r.status_code == 201 and res["deployment_status"] == "success" and res["replaced"] is True, res
+    filt = rt.tables["/ip/firewall/filter"]
+    managed = [x for x in filt if str(x.get("comment", "")).startswith("sdwan:fw:")]
+    assert len(managed) == 4
+    # Originale entfernt, nur die nicht übertragbare (customchain) und die dynamische Regel bleiben
+    rest = [x for x in filt if not str(x.get("comment", "")).startswith("sdwan:")]
+    assert sorted(x[".id"] for x in rest) == ["*105", "*106"]
+    assert managed[1]["in-interface-list"] == "!LAN" and managed[0]["comment"].endswith("defconf: accept established,related,untracked")
+    nat = rt.tables["/ip/firewall/nat"]
+    assert [x.get("action") for x in nat] == ["masquerade"] and nat[0]["comment"].startswith("sdwan:fw:")
+    al = rt.tables["/ip/firewall/address-list"]
+    assert len(al) == 1 and al[0]["comment"].startswith("sdwan:fw:")
+    pols = (await client.get(f"/api/v1/devices/{dev['id']}/policies", headers=h)).json()
+    assert pols[0]["name"] == "Bestand" and pols[0]["status"] == "deployed"
+
+
+async def test_address_list_duplicate_not_pushed(client, msp, hub):
+    _t, h, (dev,) = await _setup(client, msp, n=1)
+    rt = get_router(dev["tunnel_ip"])
+    rt.tables["/ip/firewall/address-list"].append({".id": "*301", "list": "mgmt", "address": "198.51.100.7"})
+    pid = (await client.post("/api/v1/policies", json={"name": "P", "content": POLICY}, headers=h)).json()["id"]
+    await client.post(f"/api/v1/policies/{pid}/assign", json={"device_ids": [dev["id"]]}, headers=h)
+    r = await client.post(f"/api/v1/policies/{pid}/deploy", json={}, headers=h)
+    dep = (await client.get(f"/api/v1/deployments/{r.json()['deployment_id']}", headers=h)).json()
+    assert dep["status"] == "success"
+    assert len([a for a in rt.tables["/ip/firewall/address-list"] if a["list"] == "mgmt"]) == 1

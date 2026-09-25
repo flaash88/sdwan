@@ -262,3 +262,99 @@ async def device_policy_list(device_id: uuid.UUID, ctx: Ctx = ReadCtx) -> list[d
          "deployed_version": a.deployed_version, "status": a.status, "last_error": a.last_error, "deployed_at": a.deployed_at, "position": a.position}
         for a, p in await device_policies(ctx.db, dev.id)
     ]
+
+
+# ----------------------------------------------------------------------------- Bestehende Router-Regeln
+class ImportIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    sections: list[str] = ["filter", "nat", "address_lists"]
+    # True: Policy dem Gerät zuweisen, pushen und die Original-Regeln danach entfernen
+    replace: bool = False
+
+
+@router.get("/devices/{device_id}/firewall")
+async def device_firewall(device_id: uuid.UUID, ctx: Ctx = ReadCtx) -> dict:
+    """Aktuelle Firewall des Routers (live): Filter, NAT, Address-Lists – verwaltet oder manuell."""
+    from app.routeros import RouterOSError, connect_device
+    from app.services.policy import read_router_firewall
+
+    dev = await get_or_404(ctx.db, Device, device_id, "Device")
+    try:
+        async with connect_device(dev) as api:
+            fw = await read_router_firewall(api)
+    except RouterOSError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Router nicht erreichbar: {exc}") from exc
+    return fw
+
+
+@router.post("/devices/{device_id}/firewall/import", status_code=201)
+async def import_firewall(device_id: uuid.UUID, data: ImportIn, ctx: Ctx = TechCtx) -> dict:
+    """Übernimmt die manuellen Regeln des Routers als zentrale Policy (optional inkl. Ersetzen)."""
+    from app.routeros import RouterOSError, connect_device
+    from app.services.policy import PATHS, import_rules, read_router_firewall
+
+    bad = set(data.sections) - {"filter", "nat", "address_lists"}
+    if bad or not data.sections:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "sections: filter | nat | address_lists")
+    dev = await get_or_404(ctx.db, Device, device_id, "Device")
+    try:
+        async with connect_device(dev) as api:
+            fw = await read_router_firewall(api)
+    except RouterOSError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Router nicht erreichbar: {exc}") from exc
+    content, warnings, ids = import_rules(fw, data.sections)
+    if not any(content.values()):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Keine übertragbaren manuellen Regeln gefunden")
+
+    p = FirewallPolicy(tenant_id=dev.tenant_id, name=data.name, description=f"Übernommen von {dev.name}",
+                       content=content, version=1, updated_at=utcnow())
+    ctx.db.add(p)
+    await ctx.db.flush()
+    ctx.db.add(PolicyVersion(policy_id=p.id, version=1, content=content, note=f"Import von {dev.name}", created_by=ctx.user.email))
+    result: dict[str, Any] = {"policy_id": str(p.id), "counts": {k: len(v) for k, v in content.items()}, "warnings": warnings, "replaced": False}
+
+    if data.replace:
+        from app.services.backup import BackupError, take_backup
+        from app.services.policy import run_deployment
+
+        try:
+            await take_backup(ctx.db, dev, "manual", note=f"vor Firewall-Übernahme '{data.name}'")
+        except (BackupError, RouterOSError):
+            pass
+        ctx.db.add(PolicyAssignment(tenant_id=dev.tenant_id, policy_id=p.id, device_id=dev.id, position=1000))
+        removed_al: list[dict[str, Any]] = []
+        try:
+            async with connect_device(dev) as api:
+                # Address-Lists vorher entfernen (sonst Duplikate), bei Fehler wiederherstellen
+                for r in fw["address_lists"]:
+                    if str(r[".id"]) in ids["address_lists"]:
+                        await api.remove(PATHS["address_lists"], r[".id"])
+                        removed_al.append({k: r[k] for k in ("list", "address", "comment", "disabled") if r.get(k) not in (None, "")})
+        except RouterOSError as exc:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+        dep = PolicyDeployment(tenant_id=dev.tenant_id, policy_id=p.id, policy_version=1, started_by=ctx.user.email)
+        ctx.db.add(dep)
+        await ctx.db.commit()
+        await run_deployment(dep.id, [dev.id])
+        await ctx.db.refresh(dep)
+        async with connect_device(dev) as api:
+            if dep.status == "success":
+                for key in ("filter", "nat"):
+                    current = {str(r[".id"]) for r in await api.print(PATHS[key])}
+                    for rid in ids[key]:
+                        if rid in current:
+                            await api.remove(PATHS[key], rid)
+                result["replaced"] = True
+            else:
+                for e in removed_al:
+                    try:
+                        await api.add(PATHS["address_lists"], **e)
+                    except RouterOSError:
+                        pass
+        result["deployment_id"] = str(dep.id)
+        result["deployment_status"] = dep.status
+    await ctx.audit("policy.import", target_type="device", target_id=dev.id,
+                    details={"policy": str(p.id), "counts": result["counts"], "replace": data.replace, "replaced": result["replaced"],
+                             "warnings": warnings[:20]})
+    await ctx.db.commit()
+    return result

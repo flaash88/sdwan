@@ -35,6 +35,7 @@ export default function Policies() {
   return (
     <>
       <PageHeader title="Firewall-Policies" subtitle="Zentral definierte Address-Lists, Filter- und NAT-Regeln – versioniert und mit Rollback" actions={can("technician") && <Button onClick={() => setOpen(true)}>+ Policy</Button>} />
+      <p className="-mt-3 mb-4 text-sm text-slate-500">Bestehende Regeln eines Routers anzeigen oder übernehmen: <b>Geräte → Gerät → Firewall → „Als Policy übernehmen“</b>.</p>
       <Card>
         <ErrorBox error={pols.error} />
         <Table head={["Name", "Geltung", "Version", "Regeln", "Geräte", "Geändert"]} empty={pols.data?.length === 0}>

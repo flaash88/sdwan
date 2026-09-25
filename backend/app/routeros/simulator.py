@@ -95,6 +95,8 @@ class SimRouter:
 
     # -- Kommandos -------------------------------------------------------------
     def call(self, cmd: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+        if getattr(self, "offline", False):
+            raise RouterOSError("timeout (simuliert offline)")
         if cmd in self.fail_next:
             self.fail_next.discard(cmd)
             raise RouterOSError(f"{cmd}: simulated failure")

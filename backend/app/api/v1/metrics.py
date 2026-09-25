@@ -35,7 +35,8 @@ async def live(device_id: uuid.UUID, ctx: Ctx = ReadCtx) -> dict:
     """Aktiviert 5-s-Polling für dieses Gerät (solange der Client alle ~60 s erneuert)."""
     dev = await get_or_404(ctx.db, Device, device_id, "Device")
     await request_live(dev.id)
-    return {"live": True, "snapshot": live_payload(dev)}
+    online = dev.status.value == "online"
+    return {"live": online, "status": dev.status.value, "last_seen_at": dev.last_seen_at, "snapshot": live_payload(dev) if online else None}
 
 
 @router.get("/grafana")

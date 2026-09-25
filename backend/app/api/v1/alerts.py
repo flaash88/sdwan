@@ -60,8 +60,10 @@ def _rule_out(r: AlertRule) -> dict:
             "notify_resolved": r.notify_resolved, "enabled": r.enabled}
 
 
-def _alert_out(a: Alert, names: dict | None = None) -> dict:
-    return {"id": str(a.id), "rule_id": str(a.rule_id) if a.rule_id else None, "device_id": str(a.device_id) if a.device_id else None,
+def _alert_out(a: Alert, names: dict | None = None, durations: dict | None = None) -> dict:
+    dur = (durations or {}).get(a.rule_id)
+    fires_at = a.started_at + dt.timedelta(seconds=dur) if a.status == "pending" and dur is not None else None
+    return {"fires_at": fires_at, "id": str(a.id), "rule_id": str(a.rule_id) if a.rule_id else None, "device_id": str(a.device_id) if a.device_id else None,
             "device": (names or {}).get(a.device_id), "subject": a.subject, "status": a.status, "severity": a.severity, "message": a.message,
             "value": a.value, "started_at": a.started_at, "fired_at": a.fired_at, "resolved_at": a.resolved_at, "notified": a.notified,
             "acknowledged_by": a.acknowledged_by, "acknowledged_at": a.acknowledged_at}
@@ -141,14 +143,15 @@ async def evaluate_now(ctx: Ctx = TechCtx) -> dict:
 async def list_alerts(ctx: Ctx = ReadCtx, state: Literal["open", "all", "resolved"] = "open", limit: int = Query(default=200, le=1000)) -> list[dict]:
     q = select(Alert).order_by(Alert.started_at.desc()).limit(limit)
     if state == "open":
-        q = q.where(Alert.status == "firing")
+        q = q.where(Alert.status.in_(("firing", "pending")))
     elif state == "resolved":
         q = q.where(Alert.status == "resolved")
     else:
         q = q.where(Alert.status != "pending")
     alerts = (await ctx.db.execute(q)).scalars().all()
     names = {d.id: d.name for d in (await ctx.db.execute(select(Device))).scalars()}
-    return [_alert_out(a, names) for a in alerts]
+    durations = {r.id: r.duration_s for r in (await ctx.db.execute(select(AlertRule))).scalars()}
+    return [_alert_out(a, names, durations) for a in alerts]
 
 
 @router.post("/alerts/{alert_id}/ack")

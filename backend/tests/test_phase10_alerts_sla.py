@@ -52,7 +52,7 @@ async def test_alert_lifecycle_with_email(client, msp, hub):
     get_router(dev["tunnel_ip"]).down_hosts.add("1.1.1.1")
     await poll_all()
     await evaluate_all()
-    alerts = (await client.get("/api/v1/alerts", headers=h)).json()
+    alerts = [a for a in (await client.get("/api/v1/alerts", headers=h)).json() if a["status"] == "firing"]
     assert len(alerts) == 1 and alerts[0]["severity"] == "critical" and "Glasfaser" in alerts[0]["message"]
     assert alerts[0]["notified"] is True
     mail = mailer.outbox[-1]
@@ -88,13 +88,14 @@ async def test_device_offline_alert_after_duration(client, msp, hub):
         await db.execute(update(Device).values(status=DeviceStatus.offline, last_seen_at=dt.datetime.now(UTC) - dt.timedelta(minutes=2)))
         await db.commit()
     await evaluate_all()
-    assert (await client.get("/api/v1/alerts", headers=h)).json() == []  # erst 2 min offline
+    pend = (await client.get("/api/v1/alerts", headers=h)).json()
+    assert [a["status"] for a in pend] == ["pending"]  # erst 2 min offline -> noch ausstehend
     async with system_session() as db:
         await db.execute(update(Alert).values(started_at=dt.datetime.now(UTC) - dt.timedelta(minutes=10)))
         await db.commit()
     await evaluate_all()
     alerts = (await client.get("/api/v1/alerts", headers=h)).json()
-    assert len(alerts) == 1 and alerts[0]["device"] == dev["name"]
+    assert len(alerts) == 1 and alerts[0]["device"] == dev["name"] and alerts[0]["status"] == "firing"
 
 
 async def test_sla_report_json_and_pdf(client, msp, hub):
@@ -137,3 +138,56 @@ async def test_status_events_recorded_by_poller(client, msp, hub):
 
         ev = (await db.execute(select(StatusEvent))).scalars().all()
         assert [e.status for e in ev] == ["online"]
+
+
+async def test_offline_detection_stops_live_metrics_and_alerts(client, msp, hub):
+    from app.services import metrics
+
+    metrics.reset_sink()
+    mailer.outbox.clear()
+    t = (await client.post("/api/v1/tenants", json={"name": "Off", "slug": "off", "contact_email": "noc@off.example.com"}, headers=msp)).json()
+    h = await make_tenant_admin(client, msp, t["id"], email="a@off.example.com")
+    dev = await make_paired_device(client, h)
+    await client.post("/api/v1/alert-rules", json={"name": "offline", "type": "device_offline", "severity": "critical", "duration_s": 0}, headers=h)
+    # Tunnel steht (Handshake frisch) -> erst der 2. Fehlversuch macht offline
+    async with system_session() as db:
+        await db.execute(update(Device).values(last_handshake_at=dt.datetime.now(UTC)))
+        await db.commit()
+    await poll_all()
+    n_points = len(metrics.get_sink().points)
+    assert n_points > 0
+
+    get_router(dev["tunnel_ip"]).offline = True
+    await poll_all()
+    d = (await client.get(f"/api/v1/devices/{dev['id']}", headers=h)).json()
+    assert d["status"] == "online"  # 1. Fehlversuch: noch online …
+    assert len(metrics.get_sink().points) == n_points  # … aber KEINE (alten) Werte mehr als Metrik/Live
+    await poll_all()
+    d = (await client.get(f"/api/v1/devices/{dev['id']}", headers=h)).json()
+    assert d["status"] == "offline"
+    live = (await client.post(f"/api/v1/devices/{dev['id']}/metrics/live", headers=h)).json()
+    assert live["live"] is False and live["snapshot"] is None
+
+    await evaluate_all()
+    alerts = (await client.get("/api/v1/alerts", headers=h)).json()
+    assert len(alerts) == 1 and alerts[0]["status"] == "firing"
+    assert "[CRITICAL]" in mailer.outbox[-1]["Subject"] and mailer.outbox[-1]["To"] == "noc@off.example.com"
+
+    # wieder online -> behoben
+    get_router(dev["tunnel_ip"]).offline = False
+    await poll_all()
+    await evaluate_all()
+    assert (await client.get("/api/v1/alerts", headers=h)).json() == []
+    assert "[BEHOBEN]" in mailer.outbox[-1]["Subject"]
+
+
+async def test_pending_alert_visible_with_due_time(client, msp, hub):
+    t = await make_tenant(client, msp)
+    h = await make_tenant_admin(client, msp, t["id"])
+    dev = await make_paired_device(client, h)
+    await client.post("/api/v1/alert-rules", json={"name": "offline", "type": "device_offline", "duration_s": 600}, headers=h)
+    get_router(dev["tunnel_ip"]).offline = True
+    await poll_all()  # kein Handshake bekannt -> sofort offline
+    await evaluate_all()
+    alerts = (await client.get("/api/v1/alerts", headers=h)).json()
+    assert len(alerts) == 1 and alerts[0]["status"] == "pending" and alerts[0]["fires_at"]

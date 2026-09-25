@@ -7,8 +7,9 @@ import { fmtAgo, fmtDate } from "../lib/format";
 import { useLive } from "../lib/live";
 import type { Device, Site } from "../lib/types";
 import { useFetch } from "../lib/useFetch";
+import { useMeta } from "../lib/meta";
 
-export interface AlertItem { id: string; device_id: string | null; device: string | null; status: string; severity: string; message: string; started_at: string; fired_at: string | null; resolved_at: string | null; notified: boolean; acknowledged_by: string | null }
+export interface AlertItem { fires_at: string | null; id: string; device_id: string | null; device: string | null; status: string; severity: string; message: string; started_at: string; fired_at: string | null; resolved_at: string | null; notified: boolean; acknowledged_by: string | null }
 interface Rule { id?: string; name: string; type: string; type_label?: string; severity: string; params: { threshold?: number; metric?: string }; duration_s: number; site_ids: string[]; device_ids: string[]; recipients: string[]; notify_resolved: boolean; enabled: boolean }
 
 export const sevColor = (s: string) => (s === "critical" ? "red" : s === "warning" ? "yellow" : "blue");
@@ -22,17 +23,23 @@ export default function Alerts() {
   const types = useFetch<Record<string, string>>("/alert-rules/types");
   const [edit, setEdit] = useState<Rule | null>(null);
   const { busy, error, run } = useAction();
-  useLive(() => void alerts.reload(), ["alert.firing", "alert.resolved"]);
+  const meta = useMeta();
+  useLive(() => void alerts.reload(), ["alert.firing", "alert.resolved", "device.status"]);
   return (
     <>
       <PageHeader title="Alarme" subtitle="Regelbasierte Überwachung mit E-Mail-Benachrichtigung"
         actions={can("technician") && tenant && <Button variant="secondary" disabled={busy} onClick={() => void run(async () => { await api.post("/alerts/evaluate"); await alerts.reload(); })}>Jetzt auswerten</Button>} />
       <ErrorBox error={error} />
+      {meta && !meta.smtp_configured && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          <b>E-Mail-Versand ist nicht eingerichtet</b> – Alarme erscheinen hier und als Hinweis im Dashboard, es werden aber keine Mails verschickt. SMTP-Zugangsdaten (<code>SMTP_HOST</code>, <code>SMTP_USER</code>, …) in <code>/opt/sdwan/.env</code> eintragen und <code>docker compose up -d</code> ausführen.
+        </div>
+      )}
       <Card title={<div className="flex gap-2">{(["open", "all"] as const).map((s) => <button key={s} onClick={() => setState(s)} className={cls("rounded px-2 py-1 text-sm", state === s ? "bg-brand-100 text-brand-800" : "text-slate-500")}>{s === "open" ? "Aktiv" : "Verlauf"}</button>)}</div>}>
         <Table head={["Schwere", "Meldung", "Gerät", "Seit", "Ende", "Benachrichtigt", ""]} empty={alerts.data?.length === 0}>
           {alerts.data?.map((a) => (
             <tr key={a.id} className={a.status === "firing" ? "" : "text-slate-500"}>
-              <td className="px-3 py-2"><Badge color={a.status === "resolved" ? "green" : sevColor(a.severity)}>{a.status === "resolved" ? "behoben" : a.severity}</Badge></td>
+              <td className="px-3 py-2"><Badge color={a.status === "resolved" ? "green" : a.status === "pending" ? "gray" : sevColor(a.severity)}>{a.status === "resolved" ? "behoben" : a.status === "pending" ? "ausstehend" : a.severity}</Badge>{a.status === "pending" && a.fires_at && <div className="mt-1 text-xs text-slate-500">löst aus {new Date(a.fires_at) > new Date() ? `um ${new Date(a.fires_at).toLocaleTimeString("de-DE")}` : "gleich"}</div>}</td>
               <td className="px-3 py-2">{a.message}</td>
               <td className="px-3 py-2">{a.device_id ? <Link className="text-brand-700 hover:underline" to={`/devices/${a.device_id}`}>{a.device}</Link> : "–"}</td>
               <td className="px-3 py-2">{fmtDate(a.fired_at ?? a.started_at)}<div className="text-xs">{fmtAgo(a.started_at)}</div></td>

@@ -53,6 +53,7 @@ def create_app() -> FastAPI:
             "grafana_url": s.grafana_public_url,
             "hub_endpoint": f"{s.wg_hub_endpoint}:{s.wg_hub_port}",
             "management_network": s.wg_network,
+            "smtp_configured": bool(s.smtp_host),
         }
 
     app.include_router(api_router)

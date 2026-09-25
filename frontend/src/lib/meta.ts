@@ -7,6 +7,7 @@ export interface Meta {
   grafana_url: string;
   hub_endpoint: string;
   management_network: string;
+  smtp_configured: boolean;
 }
 
 let cache: Promise<Meta> | null = null;

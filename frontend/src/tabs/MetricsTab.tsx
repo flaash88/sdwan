@@ -3,7 +3,7 @@ import { color, LineChart, Sparkline, type Series } from "../components/Chart";
 import { Button, Card, ErrorBox, Select, StatusDot, Table } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { fmtBps, fmtBytes } from "../lib/format";
+import { fmtAgo, fmtBps, fmtBytes, fmtDate } from "../lib/format";
 import { useLive } from "../lib/live";
 import type { Device } from "../lib/types";
 import { useFetch } from "../lib/useFetch";
@@ -23,14 +23,14 @@ interface Live {
 }
 type Row = { time: number; [k: string]: number | string };
 
-function Tile({ label, value, history, c }: { label: string; value: string; history: number[]; c: string }) {
+function Tile({ label, value, history, c, online = true }: { label: string; value: string; history: number[]; c: string; online?: boolean }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-slate-500">
         {label}
-        <span className="flex items-center gap-1 normal-case text-emerald-600"><StatusDot status="online" /> live</span>
+        {online ? <span className="flex items-center gap-1 normal-case text-emerald-600"><StatusDot status="online" /> live</span> : <span className="normal-case text-red-600">offline</span>}
       </div>
-      <div className="mt-1 text-2xl font-semibold text-slate-900">{value}</div>
+      <div className={`mt-1 text-2xl font-semibold ${online ? "text-slate-900" : "text-slate-300"}`}>{online ? value : "–"}</div>
       <Sparkline values={history} color={c} />
     </div>
   );
@@ -59,16 +59,24 @@ export default function MetricsTab({ device }: { device: Device }) {
   // Live-Modus anfordern und alle 60 s erneuern
   useEffect(() => {
     let stop = false;
-    const req = () => api.post<{ snapshot: Live }>(`/devices/${device.id}/metrics/live`).then((r) => !stop && !live && setLive(r.snapshot)).catch(() => undefined);
+    const req = () => api.post<{ snapshot: Live | null }>(`/devices/${device.id}/metrics/live`).then((r) => !stop && setLive((cur) => (r.snapshot ? cur ?? r.snapshot : null))).catch(() => undefined);
     void req();
     const t = setInterval(req, 60000);
     return () => { stop = true; clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [device.id]);
 
+  const online = device.status === "online";
+  useEffect(() => {
+    if (!online) {
+      setLive(null);
+      hist.current = [];
+    }
+  }, [online]);
+
   useLive((e) => {
     const d = e.data as unknown as Live;
-    if (d.id !== device.id) return;
+    if (d.id !== device.id || !online) return;
     hist.current = [...hist.current.slice(-59), d];
     setLive(d);
   }, ["device.metrics"]);
@@ -81,15 +89,20 @@ export default function MetricsTab({ device }: { device: Device }) {
 
   return (
     <div className="space-y-6">
+      {!online && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <b>Gerät nicht erreichbar.</b> Keine Live-Werte – zuletzt gesehen {fmtAgo(device.last_seen_at)}{device.last_seen_at ? ` (${fmtDate(device.last_seen_at)})` : ""}. Der Verlauf unten zeigt die Daten bis dahin.
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <Tile label="CPU-Auslastung" value={live?.cpu_load != null ? `${live.cpu_load}%` : "–"} history={h.map((x) => x.cpu_load ?? 0)} c={color(0)} />
-        <Tile label="Arbeitsspeicher" value={live?.mem_total ? `${Math.round(((live.mem_used ?? 0) / live.mem_total) * 100)}%` : "–"} history={h.map((x) => (x.mem_total ? (x.mem_used ?? 0) / x.mem_total : 0))} c={color(1)} />
-        <Tile label="Download" value={fmtBps(live?.rx_bps)} history={h.map((x) => x.rx_bps)} c={color(4)} />
-        <Tile label="Upload" value={fmtBps(live?.tx_bps)} history={h.map((x) => x.tx_bps)} c={color(2)} />
-        <Tile label="Latenz Cloud" value={live?.mgmt_rtt_ms != null ? `${live.mgmt_rtt_ms} ms` : "–"} history={h.map((x) => x.mgmt_rtt_ms ?? 0)} c={color(5)} />
+        <Tile online={online} label="CPU-Auslastung" value={live?.cpu_load != null ? `${live.cpu_load}%` : "–"} history={h.map((x) => x.cpu_load ?? 0)} c={color(0)} />
+        <Tile online={online} label="Arbeitsspeicher" value={live?.mem_total ? `${Math.round(((live.mem_used ?? 0) / live.mem_total) * 100)}%` : "–"} history={h.map((x) => (x.mem_total ? (x.mem_used ?? 0) / x.mem_total : 0))} c={color(1)} />
+        <Tile online={online} label="Download" value={fmtBps(live?.rx_bps)} history={h.map((x) => x.rx_bps)} c={color(4)} />
+        <Tile online={online} label="Upload" value={fmtBps(live?.tx_bps)} history={h.map((x) => x.tx_bps)} c={color(2)} />
+        <Tile online={online} label="Latenz Cloud" value={live?.mgmt_rtt_ms != null ? `${live.mgmt_rtt_ms} ms` : "–"} history={h.map((x) => x.mgmt_rtt_ms ?? 0)} c={color(5)} />
       </div>
 
-      <Card title="Interfaces (live)">
+      <Card title={online ? "Interfaces (live)" : "Interfaces (Gerät offline)"}>
         <Table head={["", "Interface", "RX", "TX"]} empty={ifaceRows.length === 0}>
           {ifaceRows.map(([n, i]) => (
             <tr key={n}>

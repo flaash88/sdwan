@@ -60,6 +60,7 @@ async def poll_all(only: set[str] | None = None) -> None:
                     res = data["resource"]
                     dev.status = DeviceStatus.online
                     dev.last_seen_at = utcnow()
+                    dev._poll_ok = True  # type: ignore[attr-defined]  # nur dieser Durchlauf liefert frische Werte
                     dev.uptime = str(res.get("uptime"))
                     dev.routeros_version = str(res.get("version", dev.routeros_version))
                     dev.model = str(res.get("board-name", dev.model))
@@ -72,11 +73,17 @@ async def poll_all(only: set[str] | None = None) -> None:
                         "total_memory": res.get("total-memory"),
                         "cpu_count": res.get("cpu-count"),
                         **{k: v for k, v in data.items() if k not in ("resource", "identity")},
+                        "_poll_failures": 0,
                     }
                 except (RouterOSError, TimeoutError, OSError) as exc:
                     log.info("Device %s (%s) nicht erreichbar: %s", dev.name, dev.tunnel_ip, exc)
+                    dev._poll_ok = False  # type: ignore[attr-defined]
+                    fails = int((dev.facts or {}).get("_poll_failures") or 0) + 1
+                    dev.facts = {**(dev.facts or {}), "_poll_failures": fails}
                     grace = dt.timedelta(seconds=s.offline_after_seconds)
-                    if dev.last_seen_at is None or utcnow() - dev.last_seen_at > grace:
+                    tunnel_down = dev.last_handshake_at is None or utcnow() - dev.last_handshake_at > dt.timedelta(seconds=200)
+                    # Offline: 2 Fehlversuche in Folge, WireGuard-Tunnel ohne Handshake, oder Kulanzzeit überschritten
+                    if fails >= 2 or tunnel_down or dev.last_seen_at is None or utcnow() - dev.last_seen_at > grace:
                         dev.status = DeviceStatus.offline
                 if dev.status != old:
                     await events.publish(dev.tenant_id, "device.status", {"id": str(dev.id), "name": dev.name, "status": dev.status.value, "previous": old.value})

@@ -42,6 +42,9 @@ async def fresh_db():
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     simulator.reset()
+    from app.services import metrics as _metrics
+
+    _metrics._live_memory.clear()
     await ensure_bootstrap_admin()
     yield
     await get_engine().dispose()

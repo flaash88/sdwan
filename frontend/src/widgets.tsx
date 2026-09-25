@@ -39,8 +39,9 @@ function FleetLive() {
 
 /** Aktive Alarme (live aktualisiert). */
 function ActiveAlerts() {
-  const alerts = useFetch<AlertItem[]>("/alerts?state=open");
-  useLive(() => void alerts.reload(), ["alert.firing", "alert.resolved"]);
+  const all = useFetch<AlertItem[]>("/alerts?state=open");
+  useLive(() => void all.reload(), ["alert.firing", "alert.resolved"]);
+  const alerts = { data: all.data?.filter((a) => a.status === "firing") };
   if (!alerts.data?.length) return null;
   return (
     <Card title={<Link to="/alerts" className="hover:underline">Aktive Alarme ({alerts.data.length})</Link>} className="mb-6 border-red-200">

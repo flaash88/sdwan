@@ -215,7 +215,8 @@ async def store_metrics(db: Any, devices: list[Device]) -> None:
 
     from app.models import DeviceStatus, Site, Tenant
 
-    online = [d for d in devices if d.status == DeviceStatus.online]
+    # Nur Geräte, die in DIESEM Durchlauf erfolgreich abgefragt wurden – sonst würden alte Werte als live erscheinen
+    online = [d for d in devices if d.status == DeviceStatus.online and getattr(d, "_poll_ok", False)]
     if not online:
         return
     tenants = {t.id: t.name for t in (await db.execute(select(Tenant))).scalars()}

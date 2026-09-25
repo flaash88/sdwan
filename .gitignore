@@ -10,3 +10,4 @@ dist/
 *.sqlite
 .coverage
 ZUGANGSDATEN.txt
+dump.rdb

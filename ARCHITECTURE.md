@@ -479,5 +479,6 @@ Anzeige kommt aus der API. Was das Backend nicht liefert, fehlt in der Oberfläc
   * `GET /devices/{id}/wan/routes`: verwaltete `sdwan:wan`-Routen live vom Router.
 
   Bestehende Endpunkte blieben unverändert.
-* **Kontrast:** Badge-Text auf Badge-Grund ≥ 4,5:1 in beiden Themes, Sekundärtext ≥ 4,6:1. Ausnahme ist
-  weißer Text auf `--blue` im Dunkelmodus mit 4,4:1 (Token-Wert aus dem Design unverändert übernommen).
+* **Kontrast:** Badge-Text auf Badge-Grund ≥ 4,5:1 in beiden Themes, Sekundärtext ≥ 4,6:1. Primär-Buttons
+  nutzen das eigene Token `--btn-primary` (#2563EB in beiden Themes, weißer Text 5,2:1); `--blue` selbst
+  bleibt der Designwert und wird weiter für Linien, Diagramme und Fokusrahmen genutzt.

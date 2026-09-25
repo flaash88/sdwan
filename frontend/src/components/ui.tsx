@@ -53,7 +53,7 @@ export function Button({ variant = "primary", size = "md", icon, className, chil
   variant?: Variant; size?: "sm" | "md"; icon?: IconName;
 }) {
   const v: Record<Variant, string> = {
-    primary: "border-blue bg-blue text-white hover:brightness-110",
+    primary: "border-[var(--btn-primary)] bg-[var(--btn-primary)] text-white hover:brightness-110",
     secondary: "border-line-strong bg-panel text-fg hover:bg-hover",
     "danger-outline": "border-line-strong bg-panel text-red-text hover:bg-hover",
     danger: "border-red bg-red text-white hover:brightness-110",

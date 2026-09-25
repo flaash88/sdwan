@@ -23,6 +23,8 @@
   --gray: #98A2B3; --gray-bg: #EFF1F4; --gray-text: #4B5565;
   --c2: #0D9488; --code: #F3F5F8;
   --shadow: 0 12px 32px rgba(16,24,40,.14); --overlay: rgba(16,24,40,.38);
+  /* Primär-Button: eigenes Token, damit weißer Text im Dunkelmodus ≥ 4,5:1 erreicht (--blue bleibt unverändert) */
+  --btn-primary: #2563EB;
   color-scheme: light;
 }
 :root[data-theme="dark"] {
@@ -36,6 +38,7 @@
   --gray: #6C7788; --gray-bg: rgba(140,152,170,.14); --gray-text: #AAB4C1;
   --c2: #2DD4BF; --code: #10161E;
   --shadow: 0 12px 32px rgba(0,0,0,.45); --overlay: rgba(5,8,12,.62);
+  --btn-primary: #2563EB;
   color-scheme: dark;
 }
 

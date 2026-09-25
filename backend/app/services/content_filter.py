@@ -18,6 +18,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db import utcnow
 from app.models import ContentFilterProfile, Device, Site, Tenant
 from app.routeros import RouterOSError, connect_device
@@ -112,14 +113,20 @@ async def _disable_peer_dns(api: DeviceAPI) -> list[list[str]]:
     return changed
 
 
-async def _restore_peer_dns(api: DeviceAPI, entries: list[list[str]]) -> None:
+async def _restore_peer_dns(api: DeviceAPI, entries: list[list[str]]) -> bool:
+    renewed = False
     for path, ident in entries:
         try:
             for r in await api.print(path):
                 if str(r.get("interface") or r.get("name")) == ident:
                     await api.set(path, r[".id"], **{"use-peer-dns": "yes"})
+                    if path == "/ip/dhcp-client":
+                        # Provider-DNS kommen erst mit einem neuen Lease zurück
+                        await api.call("/ip/dhcp-client/renew", **{".id": r[".id"]})
+                        renewed = True
         except RouterOSError as exc:
             log.warning("use-peer-dns für %s nicht wiederherstellbar: %s", ident, exc)
+    return renewed
 
 
 async def apply_dns(db: AsyncSession, device: Device) -> dict[str, Any]:
@@ -132,6 +139,8 @@ async def apply_dns(db: AsyncSession, device: Device) -> dict[str, Any]:
         facts = dict(device.facts or {})
         if "dns_backup" not in facts:
             facts["dns_backup"] = {"servers": str(dns.get("servers", "")), "use-doh-server": str(dns.get("use-doh-server", ""))}
+        if dns.get("dynamic-servers") and not facts["dns_backup"].get("dynamic_servers"):
+            facts["dns_backup"]["dynamic_servers"] = str(dns.get("dynamic-servers"))
         ca = await _ensure_ca(api, device)
         await api.sync_managed("/ip/dns/static", "dns:", [
             {"name": "dns.nextdns.io", "address": ip, "type": "A", "comment": f"sdwan:dns:boot{i}"}
@@ -163,7 +172,16 @@ async def remove_dns(api: DeviceAPI, device: Device) -> dict[str, Any]:
     await api.sync_managed("/ip/firewall/nat", "dns:", [], ordered=True)
     await api.call("/ip/dns/set", **{"use-doh-server": backup.get("use-doh-server", ""), "servers": backup.get("servers", "")})
     await api.sync_managed("/ip/dns/static", "dns:", [])
-    await _restore_peer_dns(api, backup.get("peer_dns", []))
+    if await _restore_peer_dns(api, backup.get("peer_dns", [])):
+        import asyncio
+
+        await asyncio.sleep(0 if get_settings().routeros_backend == "simulator" else 4)  # Lease abwarten
+    # Sicherheitsnetz: nie ohne DNS-Server zurücklassen (z. B. PPPoE liefert DNS erst nach Reconnect)
+    cur = (await api.call("/ip/dns/print") or [{}])[0]
+    if not cur.get("servers") and not cur.get("dynamic-servers") and not cur.get("use-doh-server"):
+        fallback = backup.get("dynamic_servers") or "1.1.1.1,9.9.9.9"
+        await api.call("/ip/dns/set", servers=fallback)
+        log.warning("%s: keine DNS-Server nach Filter-Entfernung – setze %s", device.name, fallback)
     await api.call("/ip/dns/cache/flush")
     facts.pop("dns_filter", None)
     device.facts = facts

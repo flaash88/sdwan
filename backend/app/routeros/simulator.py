@@ -169,6 +169,8 @@ class SimRouter:
             row = self._find(path, params.pop(".id"))
             row.update({k: _s(v) for k, v in params.items()})
             return []
+        if action == "renew":
+            return []
         if action == "remove":
             row = self._find(path, params[".id"])
             self.tables[path].remove(row)

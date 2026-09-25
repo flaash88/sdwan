@@ -92,6 +92,7 @@ async def test_profile_sync_and_apply(client, msp, hub, fake_nextdns):
     r = await client.put("/api/v1/content-filter/assignment", json={"sites": {site["id"]: None}}, headers=h)
     assert rt.dns["use-doh-server"] == ""
     assert rt.tables["/ip/dhcp-client"][0]["use-peer-dns"] == "yes"  # wiederhergestellt
+    assert rt.dns["servers"] == "1.1.1.1,9.9.9.9"  # nie ohne DNS zurückgelassen (Simulator hat kein DHCP-DNS)
     assert not [s for s in rt.tables["/ip/dns/static"] if str(s.get("comment", "")).startswith("sdwan:dns:")]
     # Löschen entfernt Profil bei NextDNS
     assert (await client.delete(f"/api/v1/content-filter/profiles/{prof['id']}", headers=h)).status_code == 204

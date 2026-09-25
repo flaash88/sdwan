@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:var(--blue-text);text-decoration:none}a:hover{text-decoration:underline}
+[data-fm]{--bg:#F4F6F9;--panel:#FFFFFF;--panel2:#F8F9FB;--sunken:#EFF2F5;--hover:#F3F5F8;--border:#E2E6EC;--border-strong:#CDD3DC;--text:#101828;--text2:#475467;--text3:#667085;--blue:#2563EB;--blue-bg:#EDF3FE;--blue-text:#1D4ED8;--green:#16A34A;--green-bg:#E8F6ED;--green-text:#15803D;--orange:#EA7A0C;--orange-bg:#FFF2E2;--orange-text:#B45309;--red:#DC2626;--red-bg:#FDECEC;--red-text:#B91C1C;--gray:#98A2B3;--gray-bg:#EFF1F4;--gray-text:#4B5565;--c2:#0D9488;--code:#F3F5F8;--shadow:0 12px 32px rgba(16,24,40,.14);--overlay:rgba(16,24,40,.38);color-scheme:light}
+[data-fm-theme="dark"]{--bg:#0F151D;--panel:#161D27;--panel2:#19212C;--sunken:#121922;--hover:#1D2632;--border:#253040;--border-strong:#334050;--text:#E6EBF1;--text2:#A6B0BE;--text3:#8290A2;--blue:#3272F0;--blue-bg:rgba(59,123,246,.16);--blue-text:#8DB2FB;--green:#2FBF62;--green-bg:rgba(47,191,98,.14);--green-text:#6CD893;--orange:#F29233;--orange-bg:rgba(242,146,51,.15);--orange-text:#F7B36B;--red:#EF5B58;--red-bg:rgba(239,91,88,.15);--red-text:#F69592;--gray:#6C7788;--gray-bg:rgba(140,152,170,.14);--gray-text:#AAB4C1;--c2:#2DD4BF;--code:#10161E;--shadow:0 12px 32px rgba(0,0,0,.45);--overlay:rgba(5,8,12,.62);color-scheme:dark}
+</style>
+</helmet>
+<div data-fm="" data-fm-theme="{{ themeEff }}" style="position:relative;min-height:900px;display:flex;background:var(--bg);color:var(--text);font-family:'Geist',system-ui,sans-serif;font-size:13px;line-height:1.45;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased">
+
+<sc-if value="{{ is.login }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;align-items:center;justify-content:center;position:relative;padding:48px 24px">
+  <div style="position:absolute;top:16px;right:20px;display:inline-flex;padding:2px;background:var(--sunken);border:1px solid var(--border);border-radius:7px;gap:2px">
+    <sc-for list="{{ themeOpts }}" as="o" hint-placeholder-count="3">
+      <button title="{{ o.title }}" onClick="{{ o.onClick }}" style="width:28px;height:26px;display:flex;align-items:center;justify-content:center;border:0;border-radius:5px;cursor:pointer;font-size:15px;background:{{ o.bg }};color:{{ o.fg }};box-shadow:{{ o.sh }}">{{ o.icon }}</button>
+    </sc-for>
+  </div>
+  <div style="width:380px;display:flex;flex-direction:column;gap:24px">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="width:44px;height:44px;border:1.5px dashed var(--border-strong);border-radius:10px;display:flex;align-items:center;justify-content:center;font:500 10px 'Geist Mono',monospace;color:var(--text3)">Logo</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="font-size:22px;font-weight:600;letter-spacing:-.01em">MikroTik-Fleet-Management</div>
+        <div style="color:var(--text2)">Melden Sie sich an, um Ihre Router-Flotte zu verwalten.</div>
+      </div>
+    </div>
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:24px;display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="font-weight:500">E-Mail</div>
+        <div style="height:36px;border:1px solid var(--border-strong);border-radius:6px;padding:0 12px;display:flex;align-items:center;background:var(--panel)">m.hofer@it-partner.at</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between"><span style="font-weight:500">Passwort</span><a href="#">Vergessen?</a></div>
+        <div style="height:36px;border:2px solid var(--blue);border-radius:6px;padding:0 11px;display:flex;align-items:center;background:var(--panel);letter-spacing:.2em">••••••••••••</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;color:var(--text2)">
+        <span style="width:16px;height:16px;border-radius:4px;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px">{{ i.check }}</span>Angemeldet bleiben
+      </div>
+      <button onClick="{{ nav.login }}" style="height:38px;border:0;border-radius:6px;background:var(--blue);color:#fff;font:inherit;font-weight:600;cursor:pointer">Anmelden</button>
+      <div style="display:flex;align-items:center;gap:10px;color:var(--text3);font-size:12px"><span style="flex:1;height:1px;background:var(--border)"></span>oder<span style="flex:1;height:1px;background:var(--border)"></span></div>
+      <button style="height:38px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px"><span style="font-size:15px;display:flex">{{ i.lock }}</span>Mit Single Sign-on anmelden</button>
+    </div>
+    <div style="color:var(--text3);font-size:12px;text-align:center">Version 2.4.1 · selbst gehostet auf <span style="font-family:'Geist Mono',monospace">fleet.it-partner.at</span></div>
+  </div>
+</div>
+</sc-if>
+
+<sc-if value="{{ notLogin }}" hint-placeholder-val="{{ true }}">
+<aside style="width:{{ sideW }};flex:none;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column">
+  <div style="height:56px;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid var(--border)">
+    <div style="width:30px;height:30px;flex:none;border:1.5px dashed var(--border-strong);border-radius:7px;display:flex;align-items:center;justify-content:center;font:500 8px 'Geist Mono',monospace;color:var(--text3)">LOGO</div>
+    <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;line-height:1.2;min-width:0">
+        <span style="font-weight:600;white-space:nowrap">MikroTik Fleet</span>
+        <span style="font-size:11px;color:var(--text3)">Management</span>
+      </div>
+    </sc-if>
+  </div>
+  <nav style="flex:1;padding:10px 8px;display:flex;flex-direction:column;gap:2px">
+    <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="12">
+      <div title="{{ n.label }}" onClick="{{ n.onClick }}" style="display:flex;align-items:center;gap:10px;height:32px;padding:{{ n.pad }};justify-content:{{ n.jc }};border-radius:6px;cursor:pointer;background:{{ n.bg }};color:{{ n.fg }};font-weight:{{ n.fw }}" style-hover="background:var(--hover)">
+        <span style="font-size:16px;display:flex;color:{{ n.ic }}">{{ n.icon }}</span>
+        <sc-if value="{{ n.showLabel }}"><span style="flex:1;white-space:nowrap">{{ n.label }}</span></sc-if>
+        <sc-if value="{{ n.hasBadge }}"><span style="min-width:18px;height:18px;padding:0 5px;border-radius:9px;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;background:{{ n.badgeBg }};color:{{ n.badgeFg }}">{{ n.badge }}</span></sc-if>
+      </div>
+    </sc-for>
+    <div style="height:1px;background:var(--border);margin:8px 4px"></div>
+    <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><div style="font-size:11px;font-weight:600;color:var(--text3);padding:4px 10px;letter-spacing:.04em;text-transform:uppercase">Verwaltung</div></sc-if>
+    <sc-for list="{{ navItems2 }}" as="n" hint-placeholder-count="2">
+      <div title="{{ n.label }}" onClick="{{ n.onClick }}" style="display:flex;align-items:center;gap:10px;height:32px;padding:{{ n.pad }};justify-content:{{ n.jc }};border-radius:6px;cursor:pointer;background:{{ n.bg }};color:{{ n.fg }};font-weight:{{ n.fw }}" style-hover="background:var(--hover)">
+        <span style="font-size:16px;display:flex;color:{{ n.ic }}">{{ n.icon }}</span>
+        <sc-if value="{{ n.showLabel }}"><span style="flex:1;white-space:nowrap">{{ n.label }}</span></sc-if>
+      </div>
+    </sc-for>
+  </nav>
+  <div style="padding:8px;border-top:1px solid var(--border)">
+    <div onClick="{{ toggleSide }}" style="display:flex;align-items:center;gap:10px;height:32px;padding:{{ collapsePad }};justify-content:{{ collapseJc }};border-radius:6px;cursor:pointer;color:var(--text3)" style-hover="background:var(--hover);color:var(--text)">
+      <span style="font-size:16px;display:flex">{{ collapseIcon }}</span>
+      <sc-if value="{{ expanded }}" hint-placeholder-val="{{ true }}"><span>Einklappen</span></sc-if>
+    </div>
+  </div>
+</aside>
+
+<main style="flex:1;min-width:0;display:flex;flex-direction:column">
+  <header style="height:56px;flex:none;display:flex;align-items:center;gap:12px;padding:0 20px;background:var(--panel);border-bottom:1px solid var(--border);position:relative;z-index:5">
+    <div style="position:relative">
+      <button onClick="{{ toggleTenant }}" style="height:36px;display:flex;align-items:center;gap:10px;padding:0 10px 0 8px;border:1px solid var(--border);border-radius:7px;background:var(--panel);color:var(--text);font:inherit;cursor:pointer" style-hover="border-color:var(--border-strong)">
+        <span style="width:22px;height:22px;border-radius:5px;background:var(--sunken);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text2)">{{ i.building }}</span>
+        <span style="display:flex;flex-direction:column;align-items:flex-start;line-height:1.15"><span style="font-size:10.5px;color:var(--text3)">Mandant</span><span style="font-weight:600">Burg Riegersburg</span></span>
+        <span style="font-size:14px;display:flex;color:var(--text3);margin-left:6px">{{ i.chevDown }}</span>
+      </button>
+      <sc-if value="{{ tenantOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;top:44px;left:0;width:300px;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:6px;display:flex;flex-direction:column;gap:2px">
+          <div style="padding:6px 8px 4px;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Mandant wechseln</div>
+          <sc-for list="{{ tenants }}" as="t" hint-placeholder-count="4">
+            <div onClick="{{ toggleTenant }}" style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:6px;cursor:pointer;background:{{ t.bg }}" style-hover="background:var(--hover)">
+              <div style="flex:1;display:flex;flex-direction:column;line-height:1.3"><span style="font-weight:500">{{ t.name }}</span><span style="font-size:12px;color:var(--text3)">{{ t.meta }}</span></div>
+              <sc-if value="{{ t.cur }}"><span style="font-size:15px;color:var(--blue-text);display:flex">{{ t.icon }}</span></sc-if>
+            </div>
+          </sc-for>
+          <div style="height:1px;background:var(--border);margin:4px 0"></div>
+          <div style="padding:7px 8px;border-radius:6px;cursor:pointer;color:var(--text2);display:flex;align-items:center;gap:8px" style-hover="background:var(--hover)"><span style="display:flex;font-size:14px">{{ i.grid }}</span>Alle Mandanten (MSP-Übersicht)</div>
+        </div>
+      </sc-if>
+    </div>
+    <div style="flex:1;max-width:460px;height:34px;display:flex;align-items:center;gap:8px;padding:0 10px;border:1px solid var(--border);border-radius:7px;background:var(--panel2);color:var(--text3)">
+      <span style="font-size:15px;display:flex">{{ i.search }}</span>
+      <input placeholder="Gerät, IP oder Standort suchen …" style="flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;color:var(--text)">
+      <span style="font:500 11px 'Geist Mono',monospace;padding:1px 5px;border:1px solid var(--border);border-radius:4px;color:var(--text3)">⌘K</span>
+    </div>
+    <div style="flex:1"></div>
+    <button title="Alarme" onClick="{{ nav.alarms }}" style="position:relative;width:34px;height:34px;border:1px solid var(--border);border-radius:7px;background:var(--panel);color:var(--text2);display:flex;align-items:center;justify-content:center;font-size:17px;cursor:pointer" style-hover="color:var(--text);border-color:var(--border-strong)">
+      {{ i.bell }}
+      <span style="position:absolute;top:-6px;right:-7px;min-width:18px;height:18px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;border:2px solid var(--panel)">{{ alarmCount }}</span>
+    </button>
+    <div title="Darstellung" style="display:inline-flex;padding:2px;background:var(--sunken);border:1px solid var(--border);border-radius:7px;gap:2px">
+      <sc-for list="{{ themeOpts }}" as="o" hint-placeholder-count="3">
+        <button title="{{ o.title }}" onClick="{{ o.onClick }}" style="width:28px;height:26px;display:flex;align-items:center;justify-content:center;border:0;border-radius:5px;cursor:pointer;font-size:15px;background:{{ o.bg }};color:{{ o.fg }};box-shadow:{{ o.sh }}">{{ o.icon }}</button>
+      </sc-for>
+    </div>
+    <div style="width:1px;height:24px;background:var(--border)"></div>
+    <div onClick="{{ nav.login }}" title="Abmelden" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:4px 6px;border-radius:7px" style-hover="background:var(--hover)">
+      <span style="width:30px;height:30px;border-radius:50%;background:var(--sunken);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--text2)">MH</span>
+      <span style="display:flex;flex-direction:column;line-height:1.2"><span style="font-weight:500">Martin Hofer</span><span style="font-size:11.5px;color:var(--text3)">MSP-Admin</span></span>
+      <span style="font-size:14px;display:flex;color:var(--text3)">{{ i.chevDown }}</span>
+    </div>
+  </header>
+
+  <div style="flex:1;min-width:0;padding:24px;display:flex;flex-direction:column;gap:20px">
+
+  <sc-if value="{{ is.dashboard }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+      <div><div style="font-size:20px;font-weight:600;letter-spacing:-.01em">Dashboard</div><div style="color:var(--text2)">Burg Riegersburg · 6 Standorte · 8 Geräte</div></div>
+      <div style="display:flex;align-items:center;gap:6px;color:var(--text3);font-size:12px"><span style="display:flex;font-size:13px">{{ i.rotate }}</span>Aktualisiert 25.09.2026, 10:02:14</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px">
+      <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="6">
+        <div onClick="{{ k.onClick }}" style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;cursor:pointer;min-width:0" style-hover="border-color:var(--border-strong)">
+          <div style="display:flex;align-items:center;gap:7px;color:var(--text2);font-size:12px;font-weight:500"><span style="display:flex;font-size:14px;color:var(--text3)">{{ k.icon }}</span>{{ k.label }}</div>
+          <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:28px;font-weight:600;letter-spacing:-.02em;line-height:1.1;color:{{ k.valFg }}">{{ k.value }}</span><span style="color:var(--text3);font-size:13px">{{ k.unit }}</span></div>
+          <div style="display:flex;align-items:center;gap:5px;font-size:12px;color:{{ k.subFg }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="display:flex;font-size:13px;flex:none">{{ k.subIcon }}</span><span style="overflow:hidden;text-overflow:ellipsis">{{ k.sub }}</span></div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:16px;align-items:start">
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border)">
+          <span style="font-weight:600">Aktuelle Alarme</span>
+          <span style="font-size:12px;color:var(--text3)">{{ alarmCount }} offen</span>
+          <div style="flex:1"></div>
+          <a href="#" onClick="{{ nav.alarms }}" style="display:flex;align-items:center;gap:4px;font-weight:500">Alle Alarme<span style="display:flex;font-size:14px">{{ i.arrowRight }}</span></a>
+        </div>
+        <div style="display:grid;grid-template-columns:104px minmax(0,1fr) 96px 140px 96px;gap:12px;padding:8px 16px;font-size:12px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);background:var(--panel2)"><span>Schweregrad</span><span>Alarm</span><span>Standort</span><span>Gerät</span><span style="text-align:right">Dauer</span></div>
+        <sc-for list="{{ dashAlarms }}" as="a" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:104px minmax(0,1fr) 96px 140px 96px;gap:12px;align-items:center;padding:0 16px;height:44px;border-bottom:1px solid var(--border)" style-hover="background:var(--hover)">
+            <span><span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;white-space:nowrap;background:{{ a.sev.bg }};color:{{ a.sev.fg }}"><span style="font-size:13px;display:flex">{{ a.sev.icon }}</span>{{ a.sev.label }}</span></span>
+            <span style="display:flex;flex-direction:column;min-width:0;line-height:1.25"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500">{{ a.title }}</span><span style="font-size:11.5px;color:var(--text3)">{{ a.stateText }}</span></span>
+            <span>{{ a.site }}</span>
+            <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.dev }}</span>
+            <span style="text-align:right;color:var(--text2)">{{ a.dur }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border)">
+          <span style="font-weight:600">Standorte</span><span style="font-size:12px;color:var(--text3)">6</span>
+          <div style="flex:1"></div><span style="font-size:12px;color:var(--text3)">Aktiver WAN · Latenz</span>
+        </div>
+        <sc-for list="{{ sites }}" as="s" hint-placeholder-count="6">
+          <div style="display:flex;align-items:center;gap:12px;padding:0 16px;height:48px;border-bottom:1px solid var(--border)" style-hover="background:var(--hover)">
+            <span style="width:8px;height:8px;border-radius:50%;flex:none;background:{{ s.dot }};box-shadow:0 0 0 3px {{ s.ring }}"></span>
+            <span style="flex:1;display:flex;flex-direction:column;line-height:1.25;min-width:0"><span style="font-weight:500">{{ s.name }}</span><span style="font-size:11.5px;color:{{ s.stFg }}">{{ s.stText }}</span></span>
+            <span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;white-space:nowrap;background:{{ s.wan.bg }};color:{{ s.wan.fg }}"><span style="font-size:13px;display:flex">{{ s.wan.icon }}</span>{{ s.wan.label }}</span>
+            <span style="width:48px;text-align:right;color:var(--text2)">{{ s.lat }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ is.devices }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+      <div><div style="font-size:20px;font-weight:600;letter-spacing:-.01em">Geräte</div><div style="color:var(--text2)">{{ devCountText }}</div></div>
+      <div style="display:flex;gap:8px">
+        <button style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-weight:500;cursor:pointer" style-hover="background:var(--hover)"><span style="display:flex;font-size:14px">{{ i.download }}</span>Exportieren</button>
+        <button onClick="{{ nav.ztp }}" style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--blue);border-radius:6px;background:var(--blue);color:#fff;font:inherit;font-weight:500;cursor:pointer"><span style="display:flex;font-size:14px">{{ i.plus }}</span>Gerät hinzufügen</button>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="width:260px;height:32px;display:flex;align-items:center;gap:8px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text3)"><span style="display:flex;font-size:14px">{{ i.search }}</span>Name, IP oder Seriennummer</div>
+      <div style="height:32px;display:flex;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);cursor:pointer"><span style="color:var(--text3)">Standort:</span><span style="font-weight:500">Alle</span><span style="display:flex;font-size:14px;color:var(--text3)">{{ i.chevDown }}</span></div>
+      <div style="display:inline-flex;padding:2px;background:var(--sunken);border:1px solid var(--border);border-radius:7px;gap:2px">
+        <sc-for list="{{ devStatusSeg }}" as="o" hint-placeholder-count="3">
+          <div onClick="{{ o.onClick }}" style="height:26px;padding:0 10px;border-radius:5px;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:500;background:{{ o.bg }};color:{{ o.fg }};box-shadow:{{ o.sh }}">{{ o.label }}<span style="color:var(--text3)">{{ o.count }}</span></div>
+        </sc-for>
+      </div>
+      <div style="width:1px;height:20px;background:var(--border)"></div>
+      <span style="color:var(--text3);font-size:12px">Tags</span>
+      <sc-for list="{{ tagChips }}" as="t" hint-placeholder-count="4">
+        <div onClick="{{ t.onClick }}" style="height:26px;padding:0 10px;border-radius:13px;display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;font-weight:500;border:1px solid {{ t.bd }};background:{{ t.bg }};color:{{ t.fg }}"><sc-if value="{{ t.on }}"><span style="display:flex;font-size:12px">{{ t.icon }}</span></sc-if>{{ t.label }}</div>
+      </sc-for>
+    </div>
+    <sc-if value="{{ hasSel }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;border:1px solid var(--blue);border-radius:8px;background:var(--blue-bg)">
+        <span style="font-weight:600;color:var(--blue-text)">{{ selText }}</span>
+        <div style="flex:1"></div>
+        <button style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-weight:500;cursor:pointer" style-hover="background:var(--hover)"><span style="display:flex;font-size:14px">{{ i.shield }}</span>Policy pushen</button>
+        <button style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-weight:500;cursor:pointer" style-hover="background:var(--hover)"><span style="display:flex;font-size:14px">{{ i.upload }}</span>Firmware-Update</button>
+        <button style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-weight:500;cursor:pointer" style-hover="background:var(--hover)"><span style="display:flex;font-size:14px">{{ i.archive }}</span>Backup erstellen</button>
+        <button onClick="{{ clearSel }}" style="height:30px;padding:0 10px;border:0;background:transparent;color:var(--blue-text);font:inherit;font-weight:500;cursor:pointer">Auswahl aufheben</button>
+      </div>
+    </sc-if>
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:24px 92px minmax(0,1.3fr) 84px 108px 108px 106px 90px 88px 76px 104px;gap:8px;align-items:center;padding:0 14px;height:36px;font-size:12px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);background:var(--panel2)">
+        <span onClick="{{ toggleAll }}" style="width:16px;height:16px;border-radius:4px;box-sizing:border-box;border:1px solid {{ allChk.bd }};background:{{ allChk.bg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer">{{ allChk.icon }}</span>
+        <span>Status</span><span>Name</span><span>Standort</span><span>Modell</span><span>RouterOS</span><span>Aktiver WAN</span><span>VRRP-Rolle</span><span>CPU</span><span>Uptime</span><span>Zuletzt gesehen</span>
+      </div>
+      <sc-for list="{{ devRows }}" as="r" hint-placeholder-count="8">
+        <div onClick="{{ r.onOpen }}" style="display:grid;grid-template-columns:24px 92px minmax(0,1.3fr) 84px 108px 108px 106px 90px 88px 76px 104px;gap:8px;align-items:center;padding:0 14px;height:48px;border-bottom:1px solid var(--border);background:{{ r.rowBg }};cursor:pointer" style-hover="background:var(--hover)">
+          <span onClick="{{ r.onToggle }}" style="width:16px;height:16px;border-radius:4px;box-sizing:border-box;border:1px solid {{ r.chk.bd }};background:{{ r.chk.bg }};color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px">{{ r.chk.icon }}</span>
+          <span><span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;white-space:nowrap;background:{{ r.st.bg }};color:{{ r.st.fg }}"><span style="font-size:13px;display:flex">{{ r.st.icon }}</span>{{ r.st.label }}</span></span>
+          <span style="display:flex;flex-direction:column;line-height:1.25;min-width:0"><span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ r.nameFg }}">{{ r.name }}</span><span style="font-family:'Geist Mono',monospace;font-size:11.5px;color:var(--text3)">{{ r.ip }}</span></span>
+          <span>{{ r.site }}</span>
+          <span style="color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.model }}</span>
+          <span style="display:flex;flex-direction:column;line-height:1.25"><span style="font-family:'Geist Mono',monospace;font-size:12px">{{ r.ros }}</span><sc-if value="{{ r.rosOld }}"><span style="font-size:11.5px;color:var(--blue-text);display:flex;align-items:center;gap:3px"><span style="display:flex;font-size:11px">{{ r.upIcon }}</span>7.16.2 verfügbar</span></sc-if></span>
+          <span><span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;white-space:nowrap;background:{{ r.wan.bg }};color:{{ r.wan.fg }}"><span style="font-size:13px;display:flex">{{ r.wan.icon }}</span>{{ r.wan.label }}</span></span>
+          <span><span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;white-space:nowrap;background:{{ r.vrrp.bg }};color:{{ r.vrrp.fg }}"><span style="font-size:13px;display:flex">{{ r.vrrp.icon }}</span>{{ r.vrrp.label }}</span></span>
+          <span style="display:flex;align-items:center;gap:8px"><span style="flex:1;height:4px;border-radius:2px;background:var(--sunken);overflow:hidden"><span style="display:block;height:100%;width:{{ r.cpuW }};background:var(--text3)"></span></span><span style="width:30px;text-align:right;color:var(--text2)">{{ r.cpu }}</span></span>
+          <span style="color:var(--text2)">{{ r.up }}</span>
+          <span style="color:{{ r.seenFg }};white-space:nowrap">{{ r.seen }}</span>
+        </div>
+      </sc-for>
+      <div style="display:flex;justify-content:space-between;padding:10px 14px;font-size:12px;color:var(--text3)"><span>{{ devFootText }}</span><span>Automatische Aktualisierung alle 10 s</span></div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ is.device }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;gap:6px;color:var(--text3);font-size:12px;margin-bottom:-8px">
+      <a href="#" onClick="{{ nav.devices }}">Geräte</a><span style="display:flex;font-size:12px">{{ i.chevRight }}</span><span style="color:var(--text2)">rr-kassasued-gw1</span>
+    </div>
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px">
+      <div style="display:flex;align-items:flex-start;gap:16px;padding:18px 20px">
+        <div style="width:44px;height:44px;border-radius:9px;background:var(--sunken);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--text2);flex:none">{{ i.router }}</div>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-size:20px;font-weight:600;letter-spacing:-.01em">rr-kassasued-gw1</span>
+            <span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;background:var(--green-bg);color:var(--green-text)"><span style="font-size:13px;display:flex">{{ i.checkCircle }}</span>Online</span>
+            <span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;background:var(--orange-bg);color:var(--orange-text)"><span style="font-size:13px;display:flex">{{ i.alert }}</span>Standort läuft über 5G-Backup</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;color:var(--text2)">
+            <span style="display:flex;align-items:center;gap:5px"><span style="display:flex;font-size:13px;color:var(--text3)">{{ i.pin }}</span>Kassa Süd</span>
+            <span>L009UiGS-RM</span>
+            <span>RouterOS <span style="font-family:'Geist Mono',monospace;font-size:12px">7.16.2</span></span>
+            <span style="font-family:'Geist Mono',monospace;font-size:12px">10.20.4.1</span>
+            <span>SN <span style="font-family:'Geist Mono',monospace;font-size:12px">HGK08Z4T7N2</span></span>
+            <span>Uptime 19 T 22 h</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex:none">
+          <button onClick="{{ tabGo.remote }}" style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--blue);border-radius:6px;background:var(--blue);color:#fff;font:inherit;font-weight:500;cursor:pointer"><span style="display:flex;font-size:14px">{{ i.terminal }}</span>Fernzugriff starten</button>
+          <button onClick="{{ backupNow }}" style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-weight:500;cursor:pointer" style-hover="background:var(--hover)"><span style="display:flex;font-size:14px">{{ backupIcon }}</span>{{ backupLabel }}</button>
+          <button style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--red-text);font:inherit;font-weight:500;cursor:pointer" style-hover="background:var(--hover)"><span style="display:flex;font-size:14px">{{ i.power }}</span>Neustart</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px;padding:0 16px;border-top:1px solid var(--border)">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="7">
+          <div onClick="{{ t.onClick }}" style="height:42px;padding:0 10px;display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500;color:{{ t.fg }};box-shadow:inset 0 -2px 0 {{ t.bd }}" style-hover="color:var(--text)">{{ t.label }}<sc-if value="{{ t.hasCount }}"><span style="font-size:11px;padding:0 6px;height:18px;display:flex;align-items:center;border-radius:9px;background:var(--sunken);color:var(--text3)">{{ t.count }}</span></sc-if></div>
+        </sc-for>
+      </div>
+    </div>
+
+    <sc-if value="{{ dt.overview }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+        <sc-for list="{{ ovTiles }}" as="k" hint-placeholder-count="4">
+          <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:12px;color:var(--text2);font-weight:500">{{ k.label }}</span>
+            <span style="font-size:22px;font-weight:600">{{ k.value }}</span>
+            <span style="font-size:12px;color:var(--text3)">{{ k.sub }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px;align-items:start">
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+          <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600">Schnittstellen</div>
+          <sc-for list="{{ ifaces }}" as="f" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:96px minmax(0,1fr) 150px 88px;gap:12px;align-items:center;padding:0 16px;height:44px;border-bottom:1px solid var(--border)">
+              <span style="font-family:'Geist Mono',monospace;font-size:12px;font-weight:500">{{ f.name }}</span>
+              <span style="color:var(--text2)">{{ f.desc }}</span>
+              <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text2)">{{ f.addr }}</span>
+              <span><span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;background:{{ f.st.bg }};color:{{ f.st.fg }}"><span style="font-size:13px;display:flex">{{ f.st.icon }}</span>{{ f.st.label }}</span></span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+          <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600">Letzte Ereignisse</div>
+          <sc-for list="{{ events }}" as="e" hint-placeholder-count="5">
+            <div style="display:flex;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border)">
+              <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text3);flex:none;padding-top:1px">{{ e.t }}</span>
+              <span style="display:flex;font-size:14px;color:{{ e.fg }};padding-top:2px">{{ e.icon }}</span>
+              <span>{{ e.text }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ dt.wan }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:10px 14px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text2)">
+        <span><span style="color:var(--text3)">Failover:</span> <span style="font-weight:500;color:var(--text)">automatisch</span></span>
+        <span><span style="color:var(--text3)">Prüfziele:</span> <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text)">1.1.1.1, 9.9.9.9</span></span>
+        <span><span style="color:var(--text3)">Intervall:</span> 5 s · 3 Fehlversuche</span>
+        <span><span style="color:var(--text3)">Rückschwenk:</span> nach 5 min stabil</span>
+        <div style="flex:1"></div>
+        <span style="color:var(--text3)">2 von 4 Leitungen belegt</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch">
+        <sc-for list="{{ wans }}" as="w" hint-placeholder-count="2">
+          <div style="background:var(--panel);border:1px solid {{ w.border }};border-radius:8px;display:flex;flex-direction:column">
+            <div style="display:flex;align-items:flex-start;gap:12px;padding:16px">
+              <div style="width:36px;height:36px;border-radius:8px;background:var(--sunken);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text2);flex:none">{{ w.icon }}</div>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+                <span style="font-size:14px;font-weight:600">{{ w.name }}</span>
+                <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text3)">{{ w.iface }}</span>
+              </div>
+              <span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;background:{{ w.st.bg }};color:{{ w.st.fg }}"><span style="font-size:13px;display:flex">{{ w.st.icon }}</span>{{ w.st.label }}</span>
+            </div>
+            <div style="padding:0 16px 14px;display:flex;align-items:center;gap:8px">
+              <span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;background:{{ w.act.bg }};color:{{ w.act.fg }}"><span style="font-size:13px;display:flex">{{ w.act.icon }}</span>{{ w.act.label }}</span>
+              <span style="font-size:12px;color:{{ w.noteFg }}">{{ w.note }}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+              <div style="padding:12px 16px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--border)"><span style="font-size:12px;color:var(--text3)">Latenz</span><span style="font-size:18px;font-weight:600">{{ w.lat }}</span></div>
+              <div style="padding:12px 16px;display:flex;flex-direction:column;gap:2px;border-right:1px solid var(--border)"><span style="font-size:12px;color:var(--text3)">Paketverlust</span><span style="font-size:18px;font-weight:600;color:{{ w.lossFg }}">{{ w.loss }}</span></div>
+              <div style="padding:12px 16px;display:flex;flex-direction:column;gap:2px"><span style="font-size:12px;color:var(--text3)">Priorität</span><span style="font-size:18px;font-weight:600">{{ w.prio }} <span style="font-size:12px;font-weight:500;color:var(--text3)">{{ w.prioNote }}</span></span></div>
+            </div>
+            <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:12px;color:var(--text3)">Monatsvolumen September</span><span><span style="font-weight:600">{{ w.vol }}</span> <span style="color:var(--text3)">von {{ w.lim }}</span></span></div>
+              <div style="height:6px;border-radius:3px;background:var(--sunken);overflow:hidden;position:relative"><div style="height:100%;width:{{ w.barW }};background:{{ w.barC }};border-radius:3px"></div><div style="position:absolute;top:0;bottom:0;left:80%;width:1px;background:var(--border-strong)"></div></div>
+              <div style="display:flex;align-items:center;gap:5px;font-size:12px;color:{{ w.volFg }}"><span style="display:flex;font-size:13px">{{ w.volIcon }}</span>{{ w.volNote }}</div>
+            </div>
+            <div style="margin-top:auto;display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--border);background:var(--panel2);border-radius:0 0 8px 8px">
+              <span style="font-size:12px;color:{{ w.testFg }}">{{ w.testText }}</span>
+              <button onClick="{{ w.onTest }}" style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-weight:500;cursor:pointer" style-hover="background:var(--hover)"><span style="display:flex;font-size:14px">{{ i.activity }}</span>Leitung testen</button>
+            </div>
+          </div>
+        </sc-for>
+        <div style="border:1.5px dashed var(--border-strong);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text3);min-height:280px;cursor:pointer" style-hover="color:var(--blue-text);border-color:var(--blue)">
+          <span style="font-size:20px;display:flex">{{ i.plus }}</span>
+          <span style="font-weight:500">Leitung hinzufügen</span>
+          <span style="font-size:12px">z. B. Kabel, DSL oder Starlink · max. 4</span>
+        </div>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600">Routen</div>
+        <sc-for list="{{ routes }}" as="r" hint-placeholder-count="2">
+          <div style="display:grid;grid-template-columns:110px minmax(0,1fr) 140px;gap:12px;align-items:center;padding:0 16px;height:42px;border-bottom:1px solid var(--border)">
+            <span><span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;background:{{ r.st.bg }};color:{{ r.st.fg }}"><span style="font-size:13px;display:flex">{{ r.st.icon }}</span>{{ r.st.label }}</span></span>
+            <span style="font-family:'Geist Mono',monospace;font-size:12px">{{ r.cmd }}</span>
+            <span style="color:var(--text3);text-align:right">{{ r.note }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ dt.vrrp }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:16px;align-items:stretch">
+        <div style="background:var(--orange-bg);border:1px solid var(--orange);border-radius:8px;padding:20px 22px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;font-weight:600;color:var(--orange-text);text-transform:uppercase;letter-spacing:.05em">Aktuelle Rolle</span><span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--orange-text)">vrrp-lan · VRID 42</span></div>
+          <div style="display:flex;align-items:center;gap:14px">
+            <span style="font-size:40px;display:flex;color:var(--orange)">{{ i.alert }}</span>
+            <div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:40px;font-weight:700;letter-spacing:-.02em;line-height:1;color:var(--orange-text)">Master</span><span style="font-size:15px;font-weight:600;color:var(--text)">Standort läuft über Backup</span></div>
+          </div>
+          <div style="color:var(--text2);text-wrap:pretty">Seit 25.09.2026, 09:24:11 (38 min). Der Peer <span style="font-family:'Geist Mono',monospace;font-size:12px">10.20.4.2</span> (FortiGate, Priorität 200) sendet keine Advertisements mehr. Datenverkehr läuft über <span style="font-family:'Geist Mono',monospace;font-size:12px">lte1</span> (5G-Backup).</div>
+          <div style="display:flex;gap:8px;margin-top:auto">
+            <button style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-weight:500;cursor:pointer"><span style="display:flex;font-size:14px">{{ i.activity }}</span>Peer prüfen</button>
+            <button onClick="{{ nav.alarms }}" style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-weight:500;cursor:pointer"><span style="display:flex;font-size:14px">{{ i.bell }}</span>Zugehöriger Alarm</button>
+          </div>
+        </div>
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+          <div style="padding:12px 16px;border-bottom:1px solid var(--border);font-weight:600">Instanz</div>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr))">
+            <sc-for list="{{ vrrpKV }}" as="k" hint-placeholder-count="8">
+              <div style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:2px">
+                <span style="font-size:12px;color:var(--text3)">{{ k.k }}</span>
+                <span style="font-weight:500;font-family:{{ k.ff }};font-size:{{ k.fs }};color:{{ k.fg }}">{{ k.v }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border)"><span style="font-weight:600">Rollenverlauf</span><span style="font-size:12px;color:var(--text3)">letzte 14 Tage</span><div style="flex:1"></div>
+          <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:2px;background:var(--sunken);border:1px solid var(--border-strong)"></span>Backup</span>
+          <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:2px;background:var(--orange)"></span>Master</span>
+        </div>
+        <div style="padding:16px 16px 10px">
+          <div style="position:relative;height:22px;border-radius:4px;background:var(--sunken);border:1px solid var(--border)">
+            <div style="position:absolute;top:0;bottom:0;left:47.6%;width:3px;background:var(--orange)"></div>
+            <div style="position:absolute;top:0;bottom:0;right:0;width:5px;background:var(--orange);border-radius:0 3px 3px 0"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--text3)"><span>11.09.</span><span>14.09.</span><span>18.09.</span><span>21.09.</span><span>25.09.</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:170px 190px minmax(0,1fr) 120px;gap:12px;padding:8px 16px;font-size:12px;color:var(--text3);font-weight:500;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--panel2)"><span>Zeitpunkt</span><span>Wechsel</span><span>Grund</span><span style="text-align:right">Master-Dauer</span></div>
+        <sc-for list="{{ vrrpHist }}" as="h" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:170px 190px minmax(0,1fr) 120px;gap:12px;align-items:center;padding:0 16px;height:42px;border-bottom:1px solid var(--border)">
+            <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text2)">{{ h.t }}</span>
+            <span style="display:flex;align-items:center;gap:6px">
+              <span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;background:{{ h.from.bg }};color:{{ h.from.fg }}">{{ h.from.label }}</span>
+              <span style="display:flex;font-size:13px;color:var(--text3)">{{ h.arrow }}</span>
+              <span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;background:{{ h.to.bg }};color:{{ h.to.fg }}">{{ h.to.label }}</span>
+            </span>
+            <span style="color:var(--text2)">{{ h.why }}</span>
+            <span style="text-align:right;color:var(--text2)">{{ h.dur }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ dt.metrics }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="display:inline-flex;padding:2px;background:var(--sunken);border:1px solid var(--border);border-radius:7px;gap:2px">
+          <sc-for list="{{ rangeSeg }}" as="o" hint-placeholder-count="6">
+            <div onClick="{{ o.onClick }}" style="height:26px;padding:0 11px;border-radius:5px;display:flex;align-items:center;cursor:pointer;font-size:12px;font-weight:500;background:{{ o.bg }};color:{{ o.fg }};box-shadow:{{ o.sh }}">{{ o.label }}</div>
+          </sc-for>
+        </div>
+        <span style="color:var(--text3);font-size:12px">{{ m.rangeText }}</span>
+        <div style="flex:1"></div>
+        <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--orange-text)"><span style="width:14px;border-top:1.5px dashed var(--orange)"></span>Failover auf 5G-Backup</span>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px 16px 12px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:16px">
+          <span style="font-weight:600">Durchsatz</span><span style="font-size:12px;color:var(--text3)">Mbit/s · alle WAN</span><div style="flex:1"></div>
+          <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)"><span style="width:12px;height:2px;background:var(--blue)"></span>Empfangen <span style="font-weight:600;color:var(--text)">{{ m.rxNow }}</span></span>
+          <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)"><span style="width:12px;height:2px;background:var(--c2)"></span>Senden <span style="font-weight:600;color:var(--text)">{{ m.txNow }}</span></span>
+        </div>
+        {{ m.thr }}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px 16px 12px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <span style="font-weight:600">Latenz</span><span style="font-size:12px;color:var(--text3)">ms · Ping 1.1.1.1</span><div style="flex:1"></div>
+            <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)"><span style="width:12px;height:2px;background:var(--blue)"></span>Glasfaser <span style="font-weight:600;color:var(--text)">—</span></span>
+            <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)"><span style="width:12px;height:2px;background:var(--c2)"></span>5G <span style="font-weight:600;color:var(--text)">{{ m.latNow }}</span></span>
+          </div>
+          {{ m.lat }}
+        </div>
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:14px 16px 12px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:14px">
+            <span style="font-weight:600">CPU</span><span style="font-size:12px;color:var(--text3)">% · 2 Kerne</span><div style="flex:1"></div>
+            <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)"><span style="width:12px;height:2px;background:var(--blue)"></span>Auslastung <span style="font-weight:600;color:var(--text)">{{ m.cpuNow }}</span></span>
+          </div>
+          {{ m.cpu }}
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ dt.backups }}" hint-placeholder-val="{{ false }}">
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border)"><span style="font-weight:600">Konfig-Stände</span><span style="font-size:12px;color:var(--text3)">14 gespeichert · täglich 02:00 und bei jeder Änderung</span><div style="flex:1"></div><span style="font-size:12px;color:var(--text3)">A und B zum Vergleich wählen</span></div>
+        <div style="display:grid;grid-template-columns:64px 150px minmax(0,1fr) 110px 70px 90px 80px;gap:12px;padding:8px 16px;font-size:12px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);background:var(--panel2)"><span>Vergleich</span><span>Zeitpunkt</span><span>Auslöser</span><span>Erstellt von</span><span>Größe</span><span>Prüfsumme</span><span></span></div>
+        <sc-for list="{{ backups }}" as="b" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:64px 150px minmax(0,1fr) 110px 70px 90px 80px;gap:12px;align-items:center;padding:0 16px;height:42px;border-bottom:1px solid var(--border);background:{{ b.rowBg }}">
+            <span style="display:flex;gap:4px">
+              <span onClick="{{ b.pickA }}" style="width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;cursor:pointer;border:1px solid {{ b.a.bd }};background:{{ b.a.bg }};color:{{ b.a.fg }}">A</span>
+              <span onClick="{{ b.pickB }}" style="width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;cursor:pointer;border:1px solid {{ b.b.bd }};background:{{ b.b.bg }};color:{{ b.b.fg }}">B</span>
+            </span>
+            <span style="font-family:'Geist Mono',monospace;font-size:12px">{{ b.t }}</span>
+            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ b.why }}</span>
+            <span style="color:var(--text2)">{{ b.by }}</span>
+            <span style="color:var(--text2)">{{ b.size }}</span>
+            <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text3)">{{ b.hash }}</span>
+            <span style="display:flex;gap:4px;justify-content:flex-end;color:var(--text3)"><span title="Herunterladen" style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer" style-hover="background:var(--hover);color:var(--text)">{{ i.download }}</span><span title="Wiederherstellen" style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer" style-hover="background:var(--hover);color:var(--text)">{{ i.rotate }}</span></span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-right:1px solid var(--border)"><span style="width:20px;height:20px;border-radius:5px;background:var(--text);color:var(--panel);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">A</span><span style="font-weight:600">{{ cmpA.t }}</span><span style="color:var(--text3)">{{ cmpA.why }}</span><div style="flex:1"></div><span style="font-size:12px;color:var(--red-text);font-weight:500">− 4 Zeilen</span></div>
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 16px"><span style="width:20px;height:20px;border-radius:5px;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">B</span><span style="font-weight:600">{{ cmpB.t }}</span><span style="color:var(--text3)">{{ cmpB.why }}</span><div style="flex:1"></div><span style="font-size:12px;color:var(--green-text);font-weight:500">+ 6 Zeilen</span></div>
+        </div>
+        <div style="font-family:'Geist Mono',monospace;font-size:12px;line-height:1.6;padding:4px 0;background:var(--code)">
+          <sc-for list="{{ diff }}" as="d" hint-placeholder-count="19">
+            <div style="display:grid;grid-template-columns:40px 18px minmax(0,1fr) 40px 18px minmax(0,1fr)">
+              <span style="text-align:right;padding-right:8px;color:var(--text3);background:{{ d.lbg }}">{{ d.ln }}</span>
+              <span style="text-align:center;font-weight:600;color:{{ d.lmc }};background:{{ d.lbg }}">{{ d.lm }}</span>
+              <span style="padding-right:12px;white-space:pre-wrap;word-break:break-all;color:{{ d.lfg }};background:{{ d.lbg }}">{{ d.lt }}</span>
+              <span style="text-align:right;padding-right:8px;color:var(--text3);background:{{ d.rbg }};border-left:1px solid var(--border)">{{ d.rn }}</span>
+              <span style="text-align:center;font-weight:600;color:{{ d.rmc }};background:{{ d.rbg }}">{{ d.rm }}</span>
+              <span style="padding-right:12px;white-space:pre-wrap;word-break:break-all;color:{{ d.rfg }};background:{{ d.rbg }}">{{ d.rt }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ dt.policies }}" hint-placeholder-val="{{ false }}">
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border)"><span style="font-weight:600">Zugewiesene Policies</span><div style="flex:1"></div><button style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-weight:500;cursor:pointer"><span style="display:flex;font-size:14px">{{ i.upload }}</span>Jetzt pushen</button></div>
+        <sc-for list="{{ policies }}" as="p" hint-placeholder-count="4">
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) 140px 170px 180px;gap:12px;align-items:center;padding:0 16px;height:46px;border-bottom:1px solid var(--border)">
+            <span style="font-weight:500">{{ p.name }} <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text3)">{{ p.ver }}</span></span>
+            <span style="color:var(--text2)">{{ p.kind }}</span>
+            <span><span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;background:{{ p.st.bg }};color:{{ p.st.fg }}"><span style="font-size:13px;display:flex">{{ p.st.icon }}</span>{{ p.st.label }}</span></span>
+            <span style="color:var(--text3)">{{ p.when }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ dt.remote }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px">
+        <sc-for list="{{ remoteOpts }}" as="o" hint-placeholder-count="3">
+          <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:center;gap:10px"><span style="width:32px;height:32px;border-radius:7px;background:var(--sunken);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text2)">{{ o.icon }}</span><span style="font-weight:600;font-size:14px">{{ o.name }}</span></div>
+            <span style="color:var(--text2);text-wrap:pretty">{{ o.desc }}</span>
+            <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text3)">{{ o.target }}</span>
+            <button style="align-self:flex-start;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-weight:500;cursor:pointer" style-hover="background:var(--hover)"><span style="display:flex;font-size:14px">{{ i.play }}</span>Sitzung starten</button>
+          </div>
+        </sc-for>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border)"><span style="font-weight:600">Letzte Sitzungen</span><span style="font-size:12px;color:var(--text3)">werden im Audit-Log protokolliert</span></div>
+        <sc-for list="{{ sessions }}" as="s" hint-placeholder-count="3">
+          <div style="display:grid;grid-template-columns:150px 140px 100px minmax(0,1fr) 90px;gap:12px;align-items:center;padding:0 16px;height:42px;border-bottom:1px solid var(--border)">
+            <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text2)">{{ s.t }}</span><span>{{ s.who }}</span><span style="color:var(--text2)">{{ s.kind }}</span><span style="color:var(--text3)">{{ s.note }}</span><span style="text-align:right;color:var(--text2)">{{ s.dur }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+  </sc-if>
+
+  <sc-if value="{{ is.mesh }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+      <div><div style="font-size:20px;font-weight:600;letter-spacing:-.01em">VPN-Mesh</div><div style="color:var(--text2)">WireGuard · Zentrale und 6 Standorte · {{ meshCountText }}</div></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="color:var(--text3);font-size:12px">Topologie</span>
+        <div style="display:inline-flex;padding:2px;background:var(--sunken);border:1px solid var(--border);border-radius:7px;gap:2px">
+          <sc-for list="{{ meshSeg }}" as="o" hint-placeholder-count="2">
+            <div onClick="{{ o.onClick }}" style="height:28px;padding:0 12px;border-radius:5px;display:flex;align-items:center;cursor:pointer;font-size:12.5px;font-weight:500;background:{{ o.bg }};color:{{ o.fg }};box-shadow:{{ o.sh }}">{{ o.label }}</div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start">
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="padding:8px">{{ topo }}</div>
+        <div style="display:flex;align-items:center;gap:18px;padding:10px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--text2)">
+          <span style="display:flex;align-items:center;gap:6px"><span style="width:18px;height:2.5px;background:var(--green)"></span><span style="display:flex;color:var(--green-text);font-size:13px">{{ i.checkCircle }}</span>Up</span>
+          <span style="display:flex;align-items:center;gap:6px"><span style="width:18px;height:2.5px;background:var(--orange)"></span><span style="display:flex;color:var(--orange-text);font-size:13px">{{ i.alert }}</span>Degradiert</span>
+          <span style="display:flex;align-items:center;gap:6px"><span style="width:18px;border-top:2.5px dashed var(--red)"></span><span style="display:flex;color:var(--red-text);font-size:13px">{{ i.xCircle }}</span>Down</span>
+          <div style="flex:1"></div><span style="color:var(--text3)">Traffic: aktueller Durchsatz Zentrale ↔ Standort</span>
+        </div>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border)"><span style="font-weight:600">Tunnel zur Zentrale</span><div style="flex:1"></div><span style="font-size:12px;color:var(--text3)">5 von 6 aktiv</span></div>
+        <sc-for list="{{ tunnels }}" as="t" hint-placeholder-count="6">
+          <div style="display:flex;flex-direction:column;gap:6px;padding:12px 16px;border-bottom:1px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:8px"><span style="font-weight:500;flex:1">{{ t.name }}</span><span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;background:{{ t.st.bg }};color:{{ t.st.fg }}"><span style="font-size:13px;display:flex">{{ t.st.icon }}</span>{{ t.st.label }}</span></div>
+            <div style="display:flex;align-items:center;gap:12px;font-size:12px;color:var(--text2)"><span style="font-family:'Geist Mono',monospace">{{ t.ip }}</span><span>{{ t.lat }}</span><span>↓ {{ t.rx }} ↑ {{ t.tx }} Mbit/s</span><div style="flex:1"></div><span style="color:var(--text3)">{{ t.hs }}</span></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ is.alarms }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+      <div><div style="font-size:20px;font-weight:600;letter-spacing:-.01em">Alarme</div><div style="color:var(--text2)">Burg Riegersburg · Benachrichtigung per E-Mail und Teams</div></div>
+      <sc-if value="{{ av.rules }}" hint-placeholder-val="{{ false }}"><button style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--blue);border-radius:6px;background:var(--blue);color:#fff;font:inherit;font-weight:500;cursor:pointer"><span style="display:flex;font-size:14px">{{ i.plus }}</span>Regel anlegen</button></sc-if>
+    </div>
+    <div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-top:-6px">
+      <sc-for list="{{ alarmTabs }}" as="t" hint-placeholder-count="2">
+        <div onClick="{{ t.onClick }}" style="height:38px;padding:0 10px;display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500;color:{{ t.fg }};box-shadow:inset 0 -2px 0 {{ t.bd }}">{{ t.label }}<span style="font-size:11px;padding:0 6px;height:18px;display:flex;align-items:center;border-radius:9px;background:var(--sunken);color:var(--text3)">{{ t.count }}</span></div>
+      </sc-for>
+    </div>
+    <sc-if value="{{ av.list }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:inline-flex;padding:2px;background:var(--sunken);border:1px solid var(--border);border-radius:7px;gap:2px">
+          <sc-for list="{{ alarmSeg }}" as="o" hint-placeholder-count="4">
+            <div onClick="{{ o.onClick }}" style="height:26px;padding:0 10px;border-radius:5px;display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:500;background:{{ o.bg }};color:{{ o.fg }};box-shadow:{{ o.sh }}">{{ o.label }}<span style="color:var(--text3)">{{ o.count }}</span></div>
+          </sc-for>
+        </div>
+        <div style="height:32px;display:flex;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);cursor:pointer"><span style="color:var(--text3)">Schweregrad:</span><span style="font-weight:500">Alle</span><span style="display:flex;font-size:14px;color:var(--text3)">{{ i.chevDown }}</span></div>
+        <div style="height:32px;display:flex;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);cursor:pointer"><span style="color:var(--text3)">Standort:</span><span style="font-weight:500">Alle</span><span style="display:flex;font-size:14px;color:var(--text3)">{{ i.chevDown }}</span></div>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="display:grid;grid-template-columns:104px minmax(0,1fr) 100px 150px 110px 100px 190px;gap:12px;padding:8px 16px;font-size:12px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);background:var(--panel2)"><span>Schweregrad</span><span>Alarm</span><span>Standort</span><span>Gerät</span><span>Beginn</span><span>Dauer</span><span style="text-align:right">Status</span></div>
+        <sc-for list="{{ alarmRows }}" as="a" hint-placeholder-count="4">
+          <div style="display:grid;grid-template-columns:104px minmax(0,1fr) 100px 150px 110px 100px 190px;gap:12px;align-items:center;padding:0 16px;height:50px;border-bottom:1px solid var(--border)" style-hover="background:var(--hover)">
+            <span><span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;white-space:nowrap;background:{{ a.sev.bg }};color:{{ a.sev.fg }}"><span style="font-size:13px;display:flex">{{ a.sev.icon }}</span>{{ a.sev.label }}</span></span>
+            <span style="display:flex;flex-direction:column;min-width:0;line-height:1.3"><span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.title }}</span><span style="font-size:12px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.detail }}</span></span>
+            <span>{{ a.site }}</span>
+            <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text2)">{{ a.dev }}</span>
+            <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text2)">{{ a.start }}</span>
+            <span style="color:var(--text2)">{{ a.dur }}</span>
+            <span style="display:flex;justify-content:flex-end">
+              <sc-if value="{{ a.canAck }}"><button onClick="{{ a.onAck }}" style="display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer" style-hover="background:var(--hover)"><span style="display:flex;font-size:13px">{{ a.ackIcon }}</span>Quittieren</button></sc-if>
+              <sc-if value="{{ a.noAck }}"><span style="font-size:12px;color:var(--text3);text-align:right;line-height:1.3">{{ a.stateText }}</span></sc-if>
+            </span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-if value="{{ av.rules }}" hint-placeholder-val="{{ false }}">
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="display:grid;grid-template-columns:48px minmax(0,1fr) minmax(0,1.2fr) 104px 140px 130px 80px;gap:12px;padding:8px 16px;font-size:12px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);background:var(--panel2)"><span>Aktiv</span><span>Regel</span><span>Bedingung</span><span>Schweregrad</span><span>Geltungsbereich</span><span>Benachrichtigung</span><span style="text-align:right">30 Tage</span></div>
+        <sc-for list="{{ rules }}" as="r" hint-placeholder-count="8">
+          <div style="display:grid;grid-template-columns:48px minmax(0,1fr) minmax(0,1.2fr) 104px 140px 130px 80px;gap:12px;align-items:center;padding:0 16px;height:48px;border-bottom:1px solid var(--border);opacity:{{ r.op }}">
+            <span onClick="{{ r.onToggle }}" style="width:30px;height:18px;border-radius:9px;background:{{ r.tg }};position:relative;cursor:pointer;display:block"><span style="position:absolute;top:2px;left:{{ r.knob }};width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25)"></span></span>
+            <span style="font-weight:500">{{ r.name }}</span>
+            <span><span style="font-family:'Geist Mono',monospace;font-size:12px;padding:2px 6px;border-radius:4px;background:var(--code);border:1px solid var(--border);color:var(--text2)">{{ r.cond }}</span></span>
+            <span><span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;white-space:nowrap;background:{{ r.sev.bg }};color:{{ r.sev.fg }}"><span style="font-size:13px;display:flex">{{ r.sev.icon }}</span>{{ r.sev.label }}</span></span>
+            <span style="color:var(--text2)">{{ r.scope }}</span>
+            <span style="color:var(--text2)">{{ r.notify }}</span>
+            <span style="text-align:right;color:var(--text2)">{{ r.hits }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+  </sc-if>
+
+  <sc-if value="{{ is.ztp }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px">
+      <div><div style="font-size:20px;font-weight:600;letter-spacing:-.01em">Zero-Touch-Provisioning</div><div style="color:var(--text2)">Neue Router per Bootstrap-Befehl automatisch mit Vorlage einrichten</div></div>
+      <button onClick="{{ openDlg }}" style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--blue);border-radius:6px;background:var(--blue);color:#fff;font:inherit;font-weight:500;cursor:pointer"><span style="display:flex;font-size:14px">{{ i.plus }}</span>Router vorbereiten</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+      <sc-for list="{{ ztpStats }}" as="k" hint-placeholder-count="3">
+        <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:12px">
+          <span style="width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;background:{{ k.st.bg }};color:{{ k.st.fg }}">{{ k.st.icon }}</span>
+          <span style="flex:1;display:flex;flex-direction:column;line-height:1.25"><span style="font-weight:500">{{ k.st.label }}</span><span style="font-size:12px;color:var(--text3)">{{ k.sub }}</span></span>
+          <span style="font-size:22px;font-weight:600">{{ k.n }}</span>
+        </div>
+      </sc-for>
+    </div>
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:140px 130px minmax(0,1fr) 150px 130px 110px 120px;gap:12px;padding:8px 16px;font-size:12px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);background:var(--panel2)"><span>Seriennummer</span><span>Modell</span><span>Vorlage</span><span>Ziel-Standort</span><span>Status</span><span>Erstellt</span><span>Letzter Kontakt</span></div>
+      <sc-for list="{{ ztpRows }}" as="z" hint-placeholder-count="5">
+        <div style="display:grid;grid-template-columns:140px 130px minmax(0,1fr) 150px 130px 110px 120px;gap:12px;align-items:center;padding:0 16px;height:46px;border-bottom:1px solid var(--border)" style-hover="background:var(--hover)">
+          <span style="font-family:'Geist Mono',monospace;font-size:12px;font-weight:500">{{ z.sn }}</span>
+          <span style="color:var(--text2)">{{ z.model }}</span>
+          <span>{{ z.tpl }} <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text3)">{{ z.ver }}</span></span>
+          <span>{{ z.site }}</span>
+          <span><span style="display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:5px;font-size:12px;font-weight:500;white-space:nowrap;background:{{ z.st.bg }};color:{{ z.st.fg }}"><span style="font-size:13px;display:flex">{{ z.st.icon }}</span>{{ z.st.label }}</span></span>
+          <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text2)">{{ z.created }}</span>
+          <span style="color:var(--text2)">{{ z.seen }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ is.other }}" hint-placeholder-val="{{ false }}">
+    <div><div style="font-size:20px;font-weight:600;letter-spacing:-.01em">{{ otherTitle }}</div><div style="color:var(--text2)">Burg Riegersburg</div></div>
+    <div style="flex:1;min-height:360px;border:1.5px dashed var(--border-strong);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--text3)">Dieser Bereich ist nicht Teil des aktuellen Entwurfs.</div>
+  </sc-if>
+  </div>
+</main>
+
+<sc-if value="{{ showDlg }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;inset:0;background:var(--overlay);display:flex;align-items:flex-start;justify-content:center;padding-top:72px;z-index:20">
+    <div style="width:640px;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <div style="flex:1"><div style="font-size:16px;font-weight:600">Router vorbereiten</div><div style="color:var(--text2);font-size:12.5px">Seriennummer registrieren, Vorlage wählen, Befehl auf dem Router ausführen.</div></div>
+        <button onClick="{{ closeDlg }}" title="Schließen" style="width:30px;height:30px;border:0;border-radius:6px;background:transparent;color:var(--text3);display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer" style-hover="background:var(--hover);color:var(--text)">{{ i.x }}</button>
+      </div>
+      <div style="padding:18px 20px;display:flex;flex-direction:column;gap:16px">
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+          <div style="display:flex;flex-direction:column;gap:6px"><span style="font-weight:500">Seriennummer</span><div style="height:34px;border:1px solid var(--border-strong);border-radius:6px;padding:0 10px;display:flex;align-items:center;font-family:'Geist Mono',monospace;font-size:12.5px">HGK09C5D1X4</div></div>
+          <div style="display:flex;flex-direction:column;gap:6px"><span style="font-weight:500">Modell</span><div style="height:34px;border:1px solid var(--border-strong);border-radius:6px;padding:0 10px;display:flex;align-items:center;justify-content:space-between">L009UiGS-RM<span style="display:flex;font-size:14px;color:var(--text3)">{{ i.chevDown }}</span></div></div>
+          <div style="display:flex;flex-direction:column;gap:6px"><span style="font-weight:500">Ziel-Standort</span><div style="height:34px;border:1px solid var(--border-strong);border-radius:6px;padding:0 10px;display:flex;align-items:center;justify-content:space-between">Kassa Süd<span style="display:flex;font-size:14px;color:var(--text3)">{{ i.chevDown }}</span></div></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <span style="font-weight:500">Vorlage</span>
+          <sc-for list="{{ tplCards }}" as="t" hint-placeholder-count="3">
+            <div onClick="{{ t.onClick }}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:7px;cursor:pointer;border:1px solid {{ t.bd }};background:{{ t.bg }}">
+              <span style="width:16px;height:16px;border-radius:50%;box-sizing:border-box;border:{{ t.radio }};flex:none"></span>
+              <span style="flex:1;display:flex;flex-direction:column;line-height:1.3"><span style="font-weight:500">{{ t.name }} <span style="font-family:'Geist Mono',monospace;font-size:12px;color:var(--text3)">{{ t.ver }}</span></span><span style="font-size:12px;color:var(--text2)">{{ t.desc }}</span></span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:500">Bootstrap-Befehl</span><span style="font-size:12px;color:var(--text3)">Im Terminal des Routers ausführen (Werkszustand, Internet an ether1)</span></div>
+          <div style="position:relative;background:var(--code);border:1px solid var(--border);border-radius:7px;padding:12px 110px 12px 14px;font-family:'Geist Mono',monospace;font-size:12px;line-height:1.65;white-space:pre-wrap;word-break:break-all">
+            <div style="color:var(--text3)">{{ cmdComment }}</div>
+            <div><span style="color:var(--blue-text)">/tool fetch</span> url="{{ cmdUrl }}" dst-path=ztp.rsc</div>
+            <div><span style="color:var(--blue-text)">:delay</span> 2s</div>
+            <div><span style="color:var(--blue-text)">/import</span> file-name=ztp.rsc</div>
+            <button onClick="{{ copyCmd }}" style="position:absolute;top:8px;right:8px;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:{{ copyFg }};font-family:'Geist',sans-serif;font-size:12.5px;font-weight:500;cursor:pointer"><span style="display:flex;font-size:13px">{{ copyIcon }}</span>{{ copyLabel }}</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3)"><span style="display:flex;font-size:13px">{{ i.clock }}</span>Token gültig bis 02.10.2026, 10:02 · einmalig verwendbar · an Seriennummer gebunden</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--border);background:var(--panel2);border-radius:0 0 10px 10px">
+        <button onClick="{{ closeDlg }}" style="height:32px;padding:0 14px;border:1px solid var(--border-strong);border-radius:6px;background:var(--panel);color:var(--text);font:inherit;font-weight:500;cursor:pointer">Abbrechen</button>
+        <button onClick="{{ closeDlg }}" style="height:32px;padding:0 14px;border:1px solid var(--blue);border-radius:6px;background:var(--blue);color:#fff;font:inherit;font-weight:500;cursor:pointer">Vorbereiten</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;screen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;login&quot;,&quot;dashboard&quot;,&quot;devices&quot;,&quot;device&quot;,&quot;mesh&quot;,&quot;alarms&quot;,&quot;ztp&quot;],&quot;default&quot;:&quot;dashboard&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;,&quot;system&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;deviceTab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;overview&quot;,&quot;wan&quot;,&quot;vrrp&quot;,&quot;metrics&quot;,&quot;backups&quot;,&quot;policies&quot;,&quot;remote&quot;],&quot;default&quot;:&quot;overview&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;alarmView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;list&quot;,&quot;rules&quot;],&quot;default&quot;:&quot;list&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;ztpDialog&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;collapsed&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const h = React.createElement;
+const P = {
+  grid:["M3 3h7v7H3z","M14 3h7v7h-7z","M14 14h7v7h-7z","M3 14h7v7H3z"],
+  router:["M3 14h18v6H3z","M6.5 17h.01","M10 17h.01","M15 10v4","M17.84 7.17a4 4 0 0 0-5.66 0","M20.66 4.34a8 8 0 0 0-11.31 0"],
+  pin:["M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z","M15 10a3 3 0 1 1-6 0a3 3 0 1 1 6 0"],
+  network:["M9 2h6v6H9z","M2 16h6v6H2z","M16 16h6v6h-6z","M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3","M12 12V8"],
+  shield:["M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"],
+  package:["M21 8 12 3 3 8v8l9 5 9-5z","M3 8l9 5 9-5","M12 13v8"],
+  filter:["M22 3H2l8 9.46V19l4 2v-8.54z"],
+  cpu:["M6 6h12v12H6z","M9 9h6v6H9z","M9 2v4","M15 2v4","M9 18v4","M15 18v4","M2 9h4","M2 15h4","M18 9h4","M18 15h4"],
+  bell:["M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9","M10.3 21a1.94 1.94 0 0 0 3.4 0"],
+  chart:["M3 3v18h18","M18 17V9","M13 17V5","M8 17v-3"],
+  terminal:["M4 17l6-6-6-6","M12 19h8"],
+  list:["M8 6h13","M8 12h13","M8 18h13","M3 6h.01","M3 12h.01","M3 18h.01"],
+  users:["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2","M13 7a4 4 0 1 1-8 0a4 4 0 1 1 8 0","M22 21v-2a4 4 0 0 0-3-3.87","M16 3.13a4 4 0 0 1 0 7.75"],
+  building:["M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z","M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2","M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2","M10 6h4","M10 10h4","M10 14h4","M10 18h4"],
+  search:["M19 11a8 8 0 1 1-16 0a8 8 0 1 1 16 0","M21 21l-4.3-4.3"],
+  sun:["M16 12a4 4 0 1 1-8 0a4 4 0 1 1 8 0","M12 2v2","M12 20v2","M4.93 4.93l1.41 1.41","M17.66 17.66l1.41 1.41","M2 12h2","M20 12h2","M6.34 17.66l-1.41 1.41","M19.07 4.93l-1.41 1.41"],
+  moon:["M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"],
+  monitor:["M2 4h20v13H2z","M8 21h8","M12 17v4"],
+  chevDown:["M6 9l6 6 6-6"], chevRight:["M9 18l6-6-6-6"],
+  chevsLeft:["M11 17l-5-5 5-5","M18 17l-5-5 5-5"], chevsRight:["M13 17l5-5-5-5","M6 17l5-5-5-5"],
+  check:["M20 6 9 17l-5-5"],
+  checkCircle:["M22 12a10 10 0 1 1-20 0a10 10 0 1 1 20 0","M8.5 12l2.5 2.5 4.5-5"],
+  alert:["M21.73 18l-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3","M12 9v4","M12 17h.01"],
+  xCircle:["M22 12a10 10 0 1 1-20 0a10 10 0 1 1 20 0","M15 9l-6 6","M9 9l6 6"],
+  octagon:["M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86z","M12 8v4","M12 16h.01"],
+  minusCircle:["M22 12a10 10 0 1 1-20 0a10 10 0 1 1 20 0","M8 12h8"],
+  info:["M22 12a10 10 0 1 1-20 0a10 10 0 1 1 20 0","M12 16v-4","M12 8h.01"],
+  clock:["M22 12a10 10 0 1 1-20 0a10 10 0 1 1 20 0","M12 6v6l4 2"],
+  copy:["M8 8h13v13H8z","M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2"],
+  play:["M6 4l14 8-14 8z"],
+  archive:["M2 3h20v5H2z","M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8","M10 12h4"],
+  power:["M12 2v10","M18.4 6.6a9 9 0 1 1-12.77.04"],
+  rotate:["M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8","M3 3v5h5"],
+  plus:["M12 5v14","M5 12h14"],
+  pause:["M9 5v14","M15 5v14"],
+  signal:["M2 20h.01","M7 20v-4","M12 20v-8","M17 20V8","M22 4v16"],
+  cable:["M4 9a2 2 0 0 1-2-2V5h6v2a2 2 0 0 1-2 2Z","M3 5V3","M7 5V3","M19 15V6.5a3.5 3.5 0 0 0-7 0v11a3.5 3.5 0 0 1-7 0V9","M17 21v-2","M21 21v-2","M22 19h-6v-2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2Z"],
+  x:["M18 6 6 18","M6 6l12 12"],
+  lock:["M5 11h14v10H5z","M7 11V7a5 5 0 0 1 10 0v4"],
+  download:["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4","M7 10l5 5 5-5","M12 15V3"],
+  upload:["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4","M17 8l-5-5-5 5","M12 3v12"],
+  arrowRight:["M5 12h14","M12 5l7 7-7 7"],
+  loader:["M21 12a9 9 0 1 1-6.22-8.56"],
+  activity:["M22 12h-4l-3 9L9 3l-3 9H2"],
+  globe:["M22 12a10 10 0 1 1-20 0a10 10 0 1 1 20 0","M2 12h20","M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20"]
+};
+const ic = n => h('svg',{width:'1em',height:'1em',viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.8,strokeLinecap:'round',strokeLinejoin:'round',style:{display:'block',flex:'none'}},(P[n]||[]).map((d,k)=>h('path',{key:k,d})));
+const I = {}; for (const k in P) I[k] = ic(k);
+const TONE = t => ({fg:`var(--${t}-text)`, bg:`var(--${t}-bg)`, dot:`var(--${t})`});
+const NEU = {fg:'var(--text2)', bg:'var(--sunken)', dot:'var(--gray)'};
+const ST = {online:['Online','green','checkCircle'],offline:['Offline','red','xCircle'],crit:['Kritisch','red','octagon'],warn:['Warnung','orange','alert'],info:['Info','gray','info'],up:['Up','green','checkCircle'],down:['Down','red','xCircle'],degraded:['Degradiert','orange','alert'],prepared:['Vorbereitet','gray','clock'],connected:['Verbunden','blue','loader'],provisioned:['Provisioniert','green','checkCircle'],sync:['Synchron','green','checkCircle'],pending:['Ausstehend','gray','clock']};
+const st = (k,label) => { const [l,t,i]=ST[k]; return {...TONE(t), label:label||l, icon:I[i]}; };
+const WAN = {fiber:{...NEU,label:'Glasfaser',icon:I.cable}, '5g':{...TONE('orange'),label:'5G-Backup',icon:I.signal}, none:{...TONE('gray'),label:'Unbekannt',icon:I.minusCircle}};
+const VR = {Master:{...TONE('orange'),label:'Master',icon:I.alert}, Backup:{...NEU,label:'Backup',icon:I.pause}, '—':{...TONE('gray'),label:'Unbekannt',icon:I.minusCircle}};
+const DEV = [
+  ['gutshof-gw1','rr-gutshof-gw1','10.20.1.1','Gutshof','RB5009UG+S+IN','7.16.2','fiber','Backup',14,'41 T 3 h','vor 8 s','online',['Kern']],
+  ['gutshof-gw2','rr-gutshof-gw2','10.20.1.2','Gutshof','hAP ax³','7.16.2','fiber','Backup',4,'41 T 3 h','vor 11 s','online',['Kern']],
+  ['burg-gw1','rr-burg-gw1','10.20.2.1','Burg','RB5009UG+S+IN','7.16.2','fiber','Backup',23,'41 T 2 h','vor 5 s','online',['Kern']],
+  ['burg-gw2','rr-burg-gw2','10.20.2.2','Burg','hAP ax³','7.16.2','fiber','Backup',6,'12 T 7 h','vor 9 s','online',['Öffentlich']],
+  ['kassanord-gw1','rr-kassanord-gw1','10.20.3.1','Kassa Nord','L009UiGS-RM','7.15.3','fiber','Backup',9,'88 T 1 h','vor 4 s','online',['Kasse']],
+  ['kassasued-gw1','rr-kassasued-gw1','10.20.4.1','Kassa Süd','L009UiGS-RM','7.16.2','5g','Master',31,'19 T 22 h','vor 3 s','online',['Kasse']],
+  ['shop-gw1','rr-shop-gw1','10.20.5.1','Shop','hAP ax³','7.15.3','fiber','Backup',11,'88 T 1 h','vor 6 s','online',['Öffentlich']],
+  ['parkplatz-gw1','rr-parkplatz-gw1','10.20.6.1','Parkplatz','hAP ax³','7.14.3','none','—',null,'—','vor 2 h 14 min','offline',['Außen','Öffentlich']]
+];
+const ALARMS = [
+  {id:'a1',sev:'crit',title:'Gerät nicht erreichbar',detail:'Ping auf 10.20.6.1 und WireGuard-Handshake fehlgeschlagen',site:'Parkplatz',dev:'rr-parkplatz-gw1',start:'25.09. 07:48',dur:'2 h 14 min',state:'active'},
+  {id:'a2',sev:'warn',title:'Standort läuft über 5G-Backup',detail:'VRRP-Rolle Master · Glasfaser via FortiGate down',site:'Kassa Süd',dev:'rr-kassasued-gw1',start:'25.09. 09:24',dur:'38 min',state:'active'},
+  {id:'a3',sev:'warn',title:'5G-Datenvolumen bei 82 %',detail:'41,2 GB von 50 GB · Warnschwelle 80 %',site:'Kassa Süd',dev:'rr-kassasued-gw1',start:'25.09. 09:50',dur:'12 min',state:'active'},
+  {id:'a4',sev:'info',title:'RouterOS-Update verfügbar',detail:'7.15.3 → 7.16.2 (stable)',site:'Kassa Nord',dev:'rr-kassanord-gw1',start:'24.09. 06:00',dur:'1 T 4 h',state:'active'},
+  {id:'a5',sev:'warn',title:'CPU-Last über 80 % für 5 min',detail:'Spitze 91 % · Firewall-Regeln Kasse',site:'Burg',dev:'rr-burg-gw1',start:'25.09. 08:12',dur:'1 h 50 min',state:'ack',by:'Quittiert von M. Hofer, 08:20'},
+  {id:'a6',sev:'crit',title:'WireGuard-Tunnel zur Zentrale down',detail:'Kein Handshake > 180 s',site:'Gutshof',dev:'rr-gutshof-gw1',start:'24.09. 22:41',dur:'4 min',state:'resolved',by:'Behoben 24.09. 22:45'},
+  {id:'a7',sev:'warn',title:'Paketverlust Glasfaser über 5 %',detail:'Max. 7,8 % · ether1',site:'Kassa Nord',dev:'rr-kassanord-gw1',start:'24.09. 14:05',dur:'17 min',state:'resolved',by:'Behoben 24.09. 14:22'},
+  {id:'a8',sev:'warn',title:'Standort lief über 5G-Backup',detail:'VRRP-Rolle Master · Glasfaser-Störung',site:'Kassa Süd',dev:'rr-kassasued-gw1',start:'18.09. 02:03',dur:'11 min',state:'resolved',by:'Behoben 18.09. 02:14'}
+];
+const SITES = [['Gutshof','online','fiber',2,'6 ms'],['Burg','online','fiber',2,'7 ms'],['Kassa Nord','online','fiber',1,'8 ms'],['Kassa Süd','warn','5g',1,'41 ms'],['Shop','online','fiber',1,'9 ms'],['Parkplatz','offline','none',1,'—']];
+const TUN = [
+  {name:'Gutshof',st:'up',ip:'10.255.0.11',lat:'6 ms',rx:'38',tx:'12',hs:'Handshake vor 21 s'},
+  {name:'Burg',st:'up',ip:'10.255.0.12',lat:'7 ms',rx:'54',tx:'9,4',hs:'Handshake vor 48 s'},
+  {name:'Kassa Nord',st:'up',ip:'10.255.0.13',lat:'8 ms',rx:'6,1',tx:'2,3',hs:'Handshake vor 1 min'},
+  {name:'Kassa Süd',st:'degraded',ip:'10.255.0.14',lat:'41 ms',rx:'4,2',tx:'1,1',hs:'über 5G',lbl:'Degradiert · 5G'},
+  {name:'Shop',st:'up',ip:'10.255.0.15',lat:'9 ms',rx:'11',tx:'3,4',hs:'Handshake vor 33 s'},
+  {name:'Parkplatz',st:'down',ip:'10.255.0.16',lat:'—',rx:'0',tx:'0',hs:'letzter Handshake vor 2 h 14 min'}
+];
+const RULES = [
+  ['Gerät nicht erreichbar','ping(mgmt) fehlgeschlagen ≥ 3× in 60 s','crit','Alle Standorte','E-Mail, SMS','3'],
+  ['Standort auf Backup-WAN','vrrp.role = master > 30 s','warn','Alle Standorte','E-Mail, Teams','2'],
+  ['5G-Datenvolumen','wan[5g].volume ≥ 80 % Limit','warn','Kassa Nord, Kassa Süd','E-Mail','1'],
+  ['CPU-Last hoch','cpu > 80 % für 5 min','warn','Alle Standorte','Teams','4'],
+  ['Paketverlust','wan.loss > 5 % für 2 min','warn','Alle Standorte','Teams','6'],
+  ['VPN-Tunnel down','wg.handshake > 180 s','crit','Alle Standorte','E-Mail, Teams','2'],
+  ['Firmware verfügbar','routeros.stable > installiert','info','Alle Standorte','Wochenbericht','3'],
+  ['Temperatur hoch','board.temp > 70 °C','warn','Parkplatz','E-Mail','0']
+];
+const BK = [
+  ['b1','25.09.2026 09:25','Automatisch · VRRP-Rollenwechsel','System','14,2 KB','9f3c1a2'],
+  ['b2','24.09.2026 22:00','Nach Policy-Push „Basis-Firewall v14“','M. Hofer','14,2 KB','7be4d90'],
+  ['b3','24.09.2026 02:00','Geplant · täglich','System','13,8 KB','51a0e6f'],
+  ['b4','23.09.2026 02:00','Geplant · täglich (identisch)','System','13,8 KB','51a0e6f'],
+  ['b5','18.09.2026 02:04','Automatisch · VRRP-Rollenwechsel','System','13,8 KB','2c77b1d']
+];
+const DIFF = [
+  ['c','/interface vrrp'],['c','add interface=bridge-lan name=vrrp-lan priority=100 vrid=42 version=3'],
+  ['c','/ip firewall address-list'],['d','add address=10.0.0.0/24 list=mgmt'],['a','add address=10.0.0.0/24 list=msp-mgmt'],['a','add address=185.12.40.16/29 comment="MSP NOC" list=msp-mgmt'],
+  ['c','/ip firewall filter'],['c','add action=accept chain=input connection-state=established,related'],
+  ['d','add action=accept chain=input dst-port=8291 protocol=tcp src-address-list=mgmt'],['a','add action=accept chain=input dst-port=8291 protocol=tcp src-address-list=msp-mgmt'],['a','add action=drop chain=forward comment=content-filter dst-address-list=cf-blocklist'],
+  ['c','add action=drop chain=input in-interface-list=WAN'],
+  ['c','/ip route'],['d','add check-gateway=ping distance=1 gateway=192.168.10.1'],['a','add check-gateway=ping comment=wan-fiber distance=1 gateway=192.168.10.1'],['c','add comment=wan-5g distance=2 gateway=lte1'],
+  ['c','/system ntp client'],['d','set enabled=yes servers=pool.ntp.org'],['a','set enabled=yes servers=10.0.0.1,pool.ntp.org']
+];
+const TPL = [
+  {id:'kasse',name:'Kassen-Standort',ver:'v5',desc:'L009 · VRRP mit FortiGate · 5G-Backup · Content-Filter Kasse'},
+  {id:'klein',name:'Kleiner Standort',ver:'v3',desc:'hAP ax³ · Glasfaser · WLAN · WireGuard zur Zentrale'},
+  {id:'kern',name:'Kernstandort',ver:'v8',desc:'RB5009 · Dual-WAN · VRRP · Full-Mesh-Teilnehmer'}
+];
+const RANGES = [['15 min',15],['1 h',60],['6 h',360],['24 h',1440],['7 T',10080],['30 T',43200]];
+const NOW = new Date(2026,8,25,10,2).getTime();
+const de = (v,d=1) => v.toFixed(d).replace('.',',');
+const pad = n => String(n).padStart(2,'0');
+
+function buildDiff(){
+  const rows=[]; let ln=0, rn=0, dq=[], aq=[];
+  const flush=()=>{ const n=Math.max(dq.length,aq.length); for(let k=0;k<n;k++){ const l=dq[k], r=aq[k];
+    rows.push({ln:l!=null?++ln:'',lt:l??'',lm:l!=null?'−':'',lbg:l!=null?'var(--red-bg)':'var(--sunken)',lmc:'var(--red-text)',lfg:'var(--text)',
+      rn:r!=null?++rn:'',rt:r??'',rm:r!=null?'+':'',rbg:r!=null?'var(--green-bg)':'var(--sunken)',rmc:'var(--green-text)',rfg:'var(--text)'}); } dq=[];aq=[]; };
+  DIFF.forEach(([t,s])=>{ if(t==='d') dq.push(s); else if(t==='a') aq.push(s); else { flush(); const sec=s.startsWith('/');
+    rows.push({ln:++ln,lt:s,lm:'',lbg:'transparent',lmc:'',lfg:sec?'var(--blue-text)':'var(--text2)',rn:++rn,rt:s,rm:'',rbg:'transparent',rmc:'',rfg:sec?'var(--blue-text)':'var(--text2)'}); } });
+  flush(); return rows;
+}
+const DIFF_ROWS = buildDiff();
+
+function rng(seed){ let s=seed%2147483647; if(s<=0)s+=2147483646; return ()=>{ s=s*16807%2147483647; return (s-1)/2147483646; }; }
+
+function chart(cfg){
+  const W=1000,H=100,L=40,n=cfg.series[0].vals.length;
+  const x=i=>i/(n-1)*W, y=v=>H-Math.min(v,cfg.max)/cfg.max*H;
+  const path=vals=>{ let d='',pen=false; vals.forEach((v,i)=>{ if(v==null){pen=false;return;} d+=(pen?'L':'M')+x(i).toFixed(1)+' '+y(v).toFixed(1)+' '; pen=true; }); return d; };
+  const g=[0,.25,.5,.75,1];
+  const mk=cfg.marker;
+  return h('div',{style:{position:'relative',height:cfg.height||170}},
+    g.map((f,k)=>h('div',{key:'y'+k,style:{position:'absolute',left:0,width:L-8,textAlign:'right',top:`calc(6px + (100% - 28px) * ${f})`,transform:'translateY(-50%)',fontSize:11,color:'var(--text3)'}},String(Math.round(cfg.max*(1-f))))),
+    h('svg',{viewBox:`0 0 ${W} ${H}`,preserveAspectRatio:'none',style:{position:'absolute',left:L,top:6,width:`calc(100% - ${L}px)`,height:'calc(100% - 28px)',overflow:'visible'}},
+      g.map((f,k)=>h('line',{key:'g'+k,x1:0,x2:W,y1:f*H,y2:f*H,vectorEffect:'non-scaling-stroke',style:{stroke:'var(--border)',strokeWidth:1}})),
+      mk!=null && h('rect',{key:'mr',x:mk*W,y:0,width:W-mk*W,height:H,style:{fill:'var(--orange)',opacity:.07}}),
+      cfg.series.map((s,k)=>s.fill && h('path',{key:'f'+k,d:path(s.vals)+`L${W} ${H} L0 ${H} Z`,style:{fill:s.color,opacity:.08}})),
+      cfg.series.map((s,k)=>h('path',{key:'s'+k,d:path(s.vals),fill:'none',vectorEffect:'non-scaling-stroke',style:{stroke:s.color,strokeWidth:1.6,strokeLinejoin:'round'}})),
+      mk!=null && h('line',{key:'m',x1:mk*W,x2:mk*W,y1:0,y2:H,vectorEffect:'non-scaling-stroke',style:{stroke:'var(--orange)',strokeWidth:1.5,strokeDasharray:'4 3'}})
+    ),
+    h('div',{style:{position:'absolute',left:L,right:0,bottom:0,display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--text3)'}},cfg.xl.map((t,k)=>h('span',{key:k},t)))
+  );
+}
+
+function metrics(rk){
+  const mins=RANGES.find(r=>r[0]===rk)[1], n=120, r=rng(mins*7+3);
+  const ago=i=>(1-i/(n-1))*mins;
+  const biz=i=>{ const d=new Date(NOW-ago(i)*60000); const hh=d.getHours()+d.getMinutes()/60; return 0.25+0.75*Math.max(0,Math.sin((hh-7)/13*Math.PI)); };
+  const g=i=>ago(i)<=38;
+  const sm=(arr,a=.55)=>{ let p=null; return arr.map(v=>{ if(v==null){p=null;return null;} p=p==null?v:p*a+v*(1-a); return p; }); };
+  const idx=[...Array(n).keys()];
+  const rx=sm(idx.map(i=>g(i)?8+r()*6:10+44*biz(i)+r()*14));
+  const tx=sm(idx.map((i,k)=>rx[k]*0.24+r()*2));
+  const lf=sm(idx.map(i=>g(i)?null:4.2+r()*2.6+(r()>.97?9:0)));
+  const l5=sm(idx.map(i=>33+r()*12));
+  const cpu=sm(idx.map(i=>g(i)?25+r()*10:6+14*biz(i)+r()*6));
+  const mk=38<mins?1-38/mins:null;
+  const xl=[0,.25,.5,.75,1].map(f=>{ const d=new Date(NOW-(1-f)*mins*60000); return mins<=1440?`${pad(d.getHours())}:${pad(d.getMinutes())}`:`${pad(d.getDate())}.${pad(d.getMonth()+1)}.`; });
+  const C1='var(--blue)',C2='var(--c2)';
+  return {
+    thr:chart({series:[{vals:rx,color:C1,fill:true},{vals:tx,color:C2}],max:80,xl,marker:mk,height:190}),
+    lat:chart({series:[{vals:lf,color:C1},{vals:l5,color:C2}],max:60,xl,marker:mk}),
+    cpu:chart({series:[{vals:cpu,color:C1,fill:true}],max:100,xl,marker:mk}),
+    rxNow:de(rx[n-1])+' Mbit/s', txNow:de(tx[n-1])+' Mbit/s', latNow:Math.round(l5[n-1])+' ms', cpuNow:Math.round(cpu[n-1])+' %',
+    rangeText: mk==null?'Gesamter Zeitraum über 5G-Backup':'Failover um 09:24 markiert'
+  };
+}
+
+function topo(full){
+  const W=820,H=540,cx=410,cy=270,rx=300,ry=196;
+  const nodes=TUN.map((t,k)=>{ const a=-Math.PI/2+k*Math.PI/3; return {...t,x:cx+rx*Math.cos(a),y:cy+ry*Math.sin(a)}; });
+  const col=s=>s==='up'?'var(--green)':s==='degraded'?'var(--orange)':'var(--red)';
+  const txc=s=>s==='up'?'var(--green-text)':s==='degraded'?'var(--orange-text)':'var(--red-text)';
+  const els=[];
+  if(full){ for(let i=0;i<6;i++) for(let j=i+1;j<6;j++){ const a=nodes[i],b=nodes[j]; const s=(a.st==='down'||b.st==='down')?'down':(a.st==='degraded'||b.st==='degraded')?'degraded':'up';
+    els.push(h('line',{key:`m${i}${j}`,x1:a.x,y1:a.y,x2:b.x,y2:b.y,style:{stroke:col(s),strokeWidth:1.2,opacity:.55,strokeDasharray:s==='down'?'5 5':'none'}})); } }
+  nodes.forEach((n,k)=>els.push(h('line',{key:'h'+k,x1:cx,y1:cy,x2:n.x,y2:n.y,style:{stroke:col(n.st),strokeWidth:2.5,strokeDasharray:n.st==='down'?'7 6':'none'}})));
+  nodes.forEach((n,k)=>{ const mx=cx+(n.x-cx)*.5, my=cy+(n.y-cy)*.5; const t=n.st==='down'?'keine Verbindung':`↓ ${n.rx}  ↑ ${n.tx} Mbit/s`; const w=t.length*6.3+16;
+    els.push(h('g',{key:'l'+k,transform:`translate(${mx},${my})`},
+      h('rect',{x:-w/2,y:-11,width:w,height:22,rx:11,style:{fill:'var(--panel)',stroke:col(n.st),strokeWidth:1}}),
+      h('text',{x:0,y:4,textAnchor:'middle',style:{fontSize:11,fontWeight:500,fill:txc(n.st),fontFamily:"'Geist Mono',monospace"}},t))); });
+  nodes.forEach((n,k)=>{ const sub=n.st==='up'?`${n.lat} · ${n.ip}`:n.st==='degraded'?'Degradiert · über 5G':'Down · 2 h 14 min';
+    const icon=n.st==='up'?'M-2.5 0l2 2 3.5-4':n.st==='degraded'?'M0 -3.5v3.5M0 3h.01':'M-2.5 -2.5l5 5M2.5 -2.5l-5 5';
+    els.push(h('g',{key:'n'+k,transform:`translate(${n.x},${n.y})`},
+      h('rect',{x:-76,y:-24,width:152,height:48,rx:8,style:{fill:'var(--panel)',stroke:n.st==='up'?'var(--border-strong)':col(n.st),strokeWidth:n.st==='up'?1:1.5}}),
+      h('circle',{cx:-58,cy:0,r:8,style:{fill:col(n.st)}}),
+      h('path',{d:icon,transform:'translate(-58,0)',style:{stroke:'#fff',strokeWidth:1.8,fill:'none',strokeLinecap:'round',strokeLinejoin:'round'}}),
+      h('text',{x:-42,y:-3,style:{fontSize:13,fontWeight:600,fill:'var(--text)'}},n.name),
+      h('text',{x:-42,y:13,style:{fontSize:11,fill:n.st==='up'?'var(--text3)':txc(n.st),fontFamily:"'Geist Mono',monospace"}},sub))); });
+  els.push(h('g',{key:'c',transform:`translate(${cx},${cy})`},
+    h('rect',{x:-92,y:-30,width:184,height:60,rx:10,style:{fill:'var(--blue-bg)',stroke:'var(--blue)',strokeWidth:1.5}}),
+    h('rect',{x:-92,y:-30,width:184,height:60,rx:10,style:{fill:'var(--panel)',opacity:.5}}),
+    h('text',{x:0,y:-4,textAnchor:'middle',style:{fontSize:14,fontWeight:600,fill:'var(--text)'}},'Zentrale · RZ Graz'),
+    h('text',{x:0,y:14,textAnchor:'middle',style:{fontSize:11,fill:'var(--text2)',fontFamily:"'Geist Mono',monospace"}},'CHR 7.16.2 · 10.255.0.1')));
+  return h('svg',{viewBox:`0 0 ${W} ${H}`,style:{width:'100%',height:'auto',display:'block',fontFamily:"'Geist',sans-serif"}},els);
+}
+
+class Component extends DCLogic {
+  state = { sel:{'kassanord-gw1':true,'shop-gw1':true,'parkplatz-gw1':true}, tags:{}, devStatus:'all', mesh:'hub', range:'24 h', tpl:'kasse', copied:false, acked:{}, alarmFilter:'active', tenantOpen:false, cmpA:'b3', cmpB:'b2', rulesOff:{'Temperatur hoch':true}, test:{}, bk:0 };
+  g(k,d){ return this.state[k] ?? this.props[k] ?? d; }
+  componentDidUpdate(pp){ const ch={}; ['screen','theme','deviceTab','alarmView','ztpDialog','collapsed'].forEach(k=>{ if(pp[k]!==this.props[k]) ch[k]=undefined; }); if(Object.keys(ch).length) this.setState(ch); }
+  componentWillUnmount(){ clearTimeout(this.t1); clearTimeout(this.t2); }
+  seg(items,cur,set){ return items.map(([k,label,count])=>({label,count,onClick:()=>set(k),bg:k===cur?'var(--panel)':'transparent',fg:k===cur?'var(--text)':'var(--text2)',sh:k===cur?'0 0 0 1px var(--border), 0 1px 2px rgba(16,24,40,.06)':'none'})); }
+  renderVals(){
+    const S=this.state;
+    const screen=this.g('screen','dashboard'), themePref=this.g('theme','light'), dtab=this.g('deviceTab','overview'), aview=this.g('alarmView','list'), dlg=this.g('ztpDialog',false), col=this.g('collapsed',false);
+    const sysDark=typeof window!=='undefined'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const themeEff=themePref==='dark'||(themePref==='system'&&sysDark)?'dark':'light';
+    const go=s=>e=>{ e&&e.preventDefault&&e.preventDefault(); this.setState({screen:s,tenantOpen:false}); };
+    const nav={}; ['dashboard','devices','device','mesh','alarms','ztp','login'].forEach(k=>nav[k]=go(k)); nav.login=go(screen==='login'?'dashboard':'login');
+
+    const alarms=ALARMS.map(a=>S.acked[a.id]&&a.state==='active'?{...a,state:'ack',by:'Quittiert von M. Hofer, gerade eben'}:a);
+    const open=alarms.filter(a=>a.state==='active'), acked=alarms.filter(a=>a.state==='ack'), resolved=alarms.filter(a=>a.state==='resolved');
+    const alarmCount=open.length+acked.length;
+
+    const NAV=[['dashboard','Dashboard','grid'],['devices','Geräte','router'],['sites','Standorte','pin'],['mesh','VPN-Mesh','network'],['firewall','Firewall-Policies','shield'],['ztp','Zero-Touch','package'],['filter','Content-Filter','filter'],['firmware','Firmware','cpu',3],['alarms','Alarme','bell',alarmCount,true],['reports','Berichte','chart'],['remote','Fernzugriff','terminal'],['audit','Audit-Log','list']];
+    const NAV2=[['users','Benutzer','users'],['tenants','Mandanten','building']];
+    const mkNav=([k,label,icon,badge,red])=>{ const act=screen===k||(k==='devices'&&screen==='device');
+      return {label,icon:I[icon],onClick:go(k),bg:act?'var(--blue-bg)':'transparent',fg:act?'var(--blue-text)':'var(--text2)',ic:act?'var(--blue-text)':'var(--text3)',fw:act?600:500,showLabel:!col,hasBadge:!!badge&&!col,badge,badgeBg:red?'var(--red-bg)':'var(--sunken)',badgeFg:red?'var(--red-text)':'var(--text2)',pad:col?'0':'0 10px',jc:col?'center':'flex-start'}; };
+
+    const themeOpts=[['light','sun','Hell'],['dark','moon','Dunkel'],['system','monitor','System']].map(([k,icon,title])=>({icon:I[icon],title,onClick:()=>this.setState({theme:k}),bg:themePref===k?'var(--panel)':'transparent',fg:themePref===k?'var(--text)':'var(--text3)',sh:themePref===k?'0 0 0 1px var(--border), 0 1px 2px rgba(16,24,40,.08)':'none'}));
+
+    const tenants=[['Burg Riegersburg','6 Standorte · 8 Geräte',true],['Stadtwerke Feldbach','11 Standorte · 23 Geräte'],['Thermenhotel Loipersdorf','4 Standorte · 9 Geräte'],['Weingut Kober','2 Standorte · 3 Geräte']].map(([name,meta,cur])=>({name,meta,cur:!!cur,icon:I.check,bg:cur?'var(--hover)':'transparent'}));
+
+    const kpis=[
+      {label:'Geräte gesamt',icon:I.router,value:'8',unit:'',sub:'6 Standorte',subIcon:I.pin,subFg:'var(--text3)',valFg:'var(--text)',onClick:go('devices')},
+      {label:'Online',icon:I.checkCircle,value:'7',unit:'von 8',sub:'Alle Kernstandorte erreichbar',subIcon:I.checkCircle,subFg:'var(--green-text)',valFg:'var(--text)',onClick:go('devices')},
+      {label:'Offline',icon:I.xCircle,value:'1',unit:'',sub:'rr-parkplatz-gw1 · 2 h 14 min',subIcon:I.xCircle,subFg:'var(--red-text)',valFg:'var(--red-text)',onClick:go('devices')},
+      {label:'Offene Alarme',icon:I.bell,value:String(alarmCount),unit:'',sub:'1 kritisch · 3 Warnung · 1 Info',subIcon:I.octagon,subFg:'var(--text2)',valFg:'var(--text)',onClick:go('alarms')},
+      {label:'Standorte auf Backup-WAN',icon:I.signal,value:'1',unit:'von 6',sub:'Kassa Süd über 5G seit 38 min',subIcon:I.alert,subFg:'var(--orange-text)',valFg:'var(--orange-text)',onClick:go('device')},
+      {label:'Firmware-Updates',icon:I.cpu,value:'3',unit:'ausstehend',sub:'Ziel: RouterOS 7.16.2',subIcon:I.upload,subFg:'var(--text3)',valFg:'var(--text)',onClick:go('devices')}
+    ];
+    const sevOrder={crit:0,warn:1,info:2};
+    const dashAlarms=[...open,...acked].sort((a,b)=>sevOrder[a.sev]-sevOrder[b.sev]).map(a=>({...a,sev:st(a.sev),stateText:a.state==='ack'?'Quittiert · M. Hofer':'Aktiv seit '+a.start}));
+    const sites=SITES.map(([name,s,w,n,lat])=>{ const t=s==='online'?'green':s==='warn'?'orange':'red';
+      return {name,lat,wan:WAN[w],dot:`var(--${t})`,ring:`var(--${t}-bg)`,stFg:s==='online'?'var(--text3)':`var(--${t}-text)`,stText:`${n} ${n>1?'Geräte':'Gerät'} · `+(s==='online'?'Online':s==='warn'?'Über Backup-WAN':'Offline')}; });
+
+    // devices
+    const tagsOn=Object.keys(S.tags).filter(k=>S.tags[k]);
+    const devs=DEV.filter(d=>(S.devStatus==='all'||d[11]===S.devStatus)&&(!tagsOn.length||tagsOn.some(t=>d[12].includes(t))));
+    const chk=on=>({bd:on?'var(--blue)':'var(--border-strong)',bg:on?'var(--blue)':'var(--panel)',icon:on?I.check:null});
+    const devRows=devs.map(d=>{ const [key,name,ip,site,model,ros,wan,vrrp,cpu,up,seen,s]=d; const on=!!S.sel[key];
+      return {name,ip,site,model,ros,rosOld:ros!=='7.16.2',upIcon:I.upload,wan:WAN[wan],vrrp:VR[vrrp],cpu:cpu==null?'—':cpu+' %',cpuW:(cpu||0)+'%',up,seen,seenFg:s==='offline'?'var(--red-text)':'var(--text2)',st:st(s),chk:chk(on),rowBg:on?'var(--blue-bg)':'transparent',nameFg:key==='kassasued-gw1'?'var(--blue-text)':'var(--text)',
+        onToggle:e=>{ e.stopPropagation(); this.setState(p=>({sel:{...p.sel,[key]:!p.sel[key]}})); },
+        onOpen:()=>{ if(key==='kassasued-gw1') this.setState({screen:'device'}); }}; });
+    const selN=Object.values(S.sel).filter(Boolean).length;
+    const allOn=selN===DEV.length;
+    const tagChips=['Kasse','Kern','Außen','Öffentlich'].map(t=>{ const on=!!S.tags[t]; return {label:t,on,icon:I.check,onClick:()=>this.setState(p=>({tags:{...p.tags,[t]:!p.tags[t]}})),bd:on?'var(--blue)':'var(--border-strong)',bg:on?'var(--blue-bg)':'var(--panel)',fg:on?'var(--blue-text)':'var(--text2)'}; });
+
+    // device tabs
+    const TABS=[['overview','Übersicht'],['wan','WAN','2'],['vrrp','VRRP'],['metrics','Metriken'],['backups','Backups','14'],['policies','Policies','4'],['remote','Fernzugriff']];
+    const tabGo={}; TABS.forEach(([k])=>tabGo[k]=()=>this.setState({screen:'device',deviceTab:k}));
+    const tabs=TABS.map(([k,label,count])=>({label,count,hasCount:!!count,onClick:tabGo[k],fg:dtab===k?'var(--text)':'var(--text2)',bd:dtab===k?'var(--blue)':'transparent'}));
+    const dt={}; TABS.forEach(([k])=>dt[k]=dtab===k);
+
+    const testState=i=>S.test[i];
+    const runTest=i=>()=>{ this.setState(p=>({test:{...p.test,[i]:'run'}})); clearTimeout(this['tt'+i]); this['tt'+i]=setTimeout(()=>this.setState(p=>({test:{...p.test,[i]:'done'}})),1600); };
+    const testText=(i,ok,fail)=>testState(i)==='run'?'Test läuft …':testState(i)==='done'?(i===0?fail:ok):'Zuletzt geprüft vor 4 s';
+    const wans=[
+      {name:'Glasfaser via FortiGate',icon:I.cable,iface:'ether1 · GW 192.168.10.1',st:st('down'),act:{...NEU,label:'Nicht aktiv',icon:I.pause},note:'Ausfall seit 09:24 · 38 min',noteFg:'var(--red-text)',lat:'—',loss:'100 %',lossFg:'var(--red-text)',prio:'1',prioNote:'Primär',vol:'418 GB',lim:'2 TB',barW:'20%',barC:'var(--gray)',volNote:'20 % · unter Warnschwelle (80 %)',volFg:'var(--text3)',volIcon:I.checkCircle,border:'var(--border)',onTest:runTest(0),testText:testText(0,'','Test fehlgeschlagen · 0/10 Pings'),testFg:testState(0)==='done'?'var(--red-text)':'var(--text3)'},
+      {name:'5G-Backup',icon:I.signal,iface:'lte1 · Magenta 5G · n78',st:st('up'),act:{fg:'var(--blue-text)',bg:'var(--blue-bg)',label:'Aktive Leitung',icon:I.check},note:'RSRP −87 dBm · SINR 14 dB',noteFg:'var(--text3)',lat:'38 ms',loss:'0,4 %',lossFg:'var(--text)',prio:'2',prioNote:'Backup',vol:'41,2 GB',lim:'50 GB',barW:'82%',barC:'var(--orange)',volNote:'82 % · Warnschwelle 80 % überschritten',volFg:'var(--orange-text)',volIcon:I.alert,border:'var(--blue)',onTest:runTest(1),testText:testText(1,'Test ok · 10/10 Pings · 37 ms',''),testFg:testState(1)==='done'?'var(--green-text)':'var(--text3)'}
+    ];
+    const routes=[
+      {st:{...NEU,label:'Inaktiv',icon:I.pause},cmd:'0.0.0.0/0 gateway=192.168.10.1 distance=1 check-gateway=ping',note:'Gateway nicht erreichbar'},
+      {st:{fg:'var(--blue-text)',bg:'var(--blue-bg)',label:'Aktiv',icon:I.check},cmd:'0.0.0.0/0 gateway=lte1 distance=2',note:'seit 09:24:11'}
+    ];
+    const mono="'Geist Mono',monospace";
+    const vrrpKV=[['Instanz','vrrp-lan',1],['Interface','bridge-lan',1],['Virtuelle IP (VIP)','10.20.4.254/24',1],['VRID','42',1],['Priorität','100 (Peer: 200)'],['Preemption','Ja'],['Advertisement-Intervall','1 s · VRRPv3'],['Peer','10.20.4.2 · nicht erreichbar',0,'var(--red-text)']].map(([k,v,m,fg])=>({k,v,ff:m?mono:'inherit',fs:m?'12.5px':'13px',fg:fg||'var(--text)'}));
+    const vrrpHist=[['25.09.2026 09:24:11','Backup','Master','Keine Advertisements vom Peer 10.20.4.2 (3 × 1 s)','38 min · läuft'],['18.09.2026 02:14:52','Master','Backup','Peer wieder erreichbar · Preemption','—'],['18.09.2026 02:03:40','Backup','Master','Keine Advertisements vom Peer · Glasfaser-Störung','11 min'],['29.08.2026 23:10:05','Master','Backup','Wartungsfenster beendet','—'],['29.08.2026 22:58:31','Backup','Master','Manuell · FortiGate-Firmware-Update','12 min']]
+      .map(([t,f,to,why,dur])=>({t,why,dur,from:VR[f],to:VR[to],arrow:I.arrowRight}));
+
+    const bById=Object.fromEntries(BK.map(b=>[b[0],{t:b[1],why:b[2]}]));
+    const chip=(on,blue)=>on?{bd:blue?'var(--blue)':'var(--text)',bg:blue?'var(--blue)':'var(--text)',fg:blue?'#fff':'var(--panel)'}:{bd:'var(--border-strong)',bg:'var(--panel)',fg:'var(--text3)'};
+    const backups=BK.map(([id,t,why,by,size,hash])=>({t,why,by,size,hash,a:chip(S.cmpA===id,false),b:chip(S.cmpB===id,true),rowBg:(S.cmpA===id||S.cmpB===id)?'var(--panel2)':'transparent',pickA:()=>this.setState({cmpA:id}),pickB:()=>this.setState({cmpB:id})}));
+
+    const ovTiles=[{label:'CPU',value:'31 %',sub:'2 Kerne · 800 MHz'},{label:'Arbeitsspeicher',value:'212 MB',sub:'von 512 MB'},{label:'Temperatur',value:'47 °C',sub:'Board'},{label:'Aktiver WAN',value:'5G-Backup',sub:'lte1 · seit 09:24'}];
+    const ifaces=[['ether1','WAN · Glasfaser via FortiGate','192.168.10.2/30','down'],['lte1','WAN · 5G-Backup','100.84.17.203','up'],['bridge-lan','LAN · Kassen','10.20.4.1/24','up'],['wg-mesh','VPN · Zentrale','10.255.0.14/32','degraded']].map(([name,desc,addr,s])=>({name,desc,addr,st:st(s)}));
+    const events=[['09:25','Konfig-Backup automatisch erstellt','archive','var(--text3)'],['09:24','VRRP: Rolle Backup → Master','alert','var(--orange-text)'],['09:24','Route distance=1 inaktiv (check-gateway)','alert','var(--orange-text)'],['09:23','ether1: Prüfziele nicht erreichbar','xCircle','var(--red-text)'],['02:00','Tägliches Backup erstellt','archive','var(--text3)']].map(([t,text,icon,fg])=>({t,text,icon:I[icon],fg}));
+    const policies=[['Basis-Firewall','v14','Firewall','sync','Übertragen 24.09. 22:00'],['MSP-Management-Zugang','v7','Firewall','sync','Übertragen 24.09. 22:00'],['Content-Filter Kasse','v3','Content-Filter','sync','Übertragen 12.09. 18:30'],['NTP & Logging','v2','System','pending','Geplant heute 22:00']].map(([name,ver,kind,s,when])=>({name,ver,kind,when,st:st(s)}));
+    const remoteOpts=[{icon:I.monitor,name:'WinBox',desc:'Tunnel über den Fleet-Proxy. Der Port wird lokal bereitgestellt.',target:'127.0.0.1:18291 → 10.20.4.1:8291'},{icon:I.globe,name:'WebFig',desc:'Weboberfläche des Routers im Browser öffnen.',target:'https://fleet.it-partner.at/r/kassasued-gw1'},{icon:I.terminal,name:'SSH-Terminal',desc:'Browser-Terminal mit Sitzungsaufzeichnung.',target:'ssh admin@10.20.4.1'}];
+    const sessions=[['18.09.2026 02:20','M. Hofer','SSH','Failover-Analyse','14 min'],['12.09.2026 18:24','S. Pichler','WinBox','Content-Filter Kasse v3','22 min'],['02.09.2026 09:10','M. Hofer','WebFig','5G-Modem geprüft','6 min']].map(([t,who,kind,note,dur])=>({t,who,kind,note,dur}));
+
+    const alarmTabs=[['list','Alarme',String(alarmCount)],['rules','Alarmregeln',String(RULES.length)]].map(([k,label,count])=>({label,count,onClick:()=>this.setState({alarmView:k}),fg:aview===k?'var(--text)':'var(--text2)',bd:aview===k?'var(--blue)':'transparent'}));
+    const af=S.alarmFilter;
+    const alarmSeg=this.seg([['active','Aktiv',open.length],['ack','Quittiert',acked.length],['resolved','Behoben',resolved.length],['all','Alle',alarms.length]],af,k=>this.setState({alarmFilter:k}));
+    const alarmRows=alarms.filter(a=>af==='all'||a.state===af).map(a=>({...a,sev:st(a.sev),canAck:a.state==='active',noAck:a.state!=='active',ackIcon:I.check,stateText:a.by||'',onAck:()=>this.setState(p=>({acked:{...p.acked,[a.id]:true}}))}));
+    const rules=RULES.map(([name,cond,sev,scope,notify,hits])=>{ const on=!S.rulesOff[name]; return {name,cond,sev:st(sev),scope,notify,hits,op:on?1:.55,tg:on?'var(--blue)':'var(--border-strong)',knob:on?'14px':'2px',onToggle:()=>this.setState(p=>({rulesOff:{...p.rulesOff,[name]:!p.rulesOff[name]}}))}; });
+
+    const ztpRows=[['HGK09A1R2T3','L009UiGS-RM','Kassen-Standort','v5','Kassa Nord (Tausch)','connected','25.09. 09:40','vor 20 s'],['HGK09A7M4P1','hAP ax³','Kleiner Standort','v3','Parkplatz (Ersatz)','prepared','25.09. 08:15','—'],['HGK09B0L2W8','L009UiGS-RM','Kassen-Standort','v5','Kassa Süd (Reserve)','prepared','23.09. 16:02','—'],['D4F10B2C8E6','RB5009UG+S+IN','Kernstandort','v8','Gutshof','provisioned','12.09. 11:30','12.09. 14:22'],['HGK09A3Q9Z5','hAP ax³','Kleiner Standort','v3','Shop','provisioned','03.09. 10:05','03.09. 10:41']].map(([sn,model,tpl,ver,site,s,created,seen])=>({sn,model,tpl,ver,site,created,seen,st:st(s)}));
+    const ztpStats=[['prepared','2','Warten auf ersten Kontakt'],['connected','1','Konfiguration wird übertragen'],['provisioned','2','In den letzten 30 Tagen']].map(([s,n,sub])=>({st:st(s),n,sub}));
+    const tplCur=TPL.find(t=>t.id===S.tpl);
+    const tplCards=TPL.map(t=>{ const on=t.id===S.tpl; return {...t,onClick:()=>this.setState({tpl:t.id}),bd:on?'var(--blue)':'var(--border)',bg:on?'var(--blue-bg)':'var(--panel)',radio:on?'5px solid var(--blue)':'1.5px solid var(--border-strong)'}; });
+
+    const OT={sites:'Standorte',firewall:'Firewall-Policies',filter:'Content-Filter',firmware:'Firmware',reports:'Berichte',remote:'Fernzugriff',audit:'Audit-Log',users:'Benutzer',tenants:'Mandanten'};
+    const known=['dashboard','devices','device','mesh','alarms','ztp','login'];
+
+    return {
+      themeEff, i:I, nav, tabGo,
+      is:{login:screen==='login',dashboard:screen==='dashboard',devices:screen==='devices',device:screen==='device',mesh:screen==='mesh',alarms:screen==='alarms',ztp:screen==='ztp',other:!known.includes(screen)},
+      notLogin:screen!=='login', otherTitle:OT[screen]||'',
+      sideW:col?'60px':'232px', expanded:!col, collapseIcon:col?I.chevsRight:I.chevsLeft, collapsePad:col?'0':'0 10px', collapseJc:col?'center':'flex-start',
+      toggleSide:()=>this.setState({collapsed:!col}),
+      navItems:NAV.map(mkNav), navItems2:NAV2.map(mkNav),
+      themeOpts, tenants, tenantOpen:S.tenantOpen, toggleTenant:()=>this.setState(p=>({tenantOpen:!p.tenantOpen})),
+      alarmCount, kpis, dashAlarms, sites,
+      devRows, devCountText:`${DEV.length} Geräte · Burg Riegersburg · 3 mit ausstehendem Firmware-Update`, devFootText:`${devRows.length} von ${DEV.length} Geräten`,
+      devStatusSeg:this.seg([['all','Alle',8],['online','Online',7],['offline','Offline',1]],S.devStatus,k=>this.setState({devStatus:k})),
+      tagChips, hasSel:selN>0, selText:`${selN} ${selN===1?'Gerät':'Geräte'} ausgewählt`, clearSel:()=>this.setState({sel:{}}),
+      allChk:chk(allOn), toggleAll:()=>this.setState({sel:allOn?{}:Object.fromEntries(DEV.map(d=>[d[0],true]))}),
+      tabs, dt, wans, routes, vrrpKV, vrrpHist,
+      backupNow:()=>{ this.setState({bk:1}); clearTimeout(this.t1); this.t1=setTimeout(()=>this.setState({bk:2}),1400); },
+      backupIcon:S.bk===2?I.check:I.archive, backupLabel:S.bk===1?'Backup läuft …':S.bk===2?'Backup erstellt':'Backup jetzt',
+      rangeSeg:this.seg(RANGES.map(r=>[r[0],r[0]]),S.range,k=>this.setState({range:k})),
+      m:dt.metrics?metrics(S.range):{},
+      backups, cmpA:bById[S.cmpA], cmpB:bById[S.cmpB], diff:DIFF_ROWS,
+      ovTiles, ifaces, events, policies, remoteOpts, sessions,
+      meshSeg:this.seg([['hub','Hub-and-Spoke'],['full','Full-Mesh']],S.mesh,k=>this.setState({mesh:k})),
+      topo:screen==='mesh'?topo(S.mesh==='full'):null, meshCountText:S.mesh==='full'?'21 Tunnel':'6 Tunnel',
+      tunnels:TUN.map(t=>({...t,st:st(t.st)})),
+      av:{list:aview==='list',rules:aview==='rules'}, alarmTabs, alarmSeg, alarmRows, rules,
+      ztpRows, ztpStats, tplCards,
+      showDlg:screen==='ztp'&&!!dlg, openDlg:()=>this.setState({ztpDialog:true,copied:false}), closeDlg:()=>this.setState({ztpDialog:false}),
+      cmdComment:`# Vorlage: ${tplCur.name} ${tplCur.ver} · SN HGK09C5D1X4 · Kassa Süd`,
+      cmdUrl:`https://fleet.it-partner.at/ztp/b/HGK09C5D1X4?tpl=${tplCur.id}-${tplCur.ver}&token=zt_8fK2qLm9vR4xT7wN`,
+      copyCmd:()=>{ const txt=`/tool fetch url="https://fleet.it-partner.at/ztp/b/HGK09C5D1X4?tpl=${tplCur.id}-${tplCur.ver}&token=zt_8fK2qLm9vR4xT7wN" dst-path=ztp.rsc\n:delay 2s\n/import file-name=ztp.rsc`; try{ navigator.clipboard&&navigator.clipboard.writeText(txt); }catch(e){} this.setState({copied:true}); clearTimeout(this.t2); this.t2=setTimeout(()=>this.setState({copied:false}),2000); },
+      copyIcon:S.copied?I.check:I.copy, copyLabel:S.copied?'Kopiert':'Kopieren', copyFg:S.copied?'var(--green-text)':'var(--text)'
+    };
+  }
+}
+</script>
+</body>
+</html>

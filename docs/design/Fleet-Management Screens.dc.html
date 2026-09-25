@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><style>body{margin:0;background:#E9ECF0;font-family:system-ui,sans-serif}a{color:#2563EB}a:hover{color:#1D4ED8}</style></helmet>
+<section id="t1" style="padding:40px 44px 48px;display:flex;flex-direction:column;gap:48px">
+  <div style="display:flex;flex-direction:column;gap:6px;max-width:900px">
+    <div style="font:600 22px/1.2 system-ui,sans-serif;color:#101828">MikroTik-Fleet-Management · Screens</div>
+    <div style="font:13px/1.5 system-ui,sans-serif;color:#475467">Jeder Screen links hell, rechts dunkel · 1440 px. Die Einzelansichten sind klickbar (Navigation, Filter, Tabs, Quittieren, Kopieren, Theme-Umschalter). Interaktiver Prototyp: <a href="FleetApp.dc.html">FleetApp.dc.html</a></div>
+  </div>
+  <sc-for list="{{ rows }}" as="r" hint-placeholder-count="11">
+    <div id="{{ r.id }}" style="display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 11px ui-monospace,Menlo,monospace;padding:3px 7px;background:#101828;color:#fff;border-radius:4px">{{ r.num }}</span><span style="font:600 15px system-ui,sans-serif;color:#101828">{{ r.title }}</span><span style="font:12px system-ui,sans-serif;color:#667085">{{ r.note }}</span></div>
+      <div style="display:flex;gap:32px;align-items:flex-start">
+        <div style="width:1440px;flex:none;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 0 0 1px rgba(0,0,0,.06)">
+          <dc-import name="FleetApp" screen="{{ r.screen }}" theme="light" device-tab="{{ r.tab }}" alarm-view="{{ r.av }}" ztp-dialog="{{ r.dlg }}" hint-size="1440px,900px"></dc-import>
+        </div>
+        <div style="width:1440px;flex:none;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08),0 0 0 1px rgba(0,0,0,.06)">
+          <dc-import name="FleetApp" screen="{{ r.screen }}" theme="dark" device-tab="{{ r.tab }}" alarm-view="{{ r.av }}" ztp-dialog="{{ r.dlg }}" hint-size="1440px,900px"></dc-import>
+        </div>
+      </div>
+    </div>
+  </sc-for>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals(){
+    const R=[
+      ['s1','1','Dashboard','Kennzahlen, aktuelle Alarme, Standorte mit aktivem WAN','dashboard'],
+      ['s2','2','Geräteliste','3 Geräte ausgewählt → Sammelaktionen','devices'],
+      ['s3a','3a','Gerätedetail · WAN','rr-kassasued-gw1 · Glasfaser down, 5G aktiv','device','wan'],
+      ['s3b','3b','Gerätedetail · VRRP','Master = orange „Standort läuft über Backup“','device','vrrp'],
+      ['s3c','3c','Gerätedetail · Metriken','Zeitraum 15 min – 30 Tage, Failover markiert','device','metrics'],
+      ['s3d','3d','Gerätedetail · Backups','Konfig-Stände + Diff A/B nebeneinander','device','backups'],
+      ['s4','4','VPN-Mesh','Hub-and-Spoke; Umschalter auf Full-Mesh','mesh'],
+      ['s5a','5a','Alarme','Filter Aktiv / Quittiert / Behoben','alarms','overview','list'],
+      ['s5b','5b','Alarmregeln','Unterseite der Alarme','alarms','overview','rules'],
+      ['s6','6','Zero-Touch · Router vorbereiten','Dialog mit Vorlagenwahl und Bootstrap-Befehl','ztp','overview','list',true],
+      ['s7','7','Login','','login']
+    ];
+    return { rows:R.map(([id,num,title,note,screen,tab,av,dlg])=>({id,num,title,note,screen,tab:tab||'overview',av:av||'list',dlg:!!dlg})) };
+  }
+}
+</script>
+</body>
+</html>

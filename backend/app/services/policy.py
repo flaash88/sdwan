@@ -225,12 +225,39 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
             dep.status = "partial"
         else:
             dep.status = "rolled_back" if all(results[str(d.id)].get("rolled_back") for d in failed) else "failed"
+        await _post_policy_backups(db, [d for d in devices if results[str(d.id)]["ok"]], dep)
         dep.results = results
         dep.finished_at = utcnow()
         await audit(db, "policy.deploy.finished", tenant_id=dep.tenant_id, target_type="deployment", target_id=dep.id,
                     success=dep.status == "success", details={"status": dep.status, "devices": len(devices), "failed": len(failed)})
         await db.commit()
         await events.publish(dep.tenant_id, "policy.deployment", {"id": str(dep.id), "status": dep.status})
+
+
+async def _post_policy_backups(db: AsyncSession, devices: list[Device], dep: Any) -> None:
+    """Nach erfolgreichem Push je Gerät ein Backup (Auslöser post-policy). Best effort: ein fehlgeschlagener
+    Export wird nur protokolliert und ändert das Ergebnis des Deployments nicht."""
+    from app.services.backup import export_config, take_backup
+
+    sem = asyncio.Semaphore(10)
+
+    async def export(dev: Device) -> str | None:
+        async with sem:
+            try:
+                return await export_config(dev)
+            except Exception as exc:  # noqa: BLE001 - Backup darf den Push nie scheitern lassen
+                log.warning("Backup nach Policy-Push für %s fehlgeschlagen: %s", dev.name, exc)
+                return None
+
+    raws = await asyncio.gather(*(export(d) for d in devices))
+    for dev, raw in zip(devices, raws):
+        if raw is None:
+            continue
+        try:
+            await take_backup(db, dev, "post-policy", raw=raw, created_by=dep.started_by,
+                              note=f"nach Policy-Deployment {str(dep.id)[:8]}")
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Backup nach Policy-Push für %s nicht gespeichert: %s", dev.name, exc)
 
 
 # ----------------------------------------------------------------------------- Bestehende Router-Regeln

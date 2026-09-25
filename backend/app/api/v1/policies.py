@@ -318,7 +318,7 @@ async def import_firewall(device_id: uuid.UUID, data: ImportIn, ctx: Ctx = TechC
         from app.services.policy import run_deployment
 
         try:
-            await take_backup(ctx.db, dev, "manual", note=f"vor Firewall-Übernahme '{data.name}'")
+            await take_backup(ctx.db, dev, "manual", note=f"vor Firewall-Übernahme '{data.name}'", created_by=ctx.user.email)
         except (BackupError, RouterOSError):
             pass
         ctx.db.add(PolicyAssignment(tenant_id=dev.tenant_id, policy_id=p.id, device_id=dev.id, position=1000))

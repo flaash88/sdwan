@@ -6,11 +6,24 @@ import { fmtBytes, fmtFull } from "../lib/format";
 import type { Device } from "../lib/types";
 import { useFetch } from "../lib/useFetch";
 
-interface Backup { id: string; trigger: string; routeros_version: string | null; size: number; pinned: boolean; note: string | null; created_at: string; added: number; removed: number; previous_id: string | null }
+interface Backup { id: string; trigger: string; created_by: string | null; sha256: string; routeros_version: string | null; size: number; pinned: boolean; note: string | null; created_at: string; added: number; removed: number; previous_id: string | null }
 interface Diff { from: string | null; to: string; added: number; removed: number; lines: string[] }
 
-const TRIGGER: Record<string, string> = { scheduled: "Geplant · täglich", manual: "Manuell", "pre-update": "Vor Firmware-Update" };
+const TRIGGER: Record<string, string> = { scheduled: "Geplant", manual: "Manuell", "pre-update": "Vor Firmware-Update", "post-policy": "Nach Policy-Push" };
 const why = (b: Backup) => [TRIGGER[b.trigger] ?? b.trigger, b.note].filter(Boolean).join(" · ");
+const COLS = "grid-cols-[64px_150px_minmax(150px,1.2fr)_minmax(120px,1fr)_130px_110px_70px_100px_40px]";
+
+/** SHA-256 gekürzt; Klick kopiert den vollen Wert. */
+function Checksum({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button type="button" title={`SHA-256: ${value}\nKlicken zum Kopieren`} aria-label={`Prüfsumme ${value} kopieren`}
+      className="cursor-pointer truncate text-left font-mono text-xs text-fg2 hover:text-fg"
+      onClick={() => void navigator.clipboard?.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}>
+      {copied ? "kopiert" : value.slice(0, 12)}
+    </button>
+  );
+}
 
 type Side = { n: number | ""; text: string; mark: "" | "-" | "+" };
 type Row = { l: Side; r: Side; kind: "ctx" | "chg" | "gap" };
@@ -75,26 +88,30 @@ export default function BackupsTab({ device }: { device: Device }) {
   return (
     <>
       <ErrorBox error={error ?? list.error} />
-      <Card flush title="Konfig-Stände" subtitle={`${items.length} gespeichert · täglich automatisch (nur bei Änderungen) und manuell`}
+      <Card flush title="Konfig-Stände" subtitle={`${items.length} gespeichert · täglich (nur bei Änderungen), manuell, vor Firmware-Updates und nach Policy-Push`}
         actions={<>
           <span className="hidden text-xs text-fg3 md:inline">A und B zum Vergleich wählen</span>
           {can("technician") && <Button size="sm" icon="archive" disabled={busy || device.status !== "online"} onClick={() => void run(async () => { await api.post(`/devices/${device.id}/backups`); await list.reload(); setB(null); setA(null); })}>{busy ? "Backup läuft …" : "Backup jetzt"}</Button>}
         </>}>
         {!list.data ? <Loading rows={4} /> : items.length === 0 ? <EmptyState compact title="Noch keine Backups" text="Das erste Backup entsteht in der nächsten Nacht oder mit „Backup jetzt“." /> : (
           <div className="overflow-x-auto">
-            <div className="min-w-[680px]">
-              <div className="grid grid-cols-[64px_160px_minmax(0,1fr)_110px_80px_110px_48px] gap-3 border-b border-line bg-panel2 px-4 py-2 text-xs font-medium text-fg3">
-                <span>Vergleich</span><span>Zeitpunkt</span><span>Auslöser</span><span>RouterOS</span><span>Größe</span><span>Änderung</span><span />
+            <div className="min-w-[1080px]">
+              <div className={cls("grid gap-3 border-b border-line bg-panel2 px-4 py-2 text-xs font-medium text-fg3", COLS)}>
+                <span>Vergleich</span><span>Zeitpunkt</span><span>Auslöser</span><span>Erstellt von</span><span>RouterOS</span><span>Prüfsumme</span><span>Größe</span><span>Änderung</span><span />
               </div>
               {items.map((x) => (
-                <div key={x.id} className={cls("grid h-[42px] grid-cols-[64px_160px_minmax(0,1fr)_110px_80px_110px_48px] items-center gap-3 border-b border-line px-4 last:border-b-0", (x.id === a || x.id === b) && "bg-panel2")}>
+                <div key={x.id} className={cls("grid h-[42px] items-center gap-3 border-b border-line px-4 last:border-b-0", COLS, (x.id === a || x.id === b) && "bg-panel2")}>
                   <span className="flex gap-1">
                     <Chip label="A" title={`Stand ${fmtFull(x.created_at)} als A wählen`} on={x.id === a} onClick={() => { setA(x.id); setView("diff"); }} />
                     <Chip label="B" blue title={`Stand ${fmtFull(x.created_at)} als B wählen`} on={x.id === b} onClick={() => setB(x.id)} />
                   </span>
                   <span className="font-mono text-xs">{fmtFull(x.created_at)}</span>
                   <span className="truncate" title={why(x)}>{why(x)}</span>
+                  <span className={cls("truncate", !x.created_by || x.created_by === "unbekannt" ? "text-fg3" : x.created_by === "system" ? "text-fg2" : "")} title={x.created_by ?? "unbekannt"}>
+                    {!x.created_by || x.created_by === "unbekannt" ? "unbekannt" : x.created_by === "system" ? "System" : x.created_by}
+                  </span>
                   <span className="truncate font-mono text-xs text-fg2">{x.routeros_version ?? "–"}</span>
+                  <Checksum value={x.sha256} />
                   <span className="text-fg2">{fmtBytes(x.size)}</span>
                   <span className="text-xs">{x.previous_id ? <><span className="text-green-text">+{x.added}</span> / <span className="text-red-text">−{x.removed}</span></> : <span className="text-fg3">erster Stand</span>}</span>
                   <span className="flex justify-end"><IconButton icon="download" label={`Stand ${fmtFull(x.created_at)} als .rsc herunterladen`} onClick={() => void download(`/backups/${x.id}/download`, `${device.name}-${x.created_at.slice(0, 16).replace(/[:T]/g, "-")}.rsc`)} /></span>

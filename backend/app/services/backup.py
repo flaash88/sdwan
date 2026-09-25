@@ -70,11 +70,17 @@ def make_diff(old: str, new: str, context: int = 2) -> dict[str, Any]:
     return {"added": added, "removed": removed, "lines": lines[:5000]}
 
 
+TRIGGERS = ("scheduled", "manual", "pre-update", "post-policy")
+PINNED_TRIGGERS = ("manual", "pre-update")  # von der Aufbewahrungsgrenze ausgenommen
+
+
 async def take_backup(
-    db: AsyncSession, device: Device, trigger: str = "scheduled", note: str | None = None, raw: str | None = None
+    db: AsyncSession, device: Device, trigger: str = "scheduled", note: str | None = None, raw: str | None = None,
+    created_by: str | None = None,
 ) -> tuple[ConfigBackup, bool]:
     """Erstellt ein Backup. Rückgabe (backup, neu?) – bei unveränderter Konfig wird kein neues angelegt
-    (außer bei manuellen/pre-update-Backups, die immer gespeichert werden). ``raw`` = bereits geholter Export."""
+    (außer bei manuellen/pre-update/post-policy-Backups, die immer gespeichert werden). ``raw`` = bereits geholter
+    Export. ``created_by``: E-Mail des Auslösers; ohne Angabe "system"."""
     if raw is None:
         raw = await export_config(device)
     content = normalize(raw)
@@ -87,7 +93,8 @@ async def take_backup(
     diff = make_diff(prev.content, content) if prev else {"added": content.count("\n"), "removed": 0, "lines": []}
     diff["previous_id"] = str(prev.id) if prev else None
     b = ConfigBackup(tenant_id=device.tenant_id, device_id=device.id, trigger=trigger, routeros_version=device.routeros_version,
-                     content=content, sha256=digest, size=len(content), diff=diff, pinned=trigger != "scheduled", note=note)
+                     content=content, sha256=digest, size=len(content), diff=diff, pinned=trigger in PINNED_TRIGGERS, note=note,
+                     created_by=created_by or "system")
     db.add(b)
     await db.flush()
     await _retention(db, device)

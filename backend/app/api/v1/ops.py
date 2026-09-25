@@ -22,7 +22,7 @@ router = APIRouter(tags=["backups", "firmware"])
 
 
 def _b_out(b: ConfigBackup, with_content: bool = False) -> dict:
-    out = {"id": str(b.id), "device_id": str(b.device_id), "trigger": b.trigger, "routeros_version": b.routeros_version,
+    out = {"id": str(b.id), "device_id": str(b.device_id), "trigger": b.trigger, "created_by": b.created_by, "routeros_version": b.routeros_version,
            "sha256": b.sha256, "size": b.size, "pinned": b.pinned, "note": b.note, "created_at": b.created_at,
            "added": b.diff.get("added"), "removed": b.diff.get("removed"), "previous_id": b.diff.get("previous_id")}
     if with_content:
@@ -43,7 +43,7 @@ async def list_backups(device_id: uuid.UUID, ctx: Ctx = ReadCtx, limit: int = Qu
 async def create_backup(device_id: uuid.UUID, ctx: Ctx = TechCtx, note: str | None = None) -> dict:
     dev = await get_or_404(ctx.db, Device, device_id, "Device")
     try:
-        b, _ = await take_backup(ctx.db, dev, "manual", note=note)
+        b, _ = await take_backup(ctx.db, dev, "manual", note=note, created_by=ctx.user.email)
     except (BackupError, RouterOSError) as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
     await ctx.audit("backup.create", target_type="device", target_id=dev.id, details={"backup": str(b.id), "note": note})

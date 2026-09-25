@@ -15,7 +15,9 @@ class ConfigBackup(IdMixin, TenantScoped, Base):
     __tablename__ = "config_backups"
 
     device_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), index=True)
-    trigger: Mapped[str] = mapped_column(String(20), default="scheduled")  # scheduled | manual | pre-update
+    trigger: Mapped[str] = mapped_column(String(20), default="scheduled")  # scheduled | manual | pre-update | post-policy
+    # E-Mail des Auslösers, "system" für geplante Backups, "unbekannt" für Altbestand (vor Migration 0018)
+    created_by: Mapped[str | None] = mapped_column(String(255))
     routeros_version: Mapped[str | None] = mapped_column(String(64))
     content: Mapped[str] = mapped_column(Text)
     sha256: Mapped[str] = mapped_column(String(64), index=True)

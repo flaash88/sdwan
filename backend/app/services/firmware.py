@@ -59,7 +59,7 @@ async def _start_item(db: AsyncSession, job: FirmwareJob, item: FirmwareJobItem,
     item.status = "updating"
     try:
         try:
-            await take_backup(db, dev, "pre-update", note=f"vor Firmware-Job {job.name}")
+            await take_backup(db, dev, "pre-update", note=f"vor Firmware-Job {job.name}", created_by=job.created_by)
         except BackupError as exc:
             log.warning("Pre-Update-Backup %s fehlgeschlagen: %s", dev.name, exc)
         info = await check_updates(dev, job.channel)

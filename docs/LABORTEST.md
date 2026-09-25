@@ -39,7 +39,7 @@ Die Tunnel-Adresse des Hubs ist die erste Adresse aus `WG_NETWORK` (Standard `10
       Referenz die Policies (einzige Definition: `backend/app/routeros/schema.py`, `API_POLICIES`):
 
   ```
-  read,write,api,policy,reboot,test,ssh,sensitive,winbox,web,local
+  read,write,api,policy,reboot,test,ssh,sensitive,winbox,web
   ```
 
   - `api, read, write`: alle Funktionen.
@@ -48,7 +48,7 @@ Die Tunnel-Adresse des Hubs ist die erste Adresse aus `WG_NETWORK` (Standard `10
   - `test`: Ping.
   - `ssh`: Backup-Export.
   - `sensitive`: Schlüssel und Passwörter im Export (ohne sie ist das Backup unvollständig).
-  - `winbox, web, local`: nötig, damit die Gruppe `sdwan-remote` für den Fernzugriff angelegt werden kann.
+  - `winbox, web`: nötig, damit die Gruppe `sdwan-remote` für den Fernzugriff angelegt werden kann.
     Ohne diese Policies funktioniert der Fernzugriff nicht.
 - [ ] Dienste auf das Nötige beschränken: `api` und `ssh` nur aus dem Tunnelnetz (Hub-Adresse), alles
       Unverschlüsselte aus:
@@ -210,8 +210,8 @@ FortiGate, Priorität 100 (kleiner als die FortiGate, z. B. 200), VIP `192.168.1
 - [ ] Sitzung beenden oder ablaufen lassen. **Erwartet:** Der temporäre Benutzer ist auf dem Router
       entfernt (`/user print`), der Port ist geschlossen, das Audit-Log enthält Start und Ende.
 - [ ] Gruppe prüfen: `/user group print where name=sdwan-remote`, `/user print where name~"sdwan-rs-"`.
-      **Erwartet:** Gruppe `sdwan-remote` mit genau `local,ssh,read,write,test,winbox,web,reboot,sensitive`
-      (ohne `policy`, ohne `api`). Der temporäre Benutzer ist in dieser Gruppe, nicht in `full`.
+      **Erwartet:** Gruppe `sdwan-remote` mit genau `ssh,read,write,test,winbox,web,reboot,sensitive`
+      (ohne `policy`, `api` und `local`). Der temporäre Benutzer ist in dieser Gruppe, nicht in `full`.
 - [ ] **Temporärer Benutzer kann sich per WinBox/SSH anmelden, aber keine Benutzer anlegen:** In der
       WinBox- bzw. SSH-Sitzung `/user add name=test group=read password=x` ausführen.
       **Erwartet:** RouterOS lehnt ab (fehlende Policy `policy`). Anmeldung, Anzeige und Konfiguration
@@ -220,7 +220,7 @@ FortiGate, Priorität 100 (kleiner als die FortiGate, z. B. 200), VIP `192.168.1
       Simulator gehen davon aus, dass RouterOS das Anlegen einer Gruppe mit Policies ablehnt, die der
       anlegende Benutzer selbst nicht hat (Simulator: `SIMULATOR_ENFORCE_GROUP_RIGHTS`). Test:
       1. `/user group remove [find name=sdwan-remote]` ausführen.
-      2. In `sdwan-api` vorübergehend `winbox` entfernen: `/user group set sdwan-api policy=read,write,api,policy,reboot,test,ssh,sensitive,web,local`.
+      2. In `sdwan-api` vorübergehend `winbox` entfernen: `/user group set sdwan-api policy=read,write,api,policy,reboot,test,ssh,sensitive,web`.
       3. Fernzugriff starten.
       **Erwartet laut Annahme:** klare Fehlermeldung „Gruppe sdwan-remote konnte nicht angelegt werden …“,
       kein temporärer Benutzer, kein Ausweichen auf `full`.

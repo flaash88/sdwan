@@ -42,7 +42,7 @@ async def test_group_creation_denied_gives_clear_error_no_full_fallback(client, 
     rt = get_router(dev["tunnel_ip"])
     # API-Gruppe ohne winbox/web -> RouterOS (Annahme) verweigert die Gruppe sdwan-remote
     api_group = next(g for g in rt.tables["/user/group"] if g["name"] == "sdwan-api")
-    api_group["policy"] = "read,write,api,policy,reboot,test,ssh,sensitive,local"
+    api_group["policy"] = "read,write,api,policy,reboot,test,ssh,sensitive"
     r = await _open(client, h, dev)
     assert r.status_code == 502
     detail = r.json()["detail"]

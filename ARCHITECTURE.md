@@ -315,3 +315,71 @@ eigenen Abschnitt.
 * **Berichte:** ad hoc als JSON/PDF (reportlab) für beliebige Zeiträume (max. 1 Jahr); gespeichert und
   optional versendet. **Automatisch** am 1. jedes Monats (06:00 UTC) für den Vormonat an Kontakt +
   konfigurierbare Empfänger (abschaltbar pro Mandant).
+
+## Phase 11 – VRRP & Backup-Transparenz
+
+**Szenario:** Filialen hängen per Glasfaser am zentralen Core. Im gemeinsamen Kassen-VLAN
+(z. B. `192.168.110.0/24`) ist die FortiGate VRRP-Master (VIP `192.168.110.1`, Priorität 255, Preempt).
+Je Standort läuft ein MikroTik (z. B. L009UiGS-RM) als VRRP-Backup an `ether2` und hat ein 5G-Modem an
+`ether8`. WAN1 = `ether2` mit der *echten* FortiGate-IP als Gateway (nicht die VIP), WAN2 = `ether8` per DHCP.
+Fällt die FortiGate bzw. die Glasfaser aus, übernimmt der MikroTik die VIP und leitet die Kassen über 5G.
+
+* **Bugfix Verbindungs-Flush im Failover:** Bisher wurden Verbindungen nur im PCC-Modus geleert
+  (per `connection-mark`). Im Failover bleibt das Interface physisch „up“, NAT-Einträge hängen aber an
+  der alten Quelladresse. Das Netwatch-Down-Skript entfernt jetzt alle Verbindungen, deren Antwort an eine
+  IP des WAN-Interfaces geht (`reply-dst-address`). Ausgenommen sind UDP-Verbindungen zu den
+  WireGuard-Ports von Hub und Mesh, damit `sdwan-mgmt` und die Mesh-Tunnel nicht abreißen.
+* **Datenmodell:** `vrrp_instances` (mandantenbezogen, mehrere pro Gerät): Name (= Name des
+  VRRP-Interfaces), Interface, VRID, Priorität, Intervall, Preemption, Version, VIP, optionale lokale
+  Adresse, optional gekoppelter WAN-Slot, aktiv. Laufzeit: `state` (master/backup/disabled/unknown),
+  `last_change_at`. Migration `0011`.
+* **Validierung:** VRID 1–255, Priorität 1–254 (255 hat nur der Adress-Besitzer, also die FortiGate),
+  VIP ohne Präfix wird zu `/32`, andere Präfixe werden abgelehnt. Mit lokaler Adresse muss die VIP in
+  deren Netz liegen und darf nicht gleich sein. Name und Interface nur `[A-Za-z0-9._-]`, damit nichts in
+  RouterOS-Skripte eingeschleust wird. (Interface, VRID) ist pro Gerät eindeutig.
+* **Push (idempotent, `sync_managed`):** `/interface/vrrp` mit Kommentar `sdwan:vrrp:<id8>`, lokale
+  Adresse `sdwan:vrrp:<id8>:local` auf dem physischen Interface, VIP `sdwan:vrrp:<id8>:vip` als `/32`
+  auf dem VRRP-Interface. Reihenfolge: lokale Adressen → VRRP-Interfaces → VIPs, damit keine Adresse auf
+  ein noch fehlendes Interface zeigt. Manuell angelegte VRRP-Instanzen und Adressen ohne `sdwan:`-Kommentar
+  bleiben unangetastet.
+* **RouterOS-7-Syntax:** Die Felder (`interface`, `vrid`, `priority`, `interval`, `preemption-mode`,
+  `version`, `on-master`, `on-backup`) stammen aus dem Schema des Terraform-Providers `routeros`, weil
+  help.mikrotik.com aus der Entwicklungsumgebung nicht erreichbar war. **Nicht geprüft:** ob die
+  API bei `print` die Flags M/B als Felder `master`/`backup` liefert. Der Poller liest diese Felder und
+  fällt sonst auf `running` zurück (VRRP-Interface läuft = Master). Bitte am echten Gerät mit
+  `/interface/vrrp print detail` gegenprüfen. Version 3 ist Standard in RouterOS 7; die FortiGate muss
+  dieselbe VRRP-Version sprechen.
+* **Gekoppeltes WAN:** `on-master` schaltet sofort die Default-Routen des Slots ab
+  (`sdwan:wan:default:<slot>`) und leert dessen Verbindungen (gleicher Flush wie oben). So wartet der
+  Router nicht erst auf die Netwatch. `on-backup` schaltet **nicht** blind wieder ein: Nach der
+  Recovery-Verzögerung werden die Routen nur aktiviert, wenn die Netwatch des Slots „up“ meldet. Die
+  Hysterese bleibt also bei der Netwatch; ist sie noch „down“, übernimmt später ihr eigenes Up-Skript.
+* **Status:** Ein Poll-Hook liest `/interface/vrrp`. Wechsel landen in `status_events` (`vrrp:<id>`)
+  und als Live-Event `vrrp.state`. Aktivwechsel eines WAN-Links werden ebenfalls protokolliert
+  (`wanactive:<id>`, `wan_links.active_since`, Migration `0012`).
+* **Simulator:** `/interface/vrrp` mit Master/Backup und Ausführung von `on-master`/`on-backup` über
+  einen kleinen Interpreter für die verwendeten Befehle. Im Tab „VRRP“ gibt es „Master werden“ und
+  „Backup werden“ zum Vorführen.
+* **ZTP:** Das Template kann eine `vrrp`-Liste enthalten. Die lokale Adresse ist je Gerät verschieden
+  und wird deshalb beim Vorbereiten pro Gerät angegeben (dritte Spalte) und schon beim Staging gegen die
+  Template-VIP geprüft. Ausgerollt wird nach WAN und vor den Policies.
+* **Alarme:** `vrrp_master` (Standard-Regel „VRRP: Standort auf Backup (Master)“, Warnung, 30 s)
+  und `wan_backup_active`: Im **Failover**-Modus trägt ein WAN mit schlechterer Priorität als der
+  beste aktive Link die Default-Route. Bei Lastverteilung ist das der Normalbetrieb, dort gibt es daher
+  keinen Alarm. Beide werden wie alle anderen Alarme automatisch behoben.
+* **Datenvolumen:** Optionales Monatslimit (GB, dezimal wie bei Mobilfunktarifen) pro WAN-Link.
+  **Entscheidung:** Das Volumen wird in der DB aufsummiert (Delta der Interface-Zähler rx+tx jedes
+  *erfolgreichen* Polls), nicht per Flux-Abfrage. Grund: exakt, auch ohne InfluxDB, und für Alarme
+  billig abfragbar. Kleinerer Zählerstand als zuvor = Reboot (aktueller Stand zählt). Monatswechsel
+  (UTC) setzt auf 0. Alarm `wan_volume` mit den Schwellen 80 % und 100 % (Parameter `thresholds`), je
+  Schwelle ein eigener Alarm. Migration `0013`.
+* **SLA:** Je Gerät „Zeit auf Backup-WAN“ (Vereinigung der `active`-Phasen aller Backup-Links, nur
+  Failover) und „Zeit als VRRP-Master“ (Vereinigung der `master`-Phasen), jeweils mit Anzahl der
+  Umschaltungen. Beides steht in der JSON-Antwort, in der PDF-Tabelle „Backup-Betrieb“, im gespeicherten
+  Monatsbericht und im Text der Monats-Mail.
+* **Webhooks (je Alarmregel, zusätzlich zur E-Mail):** Format `generic` (flaches JSON mit
+  `event`, `title`, `text`, …) oder `teams` (Nachricht mit Adaptive Card, wie sie Teams-Workflows
+  „Send webhook alerts to a channel“ annehmen). Erlaubt ist nur `https`, ohne Zugangsdaten in der URL.
+  Interne Ziele werden abgelehnt: bei der Eingabe per Name/IP und vor jedem Versand per DNS-Auflösung
+  (SSRF-Schutz). Die URL wird verschlüsselt gespeichert, weil Workflow-URLs eine Signatur enthalten, und
+  in API und Audit-Log nur maskiert angezeigt. Migration `0014`.

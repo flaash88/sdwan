@@ -23,6 +23,7 @@ Installation auf einem Server: [INSTALL.md](INSTALL.md) · Aufbau und Design-Ent
 | 8 | Remote Access: SSH/Winbox/WebFig-Proxy über den Tunnel, zeitlich begrenzt, IP-gebunden, Temp-User pro Session, lückenloses Audit | ✅ |
 | 9 | Backups & Firmware: tägliche Exporte mit Diff-Ansicht, Dedupe, Retention; Fleet-Updates mit Batches, Pause bei Fehlern, Pre-Update-Backup | ✅ |
 | 10 | Alerts & SLA: Regeln (offline, WAN down, Latenz, Mesh, CPU) mit E-Mail + Live-Toasts, Verfügbarkeit aus Statuswechseln, PDF-Berichte, Monatsversand | ✅ |
+| 11 | VRRP & Backup-Transparenz: VRRP-Backup hinter zentralem Master (z. B. FortiGate) mit gekoppeltem WAN, Verbindungs-Flush im Failover, Alarme VRRP-Master / Backup-WAN aktiv / Datenvolumen (80 %/100 %), Monatslimit je WAN, SLA-Zeiten auf Backup, Webhooks (JSON/Teams) | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

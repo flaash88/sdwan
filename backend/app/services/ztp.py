@@ -84,6 +84,14 @@ def validate_template(c: dict[str, Any]) -> dict[str, Any]:
             raise TemplateError(f"WAN-Vorlage ungültig: {exc}") from exc
         out["wan"] = parsed.model_dump(exclude={"push"})
     out["policy_ids"] = [str(p) for p in c.get("policy_ids") or []]
+    vrrp = c.get("vrrp") or []
+    if vrrp:
+        from app.services.vrrp import VrrpError, validate_set
+
+        try:
+            out["vrrp"] = [{k: v for k, v in i.items() if k not in ("id", "state", "last_change_at")} for i in validate_set(list(vrrp))]
+        except (VrrpError, TypeError, ValueError) as exc:
+            raise TemplateError(f"VRRP-Vorlage ungültig: {exc}") from exc
     return out
 
 
@@ -224,6 +232,29 @@ async def provision_device(db: AsyncSession, device: Device) -> list[str]:
             _log(device, "provisioning", "WAN-Konfiguration angewendet")
         except (RouterOSError, WanError) as exc:
             errors.append(f"WAN: {exc}")
+    vrrp_tpl = t.get("vrrp") or []
+    if vrrp_tpl:
+        from app.models import VrrpInstance
+        from app.services.vrrp import VrrpError, apply_vrrp, validate_set
+
+        has = (await db.execute(select(VrrpInstance).where(VrrpInstance.device_id == device.id).limit(1))).first()
+        if not has:
+            override = (device.facts or {}).get("ztp_vrrp_local_address")
+            try:
+                items = validate_set([{**i, "local_address": i.get("local_address") or override} for i in vrrp_tpl])
+                for i in items:
+                    db.add(VrrpInstance(tenant_id=device.tenant_id, device_id=device.id,
+                                        **{k: v for k, v in i.items() if k in ("name", "interface", "vrid", "priority", "interval_ms", "preemption",
+                                                                               "version", "vip", "local_address", "linked_wan_slot", "enabled")}))
+                await db.flush()
+            except VrrpError as exc:
+                errors.append(f"VRRP: {exc}")
+        if not any(e.startswith("VRRP") for e in errors):
+            try:
+                await apply_vrrp(db, device)
+                _log(device, "provisioning", f"{len(vrrp_tpl)} VRRP-Instanz(en) angewendet")
+            except RouterOSError as exc:
+                errors.append(f"VRRP: {exc}")
     deployments: list[str] = []
     pol_ids = t.get("policy_ids") or []
     if pol_ids:

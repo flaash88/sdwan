@@ -4,6 +4,7 @@ import BackupsTab from "./tabs/BackupsTab";
 import MetricsTab from "./tabs/MetricsTab";
 import PoliciesTab from "./tabs/PoliciesTab";
 import RemoteTab from "./tabs/RemoteTab";
+import VrrpTab from "./tabs/VrrpTab";
 import WanTab from "./tabs/WanTab";
 
 export interface DeviceTab {
@@ -17,6 +18,7 @@ export interface DeviceTab {
 export const deviceTabs: DeviceTab[] = [
   { key: "metrics", label: "Metriken", pairedOnly: true, component: MetricsTab },
   { key: "wan", label: "WAN", pairedOnly: true, component: WanTab },
+  { key: "vrrp", label: "VRRP", pairedOnly: true, component: VrrpTab },
   { key: "policies", label: "Firewall", pairedOnly: true, component: PoliciesTab },
   { key: "remote", label: "Fernzugriff", pairedOnly: true, component: RemoteTab },
   { key: "backups", label: "Backups", pairedOnly: true, component: BackupsTab },

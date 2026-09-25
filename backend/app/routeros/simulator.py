@@ -38,6 +38,7 @@ _TABLE_PATHS = {
     "/certificate",
     "/ip/dhcp-client",
     "/ip/service",
+    "/interface/vrrp",
 }
 
 
@@ -56,6 +57,7 @@ class SimRouter:
         self.dns: dict[str, Any] = {"servers": "", "use-doh-server": "", "verify-doh-cert": "no", "allow-remote-requests": "yes"}
         self.fail_next: set[str] = set()  # Tests: Befehle, die einmal fehlschlagen sollen
         self.down_hosts: set[str] = set()  # Tests: Netwatch-Ziele, die als "down" gelten
+        self.vrrp_master: set[str] = set()  # Namen der VRRP-Interfaces, die gerade Master sind
         self.counters: dict[str, list[int]] = {}
         for i, name in enumerate(["ether1", "ether2", "ether3", "ether4", "bridge", "sdwan-mgmt"]):
             iface_type = {"bridge": "bridge", "sdwan-mgmt": "wg"}.get(name, "ether")
@@ -81,8 +83,9 @@ class SimRouter:
         if path == "/interface/wireguard" and "public-key" not in row:
             row["public-key"] = _fake_key(self.host + row.get("name", item_id))
         self.tables[path].append(row)
-        if path in ("/interface/wireguard",) and not any(r["name"] == row.get("name") for r in self.tables["/interface"]):
-            self.tables["/interface"].append({".id": f"*{self._next_id:X}", "name": row.get("name"), "type": "wg", "running": "true", "disabled": "false"})
+        if path in ("/interface/wireguard", "/interface/vrrp") and not any(r["name"] == row.get("name") for r in self.tables["/interface"]):
+            itype = "wg" if path == "/interface/wireguard" else "vrrp"
+            self.tables["/interface"].append({".id": f"*{self._next_id:X}", "name": row.get("name"), "type": itype, "running": "true", "disabled": "false"})
             self._next_id += 1
             self.counters[row.get("name", "")] = [0, 0]
         return item_id
@@ -92,6 +95,31 @@ class SimRouter:
             if r[".id"] == item_id:
                 return r
         raise RouterOSError(f"no such item {item_id}")
+
+    # -- VRRP ------------------------------------------------------------------
+    def set_vrrp_master(self, name: str, master: bool) -> None:
+        """Demo/Tests: VRRP-Zustandswechsel inkl. Ausführung von on-master/on-backup."""
+        row = next((r for r in self.tables["/interface/vrrp"] if r.get("name") == name), None)
+        if row is None:
+            raise RouterOSError(f"no vrrp interface {name}")
+        was = name in self.vrrp_master
+        (self.vrrp_master.add if master else self.vrrp_master.discard)(name)
+        if was != master:
+            self.run_script(row.get("on-master" if master else "on-backup", ""))
+
+    def run_script(self, src: str) -> None:
+        """Mini-Interpreter für die von der Plattform erzeugten Route-Scripts (nicht allgemein)."""
+        import re
+
+        cond = re.search(r'netwatch get \[find where comment="(sdwan:wan:check:\d+)"\] status\] = "up"', src)
+        if cond:
+            nw = next((n for n in self.tables["/tool/netwatch"] if n.get("comment") == cond.group(1)), None)
+            if nw is None or nw.get("host") in self.down_hosts:
+                src = src[: cond.start()]  # Bedingung falsch -> nachfolgende Aktionen nicht ausführen
+        for action, prefix in re.findall(r'/ip route (disable|enable) \[find where comment~"\^([^"]+)"\]', src):
+            for r in self.tables["/ip/route"]:
+                if str(r.get("comment", "")).startswith(prefix):
+                    r["disabled"] = "yes" if action == "disable" else "no"
 
     # -- Kommandos -------------------------------------------------------------
     def call(self, cmd: str, params: dict[str, Any]) -> list[dict[str, Any]]:
@@ -153,6 +181,11 @@ class SimRouter:
                 best = min((int(r.get("distance", 1)) for r in alive), default=None)
                 for r in mains:
                     r["active"] = "true" if r in alive and int(r.get("distance", 1)) == best else "false"
+            if path == "/interface/vrrp":
+                for r in rows:
+                    off = r.get("disabled") in ("yes", "true")
+                    m = r.get("name") in self.vrrp_master and not off
+                    r["master"], r["backup"], r["running"] = ("true" if m else "false"), ("false" if m or off else "true"), ("true" if m else "false")
             if path == "/interface/wireguard/peers":
                 for r in rows:
                     r.setdefault("last-handshake", f"{self.rng.randint(1, 90)}s")
@@ -246,7 +279,7 @@ class SimRouter:
         return []
 
 
-_PERSIST = ("version", "channel", "identity", "board", "tables", "_next_id", "dns", "counters", "boot", "down_hosts")
+_PERSIST = ("version", "channel", "identity", "board", "tables", "_next_id", "dns", "counters", "boot", "down_hosts", "vrrp_master")
 
 
 def _dump(r: SimRouter) -> str:
@@ -254,6 +287,7 @@ def _dump(r: SimRouter) -> str:
 
     data = {k: getattr(r, k) for k in _PERSIST}
     data["down_hosts"] = sorted(r.down_hosts)
+    data["vrrp_master"] = sorted(r.vrrp_master)
     return json.dumps(data)
 
 
@@ -264,6 +298,7 @@ def _load(host: str, raw: str) -> SimRouter:
     for k, v in json.loads(raw).items():
         setattr(r, k, v)
     r.down_hosts = set(r.down_hosts)
+    r.vrrp_master = set(getattr(r, "vrrp_master", []) or [])
     for p in _TABLE_PATHS:
         r.tables.setdefault(p, [])
     return r

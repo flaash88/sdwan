@@ -31,6 +31,8 @@ class StageDevice(BaseModel):
     serial: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9\-]+$")
     site_id: uuid.UUID | None = None
     tags: list[str] = []
+    # Gerätespezifische lokale Adresse für VRRP-Instanzen aus dem Template (z. B. 192.168.110.21/24)
+    vrrp_local_address: str | None = None
 
 
 class StageIn(BaseModel):
@@ -107,7 +109,15 @@ async def stage(data: StageIn, ctx: Ctx = TechCtx) -> list[dict]:
             await get_or_404(ctx.db, Site, site_id, "Site")
         dev = Device(tenant_id=tenant_id, name=item.name, serial=item.serial.upper(), site_id=site_id, tags=item.tags,
                      tunnel_ip=await allocate_tunnel_ip(ctx.db), ztp_template_id=template.id if template else None,
-                     ztp_state="staged", ztp_log=[{"at": utcnow().isoformat(), "state": "staged", "msg": f"Vorbereitet von {ctx.user.email}"}])
+                     ztp_state="staged", ztp_log=[{"at": utcnow().isoformat(), "state": "staged", "msg": f"Vorbereitet von {ctx.user.email}"}],
+                     facts={"ztp_vrrp_local_address": item.vrrp_local_address} if item.vrrp_local_address else {})
+        if item.vrrp_local_address and template and (template.content or {}).get("vrrp"):
+            from app.services.vrrp import VrrpError, validate_set
+
+            try:
+                validate_set([{**i, "local_address": i.get("local_address") or item.vrrp_local_address} for i in template.content["vrrp"]])
+            except VrrpError as exc:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{item.name}: {exc}") from exc
         ctx.db.add(dev)
         info = issue_pairing_token(dev, ttl_hours=data.ttl_days * 24)
         await ctx.db.flush()

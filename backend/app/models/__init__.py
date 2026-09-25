@@ -19,3 +19,4 @@ from app.models.content_filter import ContentFilterProfile  # noqa: F401,E402
 from app.models.remote import RemoteSession  # noqa: F401,E402
 from app.models.ops import ConfigBackup, FirmwareJob, FirmwareJobItem  # noqa: F401,E402
 from app.models.alerts import Alert, AlertRule, SlaReport, StatusEvent  # noqa: F401,E402
+from app.models.vrrp import VrrpInstance  # noqa: F401,E402

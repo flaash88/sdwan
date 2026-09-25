@@ -12,6 +12,7 @@ interface TemplateContent {
   identity_pattern: string; timezone: string; ntp_servers: string[]; dns_servers: string[]; wan_interface: string;
   lan: { enabled: boolean; bridge_ports: string[]; cidr: string | null; dhcp: boolean };
   wan?: { mode: string; links: Record<string, unknown>[] };
+  vrrp?: Record<string, unknown>[];
   policy_ids: string[];
 }
 interface Template { id: string; name: string; description: string | null; content: TemplateContent; updated_at: string }
@@ -125,11 +126,11 @@ function StageModal({ templates, sites, onClose, onDone }: { templates: Template
         <Input label="Token gültig (Tage)" type="number" min={1} max={730} value={ttl} onChange={(e) => setTtl(Number(e.target.value))} />
       </div>
       <div className="mt-3">
-        <Textarea label="Geräte – eine Zeile pro Gerät: Name, Seriennummer" rows={8} placeholder={"filiale-graz, HGF0123ABC\nfiliale-linz, HGF0456DEF"} value={rows} onChange={(e) => setRows(e.target.value)} />
+        <Textarea label="Geräte – eine Zeile pro Gerät: Name, Seriennummer[, lokale VRRP-Adresse]" rows={8} placeholder={"filiale-graz, HGF0123ABC, 192.168.110.21/24\nfiliale-linz, HGF0456DEF, 192.168.110.22/24"} value={rows} onChange={(e) => setRows(e.target.value)} />
       </div>
       <div className="mt-4 flex justify-end">
         <Button disabled={busy} onClick={() => void run(async () => {
-          const devices = rows.split("\n").map((l) => l.split(/[,;\t]/).map((x) => x.trim())).filter((x) => x[0] && x[1]).map(([name, serial]) => ({ name, serial }));
+          const devices = rows.split("\n").map((l) => l.split(/[,;\t]/).map((x) => x.trim())).filter((x) => x[0] && x[1]).map(([name, serial, vrrp]) => ({ name, serial, vrrp_local_address: vrrp || null }));
           if (!devices.length) throw new Error("Keine Geräte angegeben");
           onDone(await api.post<Staged[]>("/ztp/stage", { template_id: tpl || null, site_id: site || null, ttl_days: ttl, devices }));
         })}>Vorbereiten</Button>
@@ -142,6 +143,7 @@ function TemplateModal({ tpl, policies, onClose, onSaved }: { tpl: Partial<Templ
   const [name, setName] = useState(tpl.name ?? "");
   const [c, setC] = useState<TemplateContent>(structuredClone(tpl.content ?? DEFAULT));
   const [wanJson, setWanJson] = useState(JSON.stringify(c.wan ?? { mode: "failover", links: [] }, null, 2));
+  const [vrrpJson, setVrrpJson] = useState(JSON.stringify(c.vrrp ?? [], null, 2));
   const { busy, error, run } = useAction();
   const list = (v: string) => v.split(/[\s,]+/).filter(Boolean);
   return (
@@ -173,10 +175,15 @@ function TemplateModal({ tpl, policies, onClose, onSaved }: { tpl: Partial<Templ
           </div>
         </div>
       </div>
+      <div className="mt-4">
+        <Textarea label="VRRP-Vorlage (JSON-Liste, wie VRRP-Tab; lokale Adresse pro Gerät beim Vorbereiten)" rows={6}
+          placeholder={'[{"name": "vrrp-kassen", "interface": "ether2", "vrid": 110, "priority": 100, "vip": "192.168.110.1", "linked_wan_slot": 1}]'}
+          value={vrrpJson} onChange={(e) => setVrrpJson(e.target.value)} />
+      </div>
       <div className="mt-4 flex justify-between">
         {tpl.id ? <Button variant="danger" onClick={() => confirm("Template löschen?") && void run(async () => { await api.del(`/ztp/templates/${tpl.id}`); onSaved(); })}>Löschen</Button> : <span />}
         <Button disabled={busy} onClick={() => void run(async () => {
-          const body = { name, content: { ...c, wan: JSON.parse(wanJson) } };
+          const body = { name, content: { ...c, wan: JSON.parse(wanJson), vrrp: JSON.parse(vrrpJson || "[]") } };
           if (tpl.id) await api.put(`/ztp/templates/${tpl.id}`, body);
           else await api.post("/ztp/templates", body);
           onSaved();

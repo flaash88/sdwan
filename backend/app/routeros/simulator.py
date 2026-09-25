@@ -75,7 +75,7 @@ class SimRouter:
             "/interface/wireguard",
             {"name": "sdwan-mgmt", "listen-port": "13231", "public-key": _fake_key(host + "mgmt"), "private-key": "***"},
         )
-        self._insert("/ip/address", {"address": "192.168.88.1/24", "interface": "bridge"})
+        self._insert("/ip/address", {"address": "192.168.88.1/24", "network": "192.168.88.0", "interface": "bridge", "dynamic": "false"})
         for svc, port in (("ssh", 22), ("winbox", 8291), ("www", 80), ("api", 8728)):
             self._insert("/ip/service", {"name": svc, "port": str(port), "disabled": "false", "address": ""})
         self._insert("/ip/route", {"dst-address": "0.0.0.0/0", "gateway": "100.64.0.1", "distance": "1"})

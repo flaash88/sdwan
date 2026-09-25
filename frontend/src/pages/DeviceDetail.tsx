@@ -153,15 +153,20 @@ function Overview({ device: d, state, reload }: { device: Device; state?: Device
   const wanOf = (n: string) => wan.data?.links.find((l) => l.interface === n);
   const aw = state?.active_wan;
   const evs = events.data?.events ?? [];
+  const health = pickHealth((d.facts as { health?: Sensor[] }).health);
+  const tiles = 4 + (health.temperature ? 1 : 0) + (health.voltage ? 1 : 0);
   const prevOf = (i: number) => evs.slice(i + 1).find((x) => x.subject === evs[i].subject)?.status ?? events.data?.initial[evs[i].subject]?.status;
   return (
     <>
       {paired && (
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div className={cls("grid grid-cols-2 gap-3", tiles === 6 ? "md:grid-cols-3 2xl:grid-cols-6" : tiles === 5 ? "md:grid-cols-3 2xl:grid-cols-5" : "xl:grid-cols-4")}>
           <Tile label="CPU" value={online && f.cpu_load != null ? `${f.cpu_load} %` : "–"} sub={f.cpu_count ? `${f.cpu_count} ${f.cpu_count === 1 ? "Kern" : "Kerne"}${d.architecture ? ` · ${d.architecture}` : ""}` : d.architecture ?? undefined} />
           <Tile label="Arbeitsspeicher" value={online && f.total_memory ? fmtBytes((f.total_memory ?? 0) - (f.free_memory ?? 0)) : "–"} sub={f.total_memory ? `von ${fmtBytes(f.total_memory)}` : undefined} />
           <Tile label="Latenz zur Cloud" value={online && f.mgmt_rtt_ms != null ? `${Math.round(f.mgmt_rtt_ms)} ms` : "–"} sub="über den Management-Tunnel" />
           <Tile label="Aktiver WAN" value={online && aw ? aw.name : "–"} sub={online && aw ? `${aw.interface}${aw.backup ? " · Backup-Leitung" : ""}${state?.backup_since && aw.backup ? ` · seit ${fmtSince(state.backup_since)}` : ""}` : state?.wan_links ? "unbekannt" : "kein WAN verwaltet"} />
+          {/* Sensor-Kacheln nur, wenn das Modell Werte liefert (CHR/x86 liefern keine) */}
+          {health.temperature && <Tile label="Temperatur" value={online ? `${fmtNum(health.temperature.value)} °C` : "–"} sub={SENSOR_LABEL[health.temperature.name] ?? health.temperature.name} />}
+          {health.voltage && <Tile label="Spannung" value={online ? `${fmtNum(health.voltage.value)} V` : "–"} sub={SENSOR_LABEL[health.voltage.name] ?? health.voltage.name} />}
         </div>
       )}
       {paired && (
@@ -194,9 +199,57 @@ function Overview({ device: d, state, reload }: { device: Device; state?: Device
           </Card>
         </div>
       )}
+      {paired && <AddressCard device={d} />}
       {paired && <SelftestCard device={d} />}
       <DeviceAdmin device={d} reload={reload} />
     </>
+  );
+}
+
+interface Sensor { name: string; value: number; unit: string }
+interface Address { address: string; network: string | null; interface: string; dynamic: boolean; dhcp: boolean; disabled: boolean; invalid: boolean; comment: string | null; managed: boolean }
+
+const SENSOR_LABEL: Record<string, string> = { "cpu-temperature": "CPU", temperature: "Gerät", "board-temperature1": "Board", voltage: "Versorgung" };
+const fmtNum = (v: number) => v.toLocaleString("de-DE", { maximumFractionDigits: 1 });
+
+/** Werte für die Kacheln: Temperatur (CPU bevorzugt) und Spannung – wie services/device_info.pick_health. */
+function pickHealth(sensors: Sensor[] | undefined): { temperature?: Sensor; voltage?: Sensor } {
+  const s = sensors ?? [];
+  const temperature = s.find((x) => x.name === "cpu-temperature") ?? s.find((x) => x.name === "temperature") ?? s.find((x) => x.unit === "C" && x.name.includes("temperature"));
+  const voltage = s.find((x) => x.name === "voltage") ?? s.find((x) => x.unit === "V");
+  return { temperature, voltage };
+}
+
+function AddressCard({ device: d }: { device: Device }) {
+  const q = useFetch<{ source: "live" | "cache" | "none"; at: string | null; addresses: Address[] }>(`/devices/${d.id}/addresses`);
+  useLive((e) => { if ((e.data as { id?: string }).id === d.id) void q.reload(); }, ["device.status"]);
+  const rows = q.data?.addresses ?? [];
+  return (
+    <Card flush title="IP-Adressen" subtitle={q.data?.source === "live" ? "live" : q.data?.at ? `Stand ${fmtShort(q.data.at)}` : undefined}>
+      {!q.data ? <Loading rows={2} /> : rows.length === 0 ? <EmptyState compact title="Keine IP-Adressen gemeldet" /> : (
+        <div className="overflow-x-auto">
+          <div className="min-w-[640px]">
+            <div className="grid grid-cols-[130px_170px_150px_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b border-line bg-panel2 px-4 py-2 text-xs font-medium text-fg3">
+              <span>Interface</span><span>Adresse</span><span>Netz</span><span>Kennzeichen</span><span>Kommentar</span>
+            </div>
+            {rows.map((a) => (
+              <div key={a.interface + a.address} className={cls("grid h-10 grid-cols-[130px_170px_150px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 border-b border-line px-4 last:border-b-0", a.disabled && "text-fg3")}>
+                <span className="truncate font-mono text-xs font-medium">{a.interface}</span>
+                <span className="truncate font-mono text-xs">{a.address}</span>
+                <span className="truncate font-mono text-xs text-fg2">{a.network ? `${a.network}/${a.address.split("/")[1] ?? ""}` : "–"}</span>
+                <span className="flex flex-wrap gap-1.5">
+                  {a.dhcp ? <Pill tone="blue">DHCP</Pill> : a.dynamic ? <Pill tone="gray">dynamisch</Pill> : <Pill tone="neutral">statisch</Pill>}
+                  {a.disabled && <Pill tone="gray" icon="minusCircle">deaktiviert</Pill>}
+                  {a.invalid && <Pill tone="red" icon="alert">ungültig</Pill>}
+                  {a.managed && <Pill tone="neutral" title={a.comment ?? ""}>Plattform</Pill>}
+                </span>
+                <span className="truncate text-fg2" title={a.comment ?? ""}>{a.managed ? "" : a.comment ?? ""}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
 

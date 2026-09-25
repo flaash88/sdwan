@@ -7,9 +7,10 @@ from typing import Any
 
 def poll_hooks() -> list[Any]:
     """async fn(device, api, resource) -> dict | None  (Ergebnis landet in device.facts)."""
-    from app.services import mesh, metrics, vrrp, wan
+    from app.services import device_info, mesh, metrics, vrrp, wan
 
-    return [metrics.collect, mesh.mesh_poll_hook, wan.wan_poll_hook, vrrp.vrrp_poll_hook]
+    # vrrp zuletzt: ein abgebrochener Peer-Ping verwirft die Verbindung (siehe vrrp.PEER_PING_LIMIT_S)
+    return [metrics.collect, device_info.info_poll_hook, mesh.mesh_poll_hook, wan.wan_poll_hook, vrrp.vrrp_poll_hook]
 
 
 def post_poll_hooks() -> list[Any]:

@@ -1,4 +1,4 @@
-"""Geräte-Werkzeuge: Hardware-Selbsttest (Labortest-Vorbereitung), Neustart."""
+"""Geräte-Werkzeuge: Hardware-Selbsttest (Labortest-Vorbereitung), Neustart, IP-Adressen."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from app import events
 from app.api.v1.common import get_or_404
 from app.db import utcnow
 from app.deps import Ctx, ReadCtx, TechCtx
-from app.models import Device, DeviceSelftest, PairingStatus
+from app.models import Device, DeviceSelftest, DeviceStatus, PairingStatus
 
 router = APIRouter(prefix="/devices", tags=["devices"])
 
@@ -78,3 +78,20 @@ async def reboot(device_id: uuid.UUID, ctx: Ctx = TechCtx) -> dict:
     await ctx.db.commit()
     await events.publish(dev.tenant_id, "device.reboot", {"id": str(dev.id), "name": dev.name, "state": "rebooting", **info})
     return {"ok": True, **info}
+
+
+@router.get("/{device_id}/addresses")
+async def addresses(device_id: uuid.UUID, ctx: Ctx = ReadCtx) -> dict:
+    """IP-Adressen je Interface – live vom Router, sonst der Stand der letzten Abfrage."""
+    from app.routeros import RouterOSError, connect_device
+    from app.services.device_info import read_addresses
+
+    dev = await get_or_404(ctx.db, Device, device_id, "Device")
+    cached = (dev.facts or {}).get("addresses")
+    if dev.pairing_status == PairingStatus.paired and dev.status != DeviceStatus.offline:
+        try:
+            async with connect_device(dev) as api:
+                return {"source": "live", "at": utcnow(), "addresses": await read_addresses(api)}
+        except RouterOSError:
+            pass
+    return {"source": "cache" if cached is not None else "none", "at": dev.last_seen_at, "addresses": cached or []}

@@ -3,6 +3,10 @@
 Verfügbarkeit = Zeit ``online`` / (Zeit ``online`` + Zeit ``offline``) im Zeitraum, berechnet aus den
 Statuswechseln (``status_events``). Zeit vor dem ersten bekannten Zustand bzw. vor dem Pairing zählt
 nicht (weder up noch down). WAN-Links analog mit ``up``/``degraded`` = verfügbar, ``down`` = nicht.
+
+Backup-Transparenz (Phase 11): "Zeit auf Backup-WAN" = Vereinigung der Zeiten, in denen ein WAN mit
+niedrigerer Priorität die Default-Route trug (``wanactive:<id>`` = ``active``, nur Failover-Modus);
+"Zeit als VRRP-Master" = Vereinigung der ``master``-Zeiten aller VRRP-Instanzen (``vrrp:<id>``).
 """
 
 from __future__ import annotations
@@ -17,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import system_session, utcnow
-from app.models import Alert, Device, PairingStatus, Site, SlaReport, StatusEvent, Tenant, WanLink
+from app.models import Alert, Device, PairingStatus, Site, SlaReport, StatusEvent, Tenant, VrrpInstance, WanLink
 
 log = logging.getLogger(__name__)
 UP = {"online", "up", "degraded"}
@@ -56,6 +60,39 @@ def availability(events: list[tuple[dt.datetime, str]], start: dt.datetime, end:
     }
 
 
+def intervals(events: list[tuple[dt.datetime, str]], start: dt.datetime, end: dt.datetime, initial: str | None,
+              states: set[str]) -> list[tuple[dt.datetime, dt.datetime]]:
+    """Zeitabschnitte in [start, end], in denen der Zustand in ``states`` lag."""
+    out: list[tuple[dt.datetime, dt.datetime]] = []
+    since = start if initial in states else None
+    for at, st in events:
+        at = min(max(at, start), end)
+        if since is None and st in states:
+            since = at
+        elif since is not None and st not in states:
+            if at > since:
+                out.append((since, at))
+            since = None
+    if since is not None and end > since:
+        out.append((since, end))
+    return out
+
+
+def union_stats(spans: list[tuple[dt.datetime, dt.datetime]]) -> dict[str, Any]:
+    """Gesamtdauer (Überlappungen einfach gezählt) und Anzahl zusammenhängender Phasen."""
+    total, count, cur = 0.0, 0, None
+    for s_, e in sorted(spans):
+        if cur and s_ <= cur[1]:
+            cur = (cur[0], max(cur[1], e))
+            continue
+        if cur:
+            total += (cur[1] - cur[0]).total_seconds()
+        cur, count = (s_, e), count + 1
+    if cur:
+        total += (cur[1] - cur[0]).total_seconds()
+    return {"seconds": round(total), "count": count}
+
+
 async def _series(db: AsyncSession, device_id: uuid.UUID, subject: str, start: dt.datetime, end: dt.datetime) -> tuple[list[tuple[dt.datetime, str]], str | None]:
     before = (
         await db.execute(select(StatusEvent).where(StatusEvent.device_id == device_id, StatusEvent.subject == subject, StatusEvent.at < start)
@@ -77,11 +114,25 @@ async def build_report(db: AsyncSession, tenant: Tenant, start: dt.datetime, end
         ev, initial = await _series(db, d.id, "device", start, end)
         a = availability(ev, start, end, initial)
         wans = []
-        for lk in (await db.execute(select(WanLink).where(WanLink.device_id == d.id).order_by(WanLink.slot))).scalars():
+        links = (await db.execute(select(WanLink).where(WanLink.device_id == d.id).order_by(WanLink.slot))).scalars().all()
+        best = min((lk.priority for lk in links if lk.enabled), default=1)
+        backup_spans: list[tuple[dt.datetime, dt.datetime]] = []
+        for lk in links:
             wev, wini = await _series(db, d.id, f"wan:{lk.id}", start, end)
             wa = availability(wev, start, end, wini)
             wans.append({"name": lk.name, "interface": lk.interface, **{k: wa[k] for k in ("availability_pct", "downtime_s", "outage_count")}})
-        rows.append({"device_id": str(d.id), "device": d.name, "site": sites.get(d.site_id, "–") if d.site_id else "–", **a, "wan": wans})
+            if d.wan_mode == "failover" and lk.priority > best:
+                aev, aini = await _series(db, d.id, f"wanactive:{lk.id}", start, end)
+                backup_spans += intervals(aev, start, end, aini, {"active"})
+        master_spans: list[tuple[dt.datetime, dt.datetime]] = []
+        insts = (await db.execute(select(VrrpInstance).where(VrrpInstance.device_id == d.id))).scalars().all()
+        for inst in insts:
+            vev, vini = await _series(db, d.id, f"vrrp:{inst.id}", start, end)
+            master_spans += intervals(vev, start, end, vini, {"master"})
+        bw, vm = union_stats(backup_spans), union_stats(master_spans)
+        rows.append({"device_id": str(d.id), "device": d.name, "site": sites.get(d.site_id, "–") if d.site_id else "–", **a, "wan": wans,
+                     "has_backup_wan": d.wan_mode == "failover" and any(lk.priority > best for lk in links), "has_vrrp": bool(insts),
+                     "backup_wan_s": bw["seconds"], "backup_wan_count": bw["count"], "vrrp_master_s": vm["seconds"], "vrrp_master_count": vm["count"]})
         total_up += a["measured_s"] - a["downtime_s"]
         total_measured += a["measured_s"]
     alerts = (await db.execute(select(Alert).where(Alert.tenant_id == tenant.id, Alert.fired_at >= start, Alert.fired_at <= end))).scalars().all()
@@ -151,6 +202,19 @@ def render_pdf(rep: dict[str, Any]) -> bytes:
         wt = Table(wan_rows, repeatRows=1)
         wt.setStyle(TableStyle(style[:5]))
         story.append(wt)
+    backup = [d for d in rep["devices"] if d.get("has_backup_wan") or d.get("has_vrrp")]
+    if backup:
+        story += [Spacer(1, 6 * mm), Paragraph("Backup-Betrieb", st["Heading2"]),
+                  Paragraph("Zeit, in der das Backup-WAN die Default-Route trug bzw. der Router als VRRP-Master die Rolle des Hauptsystems übernahm.", st["Normal"]),
+                  Spacer(1, 2 * mm)]
+        brows = [["Gerät", "Standort", "Zeit auf Backup-WAN", "Umschaltungen", "Zeit als VRRP-Master", "Übernahmen"]]
+        for d in backup:
+            brows.append([d["device"], d["site"],
+                          _dur(d["backup_wan_s"]) if d.get("has_backup_wan") else "–", str(d["backup_wan_count"]) if d.get("has_backup_wan") else "–",
+                          _dur(d["vrrp_master_s"]) if d.get("has_vrrp") else "–", str(d["vrrp_master_count"]) if d.get("has_vrrp") else "–"])
+        bt = Table(brows, repeatRows=1)
+        bt.setStyle(TableStyle(style[:5]))
+        story.append(bt)
     outs = [(d["device"], o) for d in rep["devices"] for o in d["outages"]]
     if outs:
         story += [Spacer(1, 6 * mm), Paragraph("Ausfälle", st["Heading2"])]
@@ -173,7 +237,8 @@ async def generate_and_store(db: AsyncSession, tenant: Tenant, start: dt.datetim
 
     rep = await build_report(db, tenant, start, end)
     pdf = render_pdf(rep)
-    summary = {k: v for k, v in rep.items() if k != "devices"} | {"devices": [{k: d[k] for k in ("device", "site", "availability_pct", "downtime_s", "outage_count")} for d in rep["devices"]]}
+    summary = {k: v for k, v in rep.items() if k != "devices"} | {"devices": [{k: d[k] for k in ("device", "site", "availability_pct", "downtime_s", "outage_count",
+                                                                                               "backup_wan_s", "backup_wan_count", "vrrp_master_s", "vrrp_master_count")} for d in rep["devices"]]}
     report = SlaReport(tenant_id=tenant.id, period_start=start, period_end=end, summary=_jsonable(summary), pdf=pdf, sent_to=[])
     db.add(report)
     recipients = list(dict.fromkeys([*((tenant.settings or {}).get("report_recipients") or []), *([tenant.contact_email] if tenant.contact_email else [])]))
@@ -181,12 +246,18 @@ async def generate_and_store(db: AsyncSession, tenant: Tenant, start: dt.datetim
         fa = rep["fleet_availability_pct"]
         ok = await send_mail(recipients, f"[SD-WAN] SLA-Bericht {tenant.name} {start:%m/%Y}",
                              f"Anbei der SLA-Verfügbarkeitsbericht für {start:%d.%m.%Y} – {end:%d.%m.%Y}.\n"
-                             f"Gesamtverfügbarkeit: {f'{fa:.3f} %' if fa is not None else 'keine Daten'}\n",
+                             f"Gesamtverfügbarkeit: {f'{fa:.3f} %' if fa is not None else 'keine Daten'}\n" + _backup_lines(rep),
                              [(f"sla-{tenant.slug}-{start:%Y-%m}.pdf", pdf, "application/pdf")])
         if ok:
             report.sent_to = recipients
     await db.flush()
     return report
+
+
+def _backup_lines(rep: dict[str, Any]) -> str:
+    lines = [f"- {d['device']}: Backup-WAN {_dur(d['backup_wan_s'])} ({d['backup_wan_count']}x), VRRP-Master {_dur(d['vrrp_master_s'])} ({d['vrrp_master_count']}x)"
+             for d in rep["devices"] if d.get("backup_wan_s") or d.get("vrrp_master_s")]
+    return ("\nBackup-Betrieb im Zeitraum:\n" + "\n".join(lines) + "\n") if lines else ""
 
 
 def _jsonable(o: Any) -> Any:

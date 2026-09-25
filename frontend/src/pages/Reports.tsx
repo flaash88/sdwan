@@ -5,7 +5,7 @@ import { useAuth } from "../lib/auth";
 import { fmtDate } from "../lib/format";
 import { useFetch } from "../lib/useFetch";
 
-interface DevRow { device_id: string; device: string; site: string; availability_pct: number | null; downtime_s: number; outage_count: number; longest_outage_s: number; mttr_s: number; wan: { name: string; availability_pct: number | null; downtime_s: number; outage_count: number }[] }
+interface DevRow { device_id: string; device: string; site: string; availability_pct: number | null; downtime_s: number; outage_count: number; longest_outage_s: number; mttr_s: number; has_backup_wan?: boolean; has_vrrp?: boolean; backup_wan_s?: number; backup_wan_count?: number; vrrp_master_s?: number; vrrp_master_count?: number; wan: { name: string; availability_pct: number | null; downtime_s: number; outage_count: number }[] }
 interface Rep { fleet_availability_pct: number | null; device_count: number; alert_count: number; alerts_by_severity: Record<string, number>; devices: DevRow[] }
 interface Stored { settings: { monthly_report: boolean; report_recipients: string[]; contact_email: string | null }; reports: { id: string; period_start: string; period_end: string; created_at: string; fleet_availability_pct: number | null; sent_to: string[] }[] }
 
@@ -43,7 +43,7 @@ export default function Reports() {
         <Stat label="Ausfälle gesamt" value={r ? r.devices.reduce((a, d) => a + d.outage_count, 0) : "–"} />
       </div>
       <Card title="Verfügbarkeit je Gerät">
-        <Table head={["Gerät", "Standort", "Verfügbarkeit", "Ausfallzeit", "Ausfälle", "Längster", "MTTR", "WAN-Links"]} empty={r?.devices.length === 0}>
+        <Table head={["Gerät", "Standort", "Verfügbarkeit", "Ausfallzeit", "Ausfälle", "Längster", "MTTR", "Auf Backup-WAN", "VRRP-Master", "WAN-Links"]} empty={r?.devices.length === 0}>
           {r?.devices.map((d) => (
             <tr key={d.device_id}>
               <td className="px-3 py-2 font-medium">{d.device}</td>
@@ -53,6 +53,8 @@ export default function Reports() {
               <td className="px-3 py-2">{d.outage_count}</td>
               <td className="px-3 py-2">{d.outage_count ? dur(d.longest_outage_s) : "–"}</td>
               <td className="px-3 py-2">{d.outage_count ? dur(d.mttr_s) : "–"}</td>
+              <td className="px-3 py-2">{d.has_backup_wan ? `${dur(d.backup_wan_s ?? 0)} (${d.backup_wan_count ?? 0}×)` : "–"}</td>
+              <td className="px-3 py-2">{d.has_vrrp ? `${dur(d.vrrp_master_s ?? 0)} (${d.vrrp_master_count ?? 0}×)` : "–"}</td>
               <td className="px-3 py-2 text-xs">{d.wan.map((w) => `${w.name}: ${pct(w.availability_pct)}`).join(" · ") || "–"}</td>
             </tr>
           ))}

@@ -268,3 +268,77 @@ async def test_wan_volume_limit_and_alerts(client, msp, hub):
         await db.commit()
     await evaluate_all()
     assert (await client.get("/api/v1/alerts", headers=h)).json() == []
+
+
+def _pdf_text(pdf: bytes) -> str:
+    import re
+    import zlib
+
+    import base64
+
+    out = []
+    for m in re.finditer(rb"stream\r?\n(.*?)endstream", pdf, re.S):
+        raw = m.group(1).strip()
+        try:
+            if raw.endswith(b"~>"):  # ReportLab: ASCII85 + Flate
+                raw = base64.a85decode(raw[:-2].replace(b"\n", b""))
+            out.append(zlib.decompress(raw).decode("latin-1"))
+        except (zlib.error, ValueError):
+            continue
+    return "".join(out)
+
+
+def test_time_in_state_math():
+    from app.services.sla import intervals, union_stats
+
+    t0 = dt.datetime(2026, 1, 1, tzinfo=dt.UTC)
+    H = lambda h: t0 + dt.timedelta(hours=h)  # noqa: E731
+    # vor dem Zeitraum aktiv, 2 h – dann 3 h Pause – nochmals 1 h, am Ende noch aktiv
+    sp = intervals([(H(2), "inactive"), (H(5), "active"), (H(6), "inactive"), (H(9), "active")], H(0), H(10), "active", {"active"})
+    assert [(a.hour, b.hour) for a, b in sp] == [(0, 2), (5, 6), (9, 10)]
+    assert union_stats(sp) == {"seconds": 4 * 3600, "count": 3}
+    # überlappende Phasen zweier Instanzen zählen einmal
+    assert union_stats([(H(1), H(3)), (H(2), H(4)), (H(6), H(7))]) == {"seconds": 4 * 3600, "count": 2}
+    assert union_stats([]) == {"seconds": 0, "count": 0}
+
+
+async def test_sla_report_backup_times(client, msp, hub):
+    import uuid
+
+    from app.models import VrrpInstance, WanLink
+
+    h, dev = await _setup(client, msp)
+    await client.put(f"/api/v1/devices/{dev['id']}/vrrp", json={"instances": [VRRP]}, headers=h)
+    base = dt.datetime.combine(dt.date.today() - dt.timedelta(days=3), dt.time(), dt.UTC)
+    async with system_session() as db:
+        links = {lk.slot: lk for lk in (await db.execute(select(WanLink).where(WanLink.device_id == uuid.UUID(dev["id"])))).scalars()}
+        inst = (await db.execute(select(VrrpInstance))).scalar_one()
+        tid, did = uuid.UUID(dev["tenant_id"]), uuid.UUID(dev["id"])
+        for hours, subj, st in ((0, f"wanactive:{links[1].id}", "active"), (0, f"wanactive:{links[2].id}", "inactive"), (0, f"vrrp:{inst.id}", "backup"),
+                                (10, f"vrrp:{inst.id}", "master"), (10, f"wanactive:{links[2].id}", "active"), (10, f"wanactive:{links[1].id}", "inactive"),
+                                (12, f"vrrp:{inst.id}", "backup"), (12.5, f"wanactive:{links[2].id}", "inactive"), (12.5, f"wanactive:{links[1].id}", "active"),
+                                (30, f"wanactive:{links[2].id}", "active"), (30.25, f"wanactive:{links[2].id}", "inactive")):
+            db.add(StatusEvent(tenant_id=tid, device_id=did, subject=subj, status=st, at=base + dt.timedelta(hours=hours)))
+        await db.commit()
+    start, end = base.date().isoformat(), (base + dt.timedelta(days=1)).date().isoformat()
+    d = (await client.get(f"/api/v1/reports/sla?start={start}&end={end}", headers=h)).json()["devices"][0]
+    assert d["has_backup_wan"] and d["has_vrrp"]
+    assert d["backup_wan_s"] == int(2.75 * 3600) and d["backup_wan_count"] == 2
+    assert d["vrrp_master_s"] == 2 * 3600 and d["vrrp_master_count"] == 1
+    pdf = (await client.get(f"/api/v1/reports/sla?start={start}&end={end}&format=pdf", headers=h)).content
+    assert pdf.startswith(b"%PDF")
+    r = (await client.post(f"/api/v1/reports?start={start}&end={end}", headers=h)).json()
+    lst = (await client.get("/api/v1/reports", headers=h)).json()["reports"]
+    assert lst and r
+    async with system_session() as db:
+        from app.models import SlaReport
+
+        rep = (await db.execute(select(SlaReport))).scalar_one()
+        assert rep.summary["devices"][0]["vrrp_master_s"] == 7200 and rep.summary["devices"][0]["backup_wan_s"] == 9900
+        from app.services.sla import _backup_lines, build_report, render_pdf
+        from app.models import Tenant
+
+        full = await build_report(db, await db.get(Tenant, tid), base, base + dt.timedelta(days=2))
+        text = _pdf_text(render_pdf(full))
+        assert "Backup-Betrieb" in text and "2 h 0 min" in text and "2 h 45 min" in text
+        assert "Backup-WAN 2 h 45 min (2x), VRRP-Master 2 h 0 min (1x)" in _backup_lines(full)  # Text der Monats-Mail

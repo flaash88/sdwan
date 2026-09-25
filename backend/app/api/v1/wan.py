@@ -33,6 +33,7 @@ class WanLinkIn(BaseModel):
     check_timeout_ms: int = Field(default=1000, ge=100, le=10000)
     loss_threshold_pct: int = Field(default=50, ge=1, le=100)
     latency_threshold_ms: int | None = Field(default=None, ge=1, le=10000)
+    monthly_limit_gb: float | None = Field(default=None, gt=0, le=100000)
     enabled: bool = True
 
     @field_validator("interface")
@@ -81,6 +82,8 @@ class WanLinkOut(WanLinkIn):
     last_loss_pct: float | None
     last_check_at: object | None
     last_change_at: object | None
+    vol_month: str | None = None
+    vol_bytes: int | None = 0
 
     model_config = {"from_attributes": True}
 

@@ -74,6 +74,10 @@ class SimRouter:
         for svc, port in (("ssh", 22), ("winbox", 8291), ("www", 80), ("api", 8728)):
             self._insert("/ip/service", {"name": svc, "port": str(port), "disabled": "false", "address": ""})
         self._insert("/ip/route", {"dst-address": "0.0.0.0/0", "gateway": "100.64.0.1", "distance": "1"})
+        # weitere Ports wie beim L009UiGS (ether5–ether8, z. B. 5G-Modem an ether8)
+        for name in ("ether5", "ether6", "ether7", "ether8"):
+            self._insert("/interface", {"name": name, "type": "ether", "running": "true", "disabled": "false", "default-name": name})
+            self.counters[name] = [self.rng.randint(10**6, 10**9), self.rng.randint(10**6, 10**9)]
 
     # -- Hilfen --------------------------------------------------------------
     def _insert(self, path: str, attrs: dict[str, Any]) -> str:

@@ -216,3 +216,55 @@ async def test_no_backup_alert_in_loadbalance_mode(client, msp, hub):
     await poll_all()
     await evaluate_all()
     assert (await client.get("/api/v1/alerts", headers=h)).json() == []
+
+
+def test_volume_accounting_math():
+    from app.models import WanLink
+    from app.services.wan import account_volume
+
+    lk = WanLink(vol_bytes=0)
+    now = dt.datetime(2026, 9, 30, 23, 0, tzinfo=dt.UTC)
+    account_volume(lk, {"rx_bytes": 1000, "tx_bytes": 500}, now)
+    assert lk.vol_bytes == 0 and lk.vol_month == "2026-09"  # erster Stand = Basis
+    account_volume(lk, {"rx_bytes": 3000, "tx_bytes": 1500}, now)
+    assert lk.vol_bytes == 3000
+    account_volume(lk, {"rx_bytes": 200, "tx_bytes": 100}, now)  # Reboot: Zähler zurückgesetzt
+    assert lk.vol_bytes == 3300
+    account_volume(lk, {"rx_bytes": 1200, "tx_bytes": 100}, now + dt.timedelta(hours=2))  # Monatswechsel
+    assert lk.vol_month == "2026-10" and lk.vol_bytes == 1000
+    account_volume(lk, None, now + dt.timedelta(hours=3))  # Interface fehlt -> unverändert
+    assert lk.vol_bytes == 1000
+
+
+async def test_wan_volume_limit_and_alerts(client, msp, hub):
+    from app.models import WanLink
+
+    h, dev = await _setup(client, msp)
+    links = [dict(WAN[0]), {**WAN[1], "monthly_limit_gb": 1}]
+    r = await client.put(f"/api/v1/devices/{dev['id']}/wan", json={"mode": "failover", "links": links}, headers=h)
+    assert r.json()["links"][1]["monthly_limit_gb"] == 1
+    await client.post("/api/v1/alert-rules", json={"name": "Volumen", "type": "wan_volume", "duration_s": 0}, headers=h)
+    await poll_all()
+    await poll_all()
+    wan = (await client.get(f"/api/v1/devices/{dev['id']}/wan", headers=h)).json()["links"]
+    assert wan[1]["vol_bytes"] > 0 and wan[1]["vol_month"] == dt.datetime.now(dt.UTC).strftime("%Y-%m")
+    await evaluate_all()
+    assert (await client.get("/api/v1/alerts", headers=h)).json() == []  # weit unter 80 %
+
+    async with system_session() as db:
+        await db.execute(update(WanLink).where(WanLink.slot == 2).values(vol_bytes=int(0.85e9)))
+        await db.commit()
+    await evaluate_all()
+    alerts = (await client.get("/api/v1/alerts", headers=h)).json()
+    assert [a["subject"].split(":")[0] for a in alerts] == ["volume80"] and "85 %" in alerts[0]["message"]
+    async with system_session() as db:
+        await db.execute(update(WanLink).where(WanLink.slot == 2).values(vol_bytes=int(1.2e9)))
+        await db.commit()
+    await evaluate_all()
+    assert sorted(a["subject"].split(":")[0] for a in (await client.get("/api/v1/alerts", headers=h)).json()) == ["volume100", "volume80"]
+    # neuer Monat -> Zähler von vorn, Alarme behoben
+    async with system_session() as db:
+        await db.execute(update(WanLink).where(WanLink.slot == 2).values(vol_month="2000-01"))
+        await db.commit()
+    await evaluate_all()
+    assert (await client.get("/api/v1/alerts", headers=h)).json() == []

@@ -31,6 +31,7 @@ TYPES = {
     "cpu_high": "CPU-Last hoch",
     "vrrp_master": "VRRP: Router ist Master (Hauptsystem ausgefallen)",
     "wan_backup_active": "Backup-WAN aktiv",
+    "wan_volume": "WAN-Datenvolumen (80 % / 100 % des Monatslimits)",
 }
 DEFAULT_RULES = [
     {"name": "Gerät offline", "type": "device_offline", "severity": "critical", "duration_s": 300},
@@ -110,6 +111,19 @@ async def conditions(db: AsyncSession, rule: AlertRule, devices: list[Device]) -
             if d.wan_mode == "failover" and lk.active and lk.priority > best[lk.device_id]:
                 out.append(Condition(d, f"wanactive:{lk.id}", f"{d.name}: Backup-WAN {lk.name} ({lk.interface}) trägt die Default-Route",
                                      since=lk.active_since))
+    elif rule.type == "wan_volume":
+        month = utcnow().strftime("%Y-%m")
+        steps = sorted({float(x) for x in p.get("thresholds", [80, 100])})
+        links = (await db.execute(select(WanLink).where(WanLink.device_id.in_(list(by_id)), WanLink.monthly_limit_gb.is_not(None)))).scalars().all()
+        for lk in links:
+            if lk.vol_month != month or not lk.monthly_limit_gb:
+                continue  # neuer Monat -> Zähler beginnt bei 0, offene Alarme werden behoben
+            d = by_id[lk.device_id]
+            pct = 100 * (lk.vol_bytes or 0) / (lk.monthly_limit_gb * 1e9)
+            for thr in steps:
+                if pct >= thr:
+                    out.append(Condition(d, f"volume{thr:g}:{lk.id}", f"{d.name}: WAN {lk.name} hat {pct:.0f} % des Monatsvolumens verbraucht "
+                                                                      f"({(lk.vol_bytes or 0) / 1e9:.1f} von {lk.monthly_limit_gb:g} GB, Schwelle {thr:g} %)", round(pct, 1)))
     elif rule.type == "cpu_high":
         thr = float(p.get("threshold", 90))
         for d in devs:

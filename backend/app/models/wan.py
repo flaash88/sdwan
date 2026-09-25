@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, IdMixin, TenantScoped, UTCDateTime
@@ -31,6 +31,7 @@ class WanLink(IdMixin, TenantScoped, Base):
     loss_threshold_pct: Mapped[int] = mapped_column(Integer, default=50)
     latency_threshold_ms: Mapped[int | None] = mapped_column(Integer)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    monthly_limit_gb: Mapped[float | None] = mapped_column(Float)  # Datenvolumen-Limit (z. B. 5G-Tarif)
 
     # Laufzeitstatus (vom Poller)
     status: Mapped[str] = mapped_column(String(20), default="unknown")  # up | down | degraded | disabled | unknown
@@ -40,3 +41,9 @@ class WanLink(IdMixin, TenantScoped, Base):
     last_loss_pct: Mapped[float | None] = mapped_column(Float)
     last_check_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
     last_change_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
+
+    # Monatsvolumen (rx+tx des Interfaces), aufsummiert aus den Zähler-Deltas jedes Polls
+    vol_month: Mapped[str | None] = mapped_column(String(7))  # "YYYY-MM" (UTC)
+    vol_bytes: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+    vol_last_rx: Mapped[int | None] = mapped_column(BigInteger)
+    vol_last_tx: Mapped[int | None] = mapped_column(BigInteger)

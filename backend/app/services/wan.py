@@ -18,6 +18,8 @@ Aufbau je WAN-Link ``<slot>`` (1..4):
 
 from __future__ import annotations
 
+import datetime as dt
+
 import ipaddress
 import logging
 from typing import Any
@@ -252,6 +254,22 @@ async def wan_poll_hook(device: Device, api: DeviceAPI, _res: dict[str, Any]) ->
     return extra
 
 
+def account_volume(lk: WanLink, iface: dict[str, Any] | None, now: dt.datetime) -> None:
+    """Addiert den Traffic seit dem letzten Poll auf das Monatsvolumen des WAN-Links."""
+    month = now.strftime("%Y-%m")
+    if lk.vol_month != month:
+        lk.vol_month, lk.vol_bytes = month, 0
+    if not iface or iface.get("rx_bytes") is None or iface.get("tx_bytes") is None:
+        return
+    rx, tx = int(iface["rx_bytes"]), int(iface["tx_bytes"])
+    if lk.vol_last_rx is not None and lk.vol_last_tx is not None:
+        # Zähler kleiner als zuvor -> Reboot/Reset: der aktuelle Stand ist der Traffic seit dem Reset
+        d_rx = rx - lk.vol_last_rx if rx >= lk.vol_last_rx else rx
+        d_tx = tx - lk.vol_last_tx if tx >= lk.vol_last_tx else tx
+        lk.vol_bytes = (lk.vol_bytes or 0) + d_rx + d_tx
+    lk.vol_last_rx, lk.vol_last_tx = rx, tx
+
+
 async def update_wan_status(db: AsyncSession, devices: list[Device]) -> None:
     by_id = {d.id: d for d in devices}
     links = (await db.execute(select(WanLink).where(WanLink.device_id.in_(list(by_id))))).scalars().all()
@@ -265,6 +283,8 @@ async def update_wan_status(db: AsyncSession, devices: list[Device]) -> None:
             if cur and cur != lk.resolved_gateway:
                 resync.add(dev.id)
         info = (facts.get("wan") or {}).get(str(lk.slot))
+        if getattr(dev, "_poll_ok", False):  # nur frische Zählerstände zählen
+            account_volume(lk, (facts.get("interfaces") or {}).get(lk.interface), now)
         old = lk.status
         if not lk.enabled:
             lk.status = "disabled"

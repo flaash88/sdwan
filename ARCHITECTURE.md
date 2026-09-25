@@ -462,8 +462,8 @@ Die Checkliste für den Test steht in `docs/LABORTEST.md`.
 ### Rechte und Gruppen
 
 * **Eine Definition:** `routeros/schema.py` enthält `API_GROUP = "sdwan-api"` mit `API_POLICIES`
-  (`read, write, api, policy, reboot, test, ssh, sensitive, winbox, web`), aufgeteilt in Kern-Policies
-  (fehlt eine → Selbsttest rot) und empfohlene (`sensitive`, `winbox`, `web` → orange mit Begründung).
+  (`read, write, api, policy, reboot, test, ssh, sensitive, winbox, web, local`), aufgeteilt in Kern-Policies
+  (fehlt eine → Selbsttest rot) und empfohlene (`sensitive`, `winbox`, `web`, `local` → orange mit Begründung).
   Onboarding-Skript, Selbsttest und „Rechte einschränken“ lesen nur diese Werte.
 * **Onboarding/ZTP:** Die Pairing-Antwort legt `sdwan-api` an bzw. setzt bei vorhandener Gruppe nur die
   Policies und legt den API-Benutzer in dieser Gruppe an. `full` wird nicht mehr verwendet. ZTP holt
@@ -482,6 +482,14 @@ Die Checkliste für den Test steht in `docs/LABORTEST.md`.
   6. Nur wenn beides klappt (Selbsttest nicht rot), den Scheduler löschen. Sonst zeigt die Oberfläche
      „Rechte werden in ca. 3 Minuten automatisch zurückgestellt“. Der Terminal-Befehl steht nur als
      letzte Rückfallebene darunter.
+* **Fernzugriff:** Temporäre Benutzer liegen in der Gruppe `REMOTE_GROUP = "sdwan-remote"` mit
+  `REMOTE_POLICIES` (`local, ssh, read, write, test, winbox, web, reboot, sensitive`, bewusst ohne `policy`
+  und `api`). Die Gruppe wird bei jeder Sitzung angelegt bzw. aktualisiert und zurückgelesen. Scheitert
+  das, bricht die Sitzung mit einer klaren Meldung ab; es gibt kein Ausweichen auf `full`.
+  `REMOTE_POLICIES ⊆ API_POLICIES` wird beim Import geprüft (deshalb enthält `API_POLICIES` auch `local`).
+* **Annahme, im Labor zu verifizieren:** RouterOS lehnt das Anlegen einer Gruppe mit Policies ab, die der
+  anlegende Benutzer selbst nicht hat. Der Simulator bildet das nach (`_check_group_rights`, abschaltbar
+  über `SIMULATOR_ENFORCE_GROUP_RIGHTS=false`).
 * **Annahme, im Labor zu verifizieren:** Ein Scheduler mit `interval=3m` ohne `start-time` läuft zum
   ersten Mal ca. 3 Minuten nach dem Anlegen. So entfallen die versionsabhängigen Datumsformate von
   `start-date`.

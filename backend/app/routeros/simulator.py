@@ -170,8 +170,10 @@ class SimRouter:
         return handler(params)
 
     def _table_op(self, path: str, action: str, params: dict[str, Any]) -> list[dict[str, Any]]:
-        if path == "/user/group" and action in ("add", "set") and "policy" in params and self.drop_policies:
-            params["policy"] = ",".join(p for p in str(params["policy"]).split(",") if p not in self.drop_policies)
+        if path == "/user/group" and action in ("add", "set") and "policy" in params:
+            self._check_group_rights(str(params["policy"]))
+            if self.drop_policies:
+                params["policy"] = ",".join(p for p in str(params["policy"]).split(",") if p not in self.drop_policies)
         if action == "print":
             rows = [dict(r) for r in self.tables[path]]
             if "count-only" in params:
@@ -283,6 +285,23 @@ class SimRouter:
         if self.board == "CHR":
             return []
         return [{"name": "cpu-temperature", "value": "47", "type": "C"}, {"name": "voltage", "value": "24.1", "type": "V"}]
+
+    def _check_group_rights(self, policy: str) -> None:
+        """ANNAHME, im Labor zu verifizieren: RouterOS lässt einen Benutzer keine Gruppe mit Policies anlegen/ändern,
+        die er selbst nicht hat. Abschaltbar über SIMULATOR_ENFORCE_GROUP_RIGHTS=false."""
+        from app.config import get_settings
+        from app.routeros.schema import policy_set
+
+        s = get_settings()
+        if not s.simulator_enforce_group_rights:
+            return
+        user = next((u for u in self.tables["/user"] if u.get("name") == s.routeros_api_user), None)
+        group = next((g for g in self.tables["/user/group"] if user and g.get("name") == user.get("group")), None)
+        if group is None:
+            return
+        extra = policy_set(policy) - policy_set(group.get("policy"))
+        if extra:
+            raise RouterOSError(f"failure: not enough permissions ({', '.join(sorted(extra))})")
 
     def fire_scheduler(self, name: str) -> None:
         """Tests: führt einen Scheduler-Eintrag aus. Der Simulator versteht nur die Befehle, die die Plattform

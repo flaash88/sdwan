@@ -109,13 +109,18 @@ API_RECOMMENDED_POLICIES: dict[str, str] = {
     "sensitive": "ohne 'sensitive' fehlen Schlüssel/Passwörter im Export – das Backup ist für eine Wiederherstellung unvollständig",
     "winbox": "ohne 'winbox' kann die Gruppe für Fernzugriffs-Benutzer nicht angelegt werden – Fernzugriff funktioniert ohne diese Policies nicht",
     "web": "ohne 'web' kann die Gruppe für Fernzugriffs-Benutzer nicht angelegt werden – Fernzugriff funktioniert ohne diese Policies nicht",
+    # REMOTE_POLICIES enthält 'local'; eine Gruppe mit Rechten, die man selbst nicht hat, lässt RouterOS
+    # (Annahme) nicht anlegen – daher auch hier
+    "local": "ohne 'local' kann die Gruppe für Fernzugriffs-Benutzer nicht angelegt werden – Fernzugriff funktioniert ohne diese Policies nicht",
 }
-API_POLICIES: tuple[str, ...] = ("read", "write", "api", "policy", "reboot", "test", "ssh", "sensitive", "winbox", "web")
+API_POLICIES: tuple[str, ...] = ("read", "write", "api", "policy", "reboot", "test", "ssh", "sensitive", "winbox", "web", "local")
 assert set(API_POLICIES) == set(API_CORE_POLICIES) | set(API_RECOMMENDED_POLICIES)
 
 # Gruppe der temporären Fernzugriffs-Benutzer: bewusst ohne 'policy' (keine Benutzerverwaltung) und ohne 'api'
 REMOTE_GROUP = "sdwan-remote"
 REMOTE_POLICIES: tuple[str, ...] = ("local", "ssh", "read", "write", "test", "winbox", "web", "reboot", "sensitive")
+# Jede Policy der Fernzugriffs-Gruppe muss der API-Benutzer selbst haben
+assert set(REMOTE_POLICIES) <= set(API_POLICIES)
 
 
 def policy_set(value: object) -> set[str]:

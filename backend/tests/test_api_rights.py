@@ -66,7 +66,7 @@ async def test_selftest_rights_hints(client, msp, hub):
     _user(rt)["group"] = "eigen"
     rt._insert("/user/group", {"name": "eigen", "policy": "api,read,write,policy,reboot,test,ssh,sensitive"})
     c = await _rights(client, h, dev)
-    assert c["status"] == "warn" and set(c["missing"]) == {"winbox", "web"}
+    assert c["status"] == "warn" and set(c["missing"]) == {"winbox", "web", "local"}
     assert "Fernzugriff funktioniert ohne diese Policies nicht" in c["notes"][0]
     # Kern-Policy fehlt -> rot
     next(g for g in rt.tables["/user/group"] if g["name"] == "eigen")["policy"] = "api,read,write,policy,test,ssh"

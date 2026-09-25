@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     routeros_timeout: float = 10.0
     # "simulator" -> kein echter Router nötig (Demo/Tests); "api" -> librouteros über den Tunnel
     routeros_backend: str = "api"
+    # Nur Simulator: Gruppen mit Policies, die der API-Benutzer selbst nicht hat, werden abgelehnt.
+    # ANNAHME über das RouterOS-Verhalten, im Labor zu verifizieren (docs/LABORTEST.md, Fernzugriff).
+    simulator_enforce_group_rights: bool = True
 
     # --- Worker / Jobs -------------------------------------------------------
     poll_interval_seconds: int = 60

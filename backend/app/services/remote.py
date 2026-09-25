@@ -22,6 +22,7 @@ from app.db import system_session, utcnow
 from app.models import Device, RemoteSession
 from app.routeros import RouterOSError, connect_device
 from app.routeros.client import DeviceAPI
+from app.routeros.schema import REMOTE_GROUP, REMOTE_POLICIES
 from app.security import generate_password
 
 log = logging.getLogger(__name__)
@@ -82,15 +83,33 @@ async def open_session(db: AsyncSession, device: Device, user: Any, protocol: st
         async with connect_device(device) as api:
             sess.target_port = await _ensure_service(api, service) or default_port
             if protocol in ("ssh", "winbox", "webfig"):
+                await _ensure_remote_group(api)
                 username = f"sdwan-rs-{sess.id.hex[:8]}"
                 password = generate_password(20)
-                await api.add("/user", name=username, group="full", password=password,
+                await api.add("/user", name=username, group=REMOTE_GROUP, password=password,
                                address=f"{get_settings().wg_hub_ip}/32", comment=f"sdwan:remote:{sess.id}")
                 sess.ros_username = username
+    except RemoteError as exc:
+        sess.status, sess.last_error, sess.closed_at = "failed", str(exc), utcnow()
+        raise
     except RouterOSError as exc:
         sess.status, sess.last_error, sess.closed_at = "failed", str(exc), utcnow()
         raise RemoteError(f"Gerät nicht erreichbar: {exc}") from exc
     return sess, password
+
+
+async def _ensure_remote_group(api: DeviceAPI) -> None:
+    """Gruppe für temporäre Benutzer anlegen/aktualisieren. Kein Ausweichen auf 'full', wenn das scheitert."""
+    from app.services.api_rights import ensure_group
+
+    hint = (f"Der API-Benutzer braucht selbst alle Policies der Gruppe {REMOTE_GROUP} ({', '.join(REMOTE_POLICIES)}) – "
+            "siehe Selbsttest „Rechte API-Benutzer“")
+    try:
+        ok = await ensure_group(api, REMOTE_GROUP, REMOTE_POLICIES, "sdwan:remote")
+    except RouterOSError as exc:
+        raise RemoteError(f"Gruppe {REMOTE_GROUP} konnte nicht angelegt werden: {exc}. {hint}") from exc
+    if not ok:
+        raise RemoteError(f"Gruppe {REMOTE_GROUP} hat nach dem Anlegen nicht die erwarteten Policies. {hint}")
 
 
 async def close_session(db: AsyncSession, sess: RemoteSession, status: str, by: str | None) -> None:

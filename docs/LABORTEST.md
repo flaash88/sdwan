@@ -100,16 +100,19 @@ Die Tunnel-Adresse des Hubs ist die erste Adresse aus `WG_NETWORK` (Standard `10
      **Erwartet:** Zeile orange „API-Benutzer in Gruppe full – Umstellung empfohlen“ mit dem Button
      „Rechte einschränken“.
   2. Button ausführen und währenddessen `/system scheduler print detail` beobachten.
-     **Erwartet:** Kurz erscheint `sdwan-revert-api-group` mit `interval=3m`. Nach Erfolg zeigt die
-     Oberfläche „Rechte eingeschränkt“, der Scheduler ist gelöscht und die Gruppe ist `sdwan-api`.
-  3. **Annahme verifizieren:** Scheduler ohne `start-time`, aber mit `interval=3m` läuft zum ersten Mal ca.
-     3 Minuten nach dem Anlegen. Dazu von Hand anlegen und `next-run` ablesen:
-     `/system scheduler add name=probe interval=3m on-event=":log info probe"`.
-     Tatsächliches Verhalten: ______________________ (danach `probe` entfernen)
+     **Erwartet:** Kurz erscheint `sdwan-revert-api-group` mit `start-date`/`start-time` = Router-Uhr
+     + 3 Minuten, im Datumsformat des Routers, und `interval=1m`. Nach Erfolg zeigt die Oberfläche
+     „Rechte eingeschränkt“, der Scheduler ist gelöscht und die Gruppe ist `sdwan-api`.
+  3. **Scheduler läuft nach ~3 Minuten:** Ein von der Plattform angelegter Scheduler startet zum festen
+     Zeitpunkt. Prüfen, dass `next-run` genau `start-date start-time` entspricht (Router-Uhr + 3 min,
+     nicht Uhr + 4 min o. Ä.) und die Router-Zeitzone stimmt (`/system clock print`, siehe Schritt 1).
+     Beobachtet: next-run = ______________________
   4. Fehlerfall: erneut `group=full` setzen, dann `/ip service set ssh address=192.168.88.0/24`, damit der
      Selbsttest nach der Umstellung rot wird. Danach den Button ausführen.
-     **Erwartet:** orange „Rechte werden in ca. 3 Minuten automatisch zurückgestellt“, der Scheduler bleibt
-     stehen. Nach ca. 3 Minuten ist `sdwan` wieder in `full` und der Scheduler ist verschwunden. `ssh`
+     **Erwartet:** orange „Rechte werden in ca. 3 Minuten automatisch zurückgestellt“ mit der Startzeit
+     (Router-Zeit), der Scheduler bleibt stehen. Zum angezeigten Zeitpunkt ist `sdwan` wieder in `full`,
+     und der Scheduler ist verschwunden. Im Log steht nur ein Lauf; ein zweiter Lauf eine Minute später
+     wäre das Sicherheitsnetz und deutet darauf hin, dass das Zurückstellen im ersten Lauf fehlschlug. `ssh`
      danach zurückstellen und den Selbsttest erneut ausführen.
 - [ ] „JSON“ exportieren und ablegen, als Referenz für RouterOS-Version und Modell.
 - [ ] **Nach Schritt 4 und 5 den Selbsttest wiederholen.** Erst dann sind Netwatch, Routen und VRRP

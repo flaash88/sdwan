@@ -20,7 +20,7 @@ const TONE: Record<St, [string, Tone, "checkCircle" | "alert" | "xCircle"]> = {
 };
 interface RestrictResult {
   status: "ok" | "unchanged" | "readback_mismatch" | "reverting"; previous_group: string; message?: string;
-  scheduler: string; revert_after: string; api_user: string; selftest?: Selftest;
+  scheduler: string; revert_after: string; api_user: string; selftest?: Selftest; revert_at?: { "start-date": string; "start-time": string };
 }
 
 /** „Rechte einschränken“: Bestätigung und Ergebnis der Umstellung mit Totmannschaltung. */
@@ -37,7 +37,7 @@ function RestrictDialog({ device, onClose, onDone }: { device: Device; onClose: 
       <div className="flex flex-col gap-3">
         <p>Der API-Benutzer wird von seiner bisherigen Gruppe auf die Gruppe <span className="font-mono">sdwan-api</span> mit genau den nötigen Rechten umgestellt.</p>
         <Notice tone="blue" title="Totmannschaltung">
-          Vorher legt die Plattform auf dem Router einen Scheduler an, der die bisherige Gruppe nach ca. 3 Minuten automatisch wiederherstellt.
+          Vorher legt die Plattform auf dem Router einen Scheduler an, der die bisherige Gruppe zu einem festen Zeitpunkt (Router-Uhr + 3 Minuten) automatisch wiederherstellt.
           Er wird erst gelöscht, wenn eine neue Verbindung und der Selbsttest mit den neuen Rechten funktionieren.
         </Notice>
         <ErrorBox error={error} />
@@ -54,7 +54,9 @@ function RestrictNotice({ r, onRetest, busy }: { r: RestrictResult; onRetest: ()
   return (
     <Notice tone="orange" title={`Rechte werden in ca. ${r.revert_after.replace("m", " Minuten")} automatisch zurückgestellt`}>
       <div className="flex flex-col gap-2">
-        <span>{r.message}. Der Scheduler <span className="font-mono">{r.scheduler}</span> stellt die Gruppe „{r.previous_group}“ wieder her. Danach den Selbsttest erneut ausführen.</span>
+        <span>{r.message}. Der Scheduler <span className="font-mono">{r.scheduler}</span> stellt die Gruppe „{r.previous_group}“ wieder her
+          {r.revert_at && <> – Start um <span className="font-mono">{r.revert_at["start-time"]}</span> Router-Zeit (<span className="font-mono">{r.revert_at["start-date"]}</span>), bei Bedarf jede Minute erneut</>}.
+          Danach den Selbsttest erneut ausführen.</span>
         <span><Button size="sm" variant="secondary" icon="activity" disabled={busy} onClick={onRetest}>Selbsttest erneut ausführen</Button></span>
         <details className="text-xs">
           <summary className="cursor-pointer text-fg2">Letzte Rückfallebene, falls die automatische Rückstellung nicht greift</summary>

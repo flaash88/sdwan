@@ -29,10 +29,10 @@ from app.routeros.schema import (
     PathSpec,
     policy_set,
 )
+from app.routeros.util import parse_router_datetime
 
 RANK = {"ok": 0, "warn": 1, "error": 2}
 CONNECTION_SAMPLE_LIMIT = 5000  # Verbindungstabelle nur bis zu dieser Größe für die Feldprüfung lesen
-_MONTHS = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"), start=1)}
 
 
 def worst(*states: str) -> str:
@@ -109,17 +109,10 @@ def _check(key: str, label: str, status: str, detail: str, **extra: Any) -> dict
 
 def _parse_clock(row: dict[str, Any]) -> dt.datetime | None:
     """RouterOS liefert ``date`` als ``sep/25/2026`` (bis 7.9) oder ``2026-09-25`` (ab 7.10), dazu ``gmt-offset``."""
-    date, clock = str(row.get("date", "")), str(row.get("time", ""))
-    m = re.match(r"^([a-z]{3})/(\d{1,2})/(\d{4})$", date.lower())
-    try:
-        if m:
-            y, mo, d = int(m.group(3)), _MONTHS[m.group(1)], int(m.group(2))
-        else:
-            y, mo, d = (int(x) for x in date.split("-"))
-        hh, mm, ss = (int(x) for x in clock.split(":")[:3])
-        local = dt.datetime(y, mo, d, hh, mm, ss)
-    except (ValueError, KeyError):
+    parsed = parse_router_datetime(row.get("date"), row.get("time"))
+    if parsed is None:
         return None
+    local = parsed[0]
     off = str(row.get("gmt-offset", "+00:00"))
     om = re.match(r"^([+-])(\d{1,2}):(\d{2})$", off)
     delta = dt.timedelta(hours=int(om.group(2)), minutes=int(om.group(3))) * (1 if om.group(1) == "+" else -1) if om else dt.timedelta()

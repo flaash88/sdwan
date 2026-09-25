@@ -277,8 +277,17 @@ class SimRouter:
         return out
 
     def _clock(self, _p: dict[str, Any]) -> list[dict[str, Any]]:
-        t = time.gmtime(time.time() + self.clock_skew_s)
-        return [{"time": time.strftime("%H:%M:%S", t), "date": time.strftime("%Y-%m-%d", t), "time-zone-name": "UTC", "gmt-offset": "+00:00"}]
+        from app.routeros.util import format_router_date, format_router_time
+
+        # Tests: clock_local = feste lokale Router-Zeit, clock_format = "iso" (ab 7.10) | "legacy" (jan/02/2026)
+        local = getattr(self, "clock_local", None)
+        if local is None:
+            import datetime as _dt
+
+            local = _dt.datetime.utcfromtimestamp(time.time() + self.clock_skew_s)
+        fmt = getattr(self, "clock_format", "iso")
+        return [{"time": format_router_time(local), "date": format_router_date(local, fmt),
+                 "time-zone-name": getattr(self, "clock_tz", "UTC"), "gmt-offset": getattr(self, "clock_gmt_offset", "+00:00")}]
 
     def _health(self, _p: dict[str, Any]) -> list[dict[str, Any]]:
         # RouterOS-7-Format; virtuelle Router (CHR) liefern keine Sensorwerte

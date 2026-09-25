@@ -3,8 +3,9 @@
 Ablauf mit Totmannschaltung – die Plattform darf sich dabei nicht selbst aussperren:
 
 1. Vorherige Gruppe des API-Benutzers auslesen (nicht fest ``full`` annehmen).
-2. Scheduler ``sdwan-revert-api-group`` anlegen: läuft einmal nach ca. 3 Minuten, stellt den Benutzer auf die
-   vorherige Gruppe zurück und entfernt sich selbst.
+2. Router-Uhr lesen und Scheduler ``sdwan-revert-api-group`` mit festem Start (``start-date``/``start-time`` =
+   Router-Zeit + 3 min) und ``interval=1m`` als Sicherheitsnetz anlegen. Er stellt den Benutzer auf die vorherige
+   Gruppe zurück und entfernt sich danach selbst.
 3. Gruppe ``sdwan-api`` anlegen/aktualisieren und zurücklesen. Stimmen die Policies nicht exakt, wird nicht
    umgestellt (Scheduler wird entfernt).
 4. Benutzer umstellen, alte Verbindung schließen.
@@ -14,6 +15,7 @@ Ablauf mit Totmannschaltung – die Plattform darf sich dabei nicht selbst aussp
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 from typing import Any
 
@@ -21,20 +23,39 @@ from app.models import Device
 from app.routeros import RouterOSError, connect_device
 from app.routeros.client import DeviceAPI
 from app.routeros.schema import API_GROUP, API_POLICIES, policy_set
+from app.routeros.util import format_router_date, format_router_time, parse_router_datetime
 
 log = logging.getLogger(__name__)
 
 REVERT_SCHEDULER = "sdwan-revert-api-group"
-# Annahme, im Labor zu verifizieren: ein Scheduler mit interval=3m und ohne start-time läuft zum ersten Mal
-# ca. 3 Minuten nach dem Anlegen (next-run in /system scheduler print prüfen). Das vermeidet die
-# versionsabhängigen Datumsformate von start-date. Er entfernt sich beim ersten Lauf selbst.
-REVERT_AFTER = "3m"
+# Fester Startzeitpunkt = Router-Uhr + 3 min (start-date/start-time explizit, im Datumsformat des Routers).
+# interval=1m ist das Sicherheitsnetz: wird der erste Lauf verpasst oder schlägt das Zurückstellen fehl,
+# läuft der Scheduler eine Minute später erneut – bis er sich nach erfolgreichem Zurückstellen selbst entfernt.
+REVERT_DELAY = dt.timedelta(minutes=3)
+REVERT_AFTER = "3m"  # Anzeige in der Oberfläche
+REVERT_RETRY = "1m"
 # Rechte, mit denen das on-event-Skript läuft (Benutzer ändern, Scheduler entfernen)
 REVERT_POLICY = "read,write,policy,test"
 
 
 def revert_script(user: str, group: str) -> str:
+    # Reihenfolge wichtig: erst Gruppe zurückstellen, dann Scheduler entfernen. Bricht der erste Befehl ab,
+    # bleibt der Scheduler stehen und versucht es nach REVERT_RETRY erneut.
     return f'/user set [find name="{user}"] group="{group}"; /system scheduler remove [find name="{REVERT_SCHEDULER}"]'
+
+
+def revert_start(clock: dict[str, Any]) -> dict[str, str]:
+    """``/system clock``-Zeile → ``start-date``/``start-time`` = Router-Zeit + 3 min.
+
+    Rechnet mit ``datetime`` (Tages-, Monats- und Jahreswechsel korrekt) in der lokalen Zeit des Routers –
+    der Scheduler wertet start-date/start-time ebenfalls in dieser Zeit aus. Das Datum geht im selben Format
+    zurück, in dem der Router es liefert (``jan/02/2026`` bis 7.9, ``2026-01-02`` ab 7.10)."""
+    parsed = parse_router_datetime(clock.get("date"), clock.get("time"))
+    if parsed is None:
+        raise RouterOSError(f"Router-Uhrzeit nicht lesbar (date={clock.get('date')!r}, time={clock.get('time')!r})")
+    now, fmt = parsed
+    at = now + REVERT_DELAY
+    return {"start-date": format_router_date(at, fmt), "start-time": format_router_time(at)}
 
 
 async def ensure_group(api: DeviceAPI, name: str, policies: tuple[str, ...], comment: str) -> bool:
@@ -69,9 +90,12 @@ async def restrict_api_user(device: Device) -> dict[str, Any]:
         if previous == API_GROUP:
             ok = await ensure_group(api, API_GROUP, API_POLICIES, "sdwan:mgmt")
             return {"status": "unchanged" if ok else "readback_mismatch", "previous_group": previous}
+        clock = (await api.call("/system/clock/print") or [{}])[0]
+        start = revert_start(clock)  # vor jeder Änderung: ist die Uhr nicht lesbar, wird nichts umgestellt
         await _remove_scheduler(api)
-        await api.add("/system/scheduler", name=REVERT_SCHEDULER, interval=REVERT_AFTER, policy=REVERT_POLICY,
-                      **{"on-event": revert_script(user, previous)}, comment="sdwan:mgmt Totmannschaltung")
+        await api.add("/system/scheduler", name=REVERT_SCHEDULER, **start, interval=REVERT_RETRY, policy=REVERT_POLICY,
+                      **{"on-event": revert_script(user, previous)},
+                      comment=f"sdwan:mgmt Totmannschaltung (Router-Zeitzone {clock.get('time-zone-name') or '?'})")
         if not await ensure_group(api, API_GROUP, API_POLICIES, "sdwan:mgmt"):
             await _remove_scheduler(api)  # nichts umgestellt -> Totmannschaltung überflüssig
             return {"status": "readback_mismatch", "previous_group": previous,
@@ -83,16 +107,16 @@ async def restrict_api_user(device: Device) -> dict[str, Any]:
         async with connect_device(device) as api:
             await api.call("/system/identity/print")
     except RouterOSError as exc:
-        return {"status": "reverting", "previous_group": previous, "selftest": None,
+        return {"status": "reverting", "previous_group": previous, "selftest": None, "revert_at": start,
                 "message": f"Neue Verbindung nach der Umstellung fehlgeschlagen: {exc}"}
     selftest = await run_selftest(device)
     if selftest["status"] == "error":
-        return {"status": "reverting", "previous_group": previous, "selftest": selftest,
+        return {"status": "reverting", "previous_group": previous, "selftest": selftest, "revert_at": start,
                 "message": "Selbsttest nach der Umstellung mit Fehlern"}
     try:
         async with connect_device(device) as api:
             await _remove_scheduler(api)
     except RouterOSError as exc:
-        return {"status": "reverting", "previous_group": previous, "selftest": selftest,
+        return {"status": "reverting", "previous_group": previous, "selftest": selftest, "revert_at": start,
                 "message": f"Totmannschaltung konnte nicht entfernt werden: {exc}"}
     return {"status": "ok", "previous_group": previous, "selftest": selftest}

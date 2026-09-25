@@ -473,8 +473,10 @@ Die Checkliste für den Test steht in `docs/LABORTEST.md`.
   Techniker, Audit `device.restrict_api_user`) stellt mit **Totmannschaltung** um
   (`services/api_rights.py`):
   1. Vorherige Gruppe lesen.
-  2. Scheduler `sdwan-revert-api-group` anlegen (`interval=3m`; `on-event` stellt die vorherige Gruppe
-     wieder her und entfernt den Scheduler).
+  2. `/system clock` lesen und Scheduler `sdwan-revert-api-group` mit **festem Start** anlegen:
+     `start-date`/`start-time` = Router-Zeit + 3 min, dazu `interval=1m` als Sicherheitsnetz.
+     `on-event` stellt erst die vorherige Gruppe wieder her und entfernt danach den Scheduler. Schlägt das
+     Zurückstellen fehl, läuft er nach einer Minute erneut. Ist die Uhr nicht lesbar, wird nichts umgestellt.
   3. Gruppe anlegen/aktualisieren und zurücklesen. Weichen die Policies ab, wird nicht umgestellt und
      der Scheduler entfernt.
   4. Benutzer umstellen.
@@ -484,15 +486,18 @@ Die Checkliste für den Test steht in `docs/LABORTEST.md`.
      letzte Rückfallebene darunter.
 * **Fernzugriff:** Temporäre Benutzer liegen in der Gruppe `REMOTE_GROUP = "sdwan-remote"` mit
   `REMOTE_POLICIES` (`ssh, read, write, test, winbox, web, reboot, sensitive`, bewusst ohne `policy`,
-  `api` und `local` – letzteres ist nur der Konsolen-Login). Die Gruppe wird bei jeder Sitzung angelegt bzw. aktualisiert und zurückgelesen. Scheitert
+  `api` und `local` – letzteres ist nur der Konsolen-Login). Die Gruppe wird bei jeder Sitzung angelegt
+  bzw. aktualisiert und zurückgelesen. Scheitert
   das, bricht die Sitzung mit einer klaren Meldung ab; es gibt kein Ausweichen auf `full`.
   `REMOTE_POLICIES ⊆ API_POLICIES` sichert ein Test (`tests/test_policies.py`) ab.
 * **Annahme, im Labor zu verifizieren:** RouterOS lehnt das Anlegen einer Gruppe mit Policies ab, die der
   anlegende Benutzer selbst nicht hat. Der Simulator bildet das nach (`_check_group_rights`, abschaltbar
   über `SIMULATOR_ENFORCE_GROUP_RIGHTS=false`).
-* **Annahme, im Labor zu verifizieren:** Ein Scheduler mit `interval=3m` ohne `start-time` läuft zum
-  ersten Mal ca. 3 Minuten nach dem Anlegen. So entfallen die versionsabhängigen Datumsformate von
-  `start-date`.
+* **Zeitrechnung für den Scheduler** (`api_rights.revert_start`, `routeros/util.py`): Die Rechnung läuft
+  mit `datetime` in der lokalen Zeit des Routers, in der er auch `start-date`/`start-time` auswertet.
+  Tages-, Monats- und Jahreswechsel sowie Schaltjahre sind damit korrekt. Das Datum geht im Format zurück,
+  in dem der Router es liefert (`jan/02/2026` bis 7.9, `2026-01-02` ab 7.10). Selbsttest und
+  Totmannschaltung nutzen denselben Parser (`parse_router_datetime`).
 
 ### Fernzugriff: Dienstzustand wiederherstellen
 

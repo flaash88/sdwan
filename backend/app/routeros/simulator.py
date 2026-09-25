@@ -62,6 +62,7 @@ class SimRouter:
         self.down_hosts: set[str] = set()  # Tests: Netwatch-Ziele, die als "down" gelten
         self.hang_hosts: set[str] = set()  # Tests: /ping auf diese Ziele antwortet nicht (hängt)
         self.ping_log: list[dict[str, Any]] = []  # Tests: Parameter der letzten Pings
+        self.drop_policies: set[str] = set()  # Tests: /user/group add/set übernimmt diese Policies nicht (Rücklesen weicht ab)
         self.vrrp_master: set[str] = set()  # Namen der VRRP-Interfaces, die gerade Master sind
         self.counters: dict[str, list[int]] = {}
         for i, name in enumerate(["ether1", "ether2", "ether3", "ether4", "bridge", "sdwan-mgmt"]):
@@ -169,6 +170,8 @@ class SimRouter:
         return handler(params)
 
     def _table_op(self, path: str, action: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+        if path == "/user/group" and action in ("add", "set") and "policy" in params and self.drop_policies:
+            params["policy"] = ",".join(p for p in str(params["policy"]).split(",") if p not in self.drop_policies)
         if action == "print":
             rows = [dict(r) for r in self.tables[path]]
             if "count-only" in params:
@@ -281,6 +284,29 @@ class SimRouter:
             return []
         return [{"name": "cpu-temperature", "value": "47", "type": "C"}, {"name": "voltage", "value": "24.1", "type": "V"}]
 
+    def fire_scheduler(self, name: str) -> None:
+        """Tests: führt einen Scheduler-Eintrag aus. Der Simulator versteht nur die Befehle, die die Plattform
+        selbst in Scheduler schreibt (``/user set … group=…`` und ``/system scheduler remove …``)."""
+        import re
+
+        row = next((r for r in self.tables["/system/scheduler"] if r.get("name") == name), None)
+        if row is None:
+            raise RouterOSError(f"scheduler {name} nicht vorhanden")
+        for cmd in str(row.get("on-event", "")).split(";"):
+            cmd = cmd.strip()
+            m = re.match(r'^/user set \[find name="([^"]+)"\] group="([^"]+)"$', cmd)
+            if m:
+                for u in self.tables["/user"]:
+                    if u.get("name") == m.group(1):
+                        u["group"] = m.group(2)
+                continue
+            m = re.match(r'^/system scheduler remove \[find name="([^"]+)"\]$', cmd)
+            if m:
+                self.tables["/system/scheduler"] = [r for r in self.tables["/system/scheduler"] if r.get("name") != m.group(1)]
+                continue
+            if cmd:
+                raise RouterOSError(f"Simulator kennt den Scheduler-Befehl nicht: {cmd}")
+
     def _reboot(self, _p: dict[str, Any]) -> list[dict[str, Any]]:
         self.boot = time.time()
         return []
@@ -338,8 +364,12 @@ def _seed_extras(r: SimRouter) -> None:
         for name, pol in (("read", "local,telnet,ssh,reboot,read,test,winbox,password,web,sniff,sensitive,api,romon,rest-api,!ftp,!write,!policy"),
                           ("full", "local,telnet,ssh,ftp,reboot,read,write,policy,test,winbox,password,web,sniff,sensitive,api,romon,rest-api")):
             r._insert("/user/group", {"name": name, "policy": pol})
+    from app.routeros.schema import API_GROUP, API_POLICIES
+
+    if not any(g.get("name") == API_GROUP for g in r.tables["/user/group"]):  # Zustand nach dem Onboarding-Skript
+        r._insert("/user/group", {"name": API_GROUP, "policy": ",".join(API_POLICIES), "comment": "sdwan:mgmt"})
     if not any(u.get("name") == s.routeros_api_user for u in r.tables["/user"]):
-        r._insert("/user", {"name": s.routeros_api_user, "group": "full", "address": f"{s.wg_hub_ip}/32", "comment": "sdwan:mgmt"})
+        r._insert("/user", {"name": s.routeros_api_user, "group": API_GROUP, "address": f"{s.wg_hub_ip}/32", "comment": "sdwan:mgmt"})
     if not any(p.get("comment") == "sdwan:hub" for p in r.tables["/interface/wireguard/peers"]):
         r._insert("/interface/wireguard/peers", {"interface": s.wg_device_interface, "public-key": _fake_key("hub"),
                                                  "allowed-address": f"{s.wg_hub_ip}/32", "comment": "sdwan:hub"})

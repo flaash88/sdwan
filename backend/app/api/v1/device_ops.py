@@ -22,6 +22,16 @@ def _selftest_out(t: DeviceSelftest | None) -> dict | None:
     return {"status": t.status, "ran_at": t.ran_at, "ran_by": t.ran_by, "duration_ms": t.duration_ms, **t.result}
 
 
+async def _store_selftest(ctx: Ctx, dev: Device, res: dict) -> DeviceSelftest:
+    t = (await ctx.db.execute(select(DeviceSelftest).where(DeviceSelftest.device_id == dev.id))).scalar_one_or_none()
+    if t is None:
+        t = DeviceSelftest(tenant_id=dev.tenant_id, device_id=dev.id)
+        ctx.db.add(t)
+    t.status, t.duration_ms, t.ran_at, t.ran_by = res["status"], res["duration_ms"], utcnow(), ctx.user.email
+    t.result = {k: v for k, v in res.items() if k not in ("status", "duration_ms")}
+    return t
+
+
 @router.get("/{device_id}/selftest")
 async def get_selftest(device_id: uuid.UUID, ctx: Ctx = ReadCtx) -> dict | None:
     dev = await get_or_404(ctx.db, Device, device_id, "Device")
@@ -38,16 +48,37 @@ async def run_selftest_endpoint(device_id: uuid.UUID, ctx: Ctx = TechCtx) -> dic
     if dev.pairing_status != PairingStatus.paired:
         raise HTTPException(status.HTTP_409_CONFLICT, "Gerät ist nicht verbunden")
     res = await run_selftest(dev)
-    t = (await ctx.db.execute(select(DeviceSelftest).where(DeviceSelftest.device_id == dev.id))).scalar_one_or_none()
-    if t is None:
-        t = DeviceSelftest(tenant_id=dev.tenant_id, device_id=dev.id)
-        ctx.db.add(t)
-    t.status, t.duration_ms, t.ran_at, t.ran_by = res["status"], res["duration_ms"], utcnow(), ctx.user.email
-    t.result = {k: v for k, v in res.items() if k not in ("status", "duration_ms")}
+    t = await _store_selftest(ctx, dev, res)
     await ctx.audit("device.selftest", target_type="device", target_id=dev.id, success=res["status"] != "error",
                     details={"status": res["status"], "summary": res.get("summary")})
     await ctx.db.commit()
     return _selftest_out(t)
+
+
+@router.post("/{device_id}/restrict-api-user")
+async def restrict_api_user_endpoint(device_id: uuid.UUID, ctx: Ctx = TechCtx) -> dict:
+    """API-Benutzer auf die eigene Gruppe umstellen – mit Totmannschaltung (siehe services/api_rights.py)."""
+    from app.routeros import RouterOSError
+    from app.config import get_settings
+    from app.services.api_rights import REVERT_AFTER, REVERT_SCHEDULER, restrict_api_user
+
+    dev = await get_or_404(ctx.db, Device, device_id, "Device")
+    if dev.pairing_status != PairingStatus.paired:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Gerät ist nicht verbunden")
+    try:
+        res = await restrict_api_user(dev)
+    except RouterOSError as exc:
+        await ctx.audit("device.restrict_api_user", target_type="device", target_id=dev.id, success=False, details={"error": str(exc)})
+        await ctx.db.commit()
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Router nicht erreichbar: {exc}") from exc
+    selftest = res.pop("selftest", None)
+    out: dict = {**res, "scheduler": REVERT_SCHEDULER, "revert_after": REVERT_AFTER, "api_user": get_settings().routeros_api_user}
+    if selftest is not None:
+        out["selftest"] = _selftest_out(await _store_selftest(ctx, dev, selftest))
+    await ctx.audit("device.restrict_api_user", target_type="device", target_id=dev.id, success=res["status"] in ("ok", "unchanged"),
+                    details={k: v for k, v in res.items()})
+    await ctx.db.commit()
+    return out
 
 
 # Verbindungsabbruch direkt nach /system/reboot ist erwartet (der Router trennt die API-Sitzung)

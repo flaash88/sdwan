@@ -20,6 +20,7 @@ import re
 
 from app.config import get_settings
 from app.models import Device
+from app.routeros.schema import API_GROUP, API_POLICIES
 
 _SAFE = re.compile(r"^[A-Za-z0-9._:/+=@, -]*$")
 
@@ -93,9 +94,15 @@ def pair_response_script(device: Device, hub_public_key: str, api_password: str,
 /interface wireguard peers remove [find comment="sdwan:hub"]
 /interface wireguard peers add interface=$iface public-key={_q(hub_public_key)} endpoint-address={_q(s.wg_hub_endpoint)} endpoint-port={s.wg_hub_port} allowed-address={hub_ip}/32 persistent-keepalive=25s comment="sdwan:hub"
 
+# Eigene Gruppe mit genau den nötigen Rechten (nie "full"); vorhandene Gruppe wird nur aktualisiert
+:if ([:len [/user group find name={_q(API_GROUP)}]] = 0) do={{
+  /user group add name={_q(API_GROUP)} policy={",".join(API_POLICIES)} comment="sdwan:mgmt"
+}} else={{
+  /user group set [find name={_q(API_GROUP)}] policy={",".join(API_POLICIES)}
+}}
 # API-Benutzer nur aus dem Tunnel erreichbar
 /user remove [find name={_q(s.routeros_api_user)}]
-/user add name={_q(s.routeros_api_user)} group=full password={_q(api_password)} address={hub_ip}/32 comment="sdwan:mgmt"
+/user add name={_q(s.routeros_api_user)} group={_q(API_GROUP)} password={_q(api_password)} address={hub_ip}/32 comment="sdwan:mgmt"
 /ip service set api disabled=no address={hub_ip}/32
 
 # Firewall: Management-Zugriff ausschließlich vom Hub über das Tunnel-Interface

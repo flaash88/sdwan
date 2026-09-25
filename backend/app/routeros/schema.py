@@ -90,9 +90,37 @@ PATH_SPECS: tuple[PathSpec, ...] = (
 
 SPEC_BY_KEY = {s.key: s for s in PATH_SPECS}
 
-# Benötigte Policies der API-Benutzergruppe: api/read/write für alle Funktionen, policy für temporäre
-# Fernzugriffs-Benutzer, reboot für Neustart/Firmware, test für Ping, ssh für den Backup-Export.
-REQUIRED_POLICIES = ("api", "read", "write", "policy", "reboot", "test", "ssh")
-# Optional: ohne 'sensitive' enthält der Export keine Schlüssel/Passwörter (Backup für Wiederherstellung unvollständig)
-OPTIONAL_POLICIES = ("sensitive",)
+# ----------------------------------------------------------------------------- Benutzergruppen
+# Einzige Definition der Policies. Onboarding-Skript, „Rechte einschränken“, Fernzugriff und Selbsttest
+# lesen diese Werte; nichts davon ist an anderer Stelle hart kodiert.
+API_GROUP = "sdwan-api"
+# Kern-Policies: ohne sie funktioniert ein Teil der Plattform nicht (Selbsttest rot)
+API_CORE_POLICIES: dict[str, str] = {
+    "api": "Zugriff der Plattform",
+    "read": "alle Anzeigen",
+    "write": "Konfiguration schreiben",
+    "policy": "temporäre Fernzugriffs-Benutzer und Gruppen anlegen",
+    "reboot": "Neustart und Firmware-Update",
+    "test": "Ping (Leitungstest, VRRP-Gegenstelle)",
+    "ssh": "Backup-Export",
+}
+# Empfohlen: fehlen sie, ist der Selbsttest orange
+API_RECOMMENDED_POLICIES: dict[str, str] = {
+    "sensitive": "ohne 'sensitive' fehlen Schlüssel/Passwörter im Export – das Backup ist für eine Wiederherstellung unvollständig",
+    "winbox": "ohne 'winbox' kann die Gruppe für Fernzugriffs-Benutzer nicht angelegt werden – Fernzugriff funktioniert ohne diese Policies nicht",
+    "web": "ohne 'web' kann die Gruppe für Fernzugriffs-Benutzer nicht angelegt werden – Fernzugriff funktioniert ohne diese Policies nicht",
+}
+API_POLICIES: tuple[str, ...] = ("read", "write", "api", "policy", "reboot", "test", "ssh", "sensitive", "winbox", "web")
+assert set(API_POLICIES) == set(API_CORE_POLICIES) | set(API_RECOMMENDED_POLICIES)
+
+# Gruppe der temporären Fernzugriffs-Benutzer: bewusst ohne 'policy' (keine Benutzerverwaltung) und ohne 'api'
+REMOTE_GROUP = "sdwan-remote"
+REMOTE_POLICIES: tuple[str, ...] = ("local", "ssh", "read", "write", "test", "winbox", "web", "reboot", "sensitive")
+
+
+def policy_set(value: object) -> set[str]:
+    """RouterOS-Policy-Liste (``read,write,!ftp,…``) → Menge der aktiven Policies."""
+    return {p.strip() for p in str(value or "").split(",") if p.strip() and not p.strip().startswith("!")}
+
+
 KNOWN_ARCHITECTURES = ("arm", "arm64", "mipsbe", "mmips", "smips", "tile", "ppc", "x86", "x86_64")

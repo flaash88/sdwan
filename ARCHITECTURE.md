@@ -452,12 +452,39 @@ Die Checkliste für den Test steht in `docs/LABORTEST.md`.
   dem Hinweis „Feldprüfung übersprungen“). Pflichtfelder müssen in jeder Zeile stehen, weil RouterOS leere
   Felder (z. B. `comment`) weglässt; diese sind deshalb optional. Gesamtstatus = schlechtester Einzelwert.
 * **Zusatzprüfungen:** RouterOS ≥ 7, Architektur bekannt, Policies der Gruppe des API-Benutzers
-  (Pflicht: `api, read, write, policy, reboot, test, ssh`; `sensitive` fehlt → orange, weil der Export
-  dann keine Schlüssel/Passwörter enthält), `/ip service` `api` und `ssh` aktiv und für die Hub-Adresse
-  erlaubt (sonst rot, der Export läuft über SSH), Uhrzeitabweichung (> 60 s orange, > 300 s rot).
+  (gegen `API_CORE_POLICIES`/`API_RECOMMENDED_POLICIES`, siehe „Rechte und Gruppen“), `/ip service`
+  `api` und `ssh` aktiv und für die Hub-Adresse erlaubt (sonst rot, der Export läuft über SSH),
+  Uhrzeitabweichung (> 60 s orange, > 300 s rot).
   `latest-version` ist erst nach einer Update-Prüfung befüllt und daher nur ein Hinweis.
 * **Speicherung:** letzter Lauf je Gerät in `device_selftests` (eigene Tabelle, damit der Poller ihn nie
   überschreibt). Die Oberfläche zeigt die Karte „Selbsttest“ in der Übersicht mit JSON-Export.
+
+### Rechte und Gruppen
+
+* **Eine Definition:** `routeros/schema.py` enthält `API_GROUP = "sdwan-api"` mit `API_POLICIES`
+  (`read, write, api, policy, reboot, test, ssh, sensitive, winbox, web`), aufgeteilt in Kern-Policies
+  (fehlt eine → Selbsttest rot) und empfohlene (`sensitive`, `winbox`, `web` → orange mit Begründung).
+  Onboarding-Skript, Selbsttest und „Rechte einschränken“ lesen nur diese Werte.
+* **Onboarding/ZTP:** Die Pairing-Antwort legt `sdwan-api` an bzw. setzt bei vorhandener Gruppe nur die
+  Policies und legt den API-Benutzer in dieser Gruppe an. `full` wird nicht mehr verwendet. ZTP holt
+  dasselbe Skript und ist damit abgedeckt.
+* **Altgeräte** (API-Benutzer in `full`) werden nicht automatisch umgestellt. Der Selbsttest zeigt einen
+  orangen Hinweis, und der Button „Rechte einschränken“ (`POST /devices/{id}/restrict-api-user`,
+  Techniker, Audit `device.restrict_api_user`) stellt mit **Totmannschaltung** um
+  (`services/api_rights.py`):
+  1. Vorherige Gruppe lesen.
+  2. Scheduler `sdwan-revert-api-group` anlegen (`interval=3m`; `on-event` stellt die vorherige Gruppe
+     wieder her und entfernt den Scheduler).
+  3. Gruppe anlegen/aktualisieren und zurücklesen. Weichen die Policies ab, wird nicht umgestellt und
+     der Scheduler entfernt.
+  4. Benutzer umstellen.
+  5. **Neue** Verbindung aufbauen und den Selbsttest ausführen.
+  6. Nur wenn beides klappt (Selbsttest nicht rot), den Scheduler löschen. Sonst zeigt die Oberfläche
+     „Rechte werden in ca. 3 Minuten automatisch zurückgestellt“. Der Terminal-Befehl steht nur als
+     letzte Rückfallebene darunter.
+* **Annahme, im Labor zu verifizieren:** Ein Scheduler mit `interval=3m` ohne `start-time` läuft zum
+  ersten Mal ca. 3 Minuten nach dem Anlegen. So entfallen die versionsabhängigen Datumsformate von
+  `start-date`.
 
 ### Neustart und Alarm-Unterdrückung
 
@@ -552,7 +579,7 @@ Anzeige kommt aus der API. Was das Backend nicht liefert, fehlt in der Oberfläc
   * `GET /dashboard/fleet-state`: aktiver WAN, VRRP-Rolle und Backup-Betrieb je Gerät.
   * `GET /devices/{id}/events`: state_log für Rollenverlauf, Ereignisse und Failover-Markierungen.
   * `GET /devices/{id}/wan/routes`: verwaltete `sdwan:wan`-Routen live vom Router.
-  * Phase 13: `GET/POST /devices/{id}/selftest`, `POST /devices/{id}/reboot`,
+  * Phase 13: `GET/POST /devices/{id}/selftest`, `POST /devices/{id}/reboot`, `POST /devices/{id}/restrict-api-user`,
     `GET /devices/{id}/addresses`, `POST /devices/{id}/vrrp/{inst}/ping`.
 
   Bestehende Endpunkte blieben unverändert.

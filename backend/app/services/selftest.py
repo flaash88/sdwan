@@ -20,7 +20,15 @@ from app.db import utcnow
 from app.models import Device
 from app.routeros import RouterOSError, connect_device
 from app.routeros.client import DeviceAPI
-from app.routeros.schema import KNOWN_ARCHITECTURES, OPTIONAL_POLICIES, PATH_SPECS, REQUIRED_POLICIES, PathSpec
+from app.routeros.schema import (
+    API_CORE_POLICIES,
+    API_GROUP,
+    API_RECOMMENDED_POLICIES,
+    KNOWN_ARCHITECTURES,
+    PATH_SPECS,
+    PathSpec,
+    policy_set,
+)
 
 RANK = {"ok": 0, "warn": 1, "error": 2}
 CONNECTION_SAMPLE_LIMIT = 5000  # Verbindungstabelle nur bis zu dieser Größe für die Feldprüfung lesen
@@ -153,19 +161,24 @@ def extra_checks(raw: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
         out.append(_check("rights", "Rechte API-Benutzer", "error", f"Benutzer '{s.routeros_api_user}' nicht gefunden"))
     else:
         group = next((g for g in raw.get("user_group") or [] if g.get("name") == user.get("group")), None)
-        pol = {p for p in str((group or {}).get("policy", "")).split(",") if p and not p.startswith("!")}
-        missing = [p for p in REQUIRED_POLICIES if p not in pol]
-        opt = [p for p in OPTIONAL_POLICIES if p not in pol]
+        pol = policy_set((group or {}).get("policy"))
+        missing = [p for p in API_CORE_POLICIES if p not in pol]
+        opt = [p for p in API_RECOMMENDED_POLICIES if p not in pol]
+        label = "Rechte API-Benutzer"
         if group is None:
-            out.append(_check("rights", "Rechte API-Benutzer", "error", f"Gruppe '{user.get('group')}' nicht lesbar"))
+            out.append(_check("rights", label, "error", f"Gruppe '{user.get('group')}' nicht lesbar"))
         elif missing:
-            out.append(_check("rights", "Rechte API-Benutzer", "error", f"Gruppe '{group['name']}' ohne: {', '.join(missing)}", missing=missing))
+            out.append(_check("rights", label, "error", f"Gruppe '{group['name']}' ohne: "
+                              + "; ".join(f"{p} ({API_CORE_POLICIES[p]})" for p in missing), missing=missing))
+        elif group["name"] == "full":
+            # Altgeräte (Onboarding vor der eigenen Gruppe): keine automatische Umstellung, nur Hinweis + Button
+            out.append(_check("rights", label, "warn", f"API-Benutzer in Gruppe full – Umstellung empfohlen (Gruppe '{API_GROUP}' "
+                              "mit genau den nötigen Rechten)", action="restrict_api_user", group="full"))
         elif opt:
-            out.append(_check("rights", "Rechte API-Benutzer", "warn",
-                              f"Gruppe '{group['name']}' ohne 'sensitive' – im Export fehlen Schlüssel/Passwörter, das Backup ist für eine "
-                              "Wiederherstellung unvollständig", missing=opt))
+            out.append(_check("rights", label, "warn", f"Gruppe '{group['name']}' ohne: "
+                              + "; ".join(f"{p} – {API_RECOMMENDED_POLICIES[p]}" for p in opt), missing=opt, group=group["name"]))
         else:
-            out.append(_check("rights", "Rechte API-Benutzer", "ok", f"Gruppe '{group['name']}' hat alle benötigten Rechte"))
+            out.append(_check("rights", label, "ok", f"Gruppe '{group['name']}' hat alle benötigten Rechte", group=group["name"]))
 
     # Dienste: API für die Plattform, SSH für den Backup-Export – beide aus dem Management-Tunnel erreichbar
     services = {str(r.get("name")): r for r in raw.get("ip_service") or []}

@@ -6,18 +6,65 @@ import { useMeta } from "../lib/meta";
 import type { Device } from "../lib/types";
 import { useFetch } from "../lib/useFetch";
 import { Icon } from "./Icon";
-import { Button, Card, EmptyState, ErrorBox, Loading, Pill, Segment, cls, useAction, type Tone } from "./ui";
+import { Button, Card, CodeBlock, EmptyState, ErrorBox, Loading, Modal, Notice, Pill, Segment, cls, useAction, type Tone } from "./ui";
 
 type St = "ok" | "warn" | "error";
 interface Check {
   key: string; label: string; kind: "path" | "check"; status: St; command?: string; used_by?: string; ms?: number; rows?: number; count?: number | null;
-  reachable?: boolean; missing?: string[]; missing_optional?: string[]; notes?: string[]; error?: string | null; expected?: string[]; sample_fields?: string[]; value?: unknown;
+  reachable?: boolean; missing?: string[]; action?: string; group?: string; missing_optional?: string[]; notes?: string[]; error?: string | null; expected?: string[]; sample_fields?: string[]; value?: unknown;
 }
 interface Selftest { status: St; ran_at: string; ran_by: string | null; duration_ms: number; checks: Check[]; summary?: Record<St, number> }
 
 const TONE: Record<St, [string, Tone, "checkCircle" | "alert" | "xCircle"]> = {
   ok: ["OK", "green", "checkCircle"], warn: ["Warnung", "orange", "alert"], error: ["Fehler", "red", "xCircle"],
 };
+interface RestrictResult {
+  status: "ok" | "unchanged" | "readback_mismatch" | "reverting"; previous_group: string; message?: string;
+  scheduler: string; revert_after: string; api_user: string; selftest?: Selftest;
+}
+
+/** „Rechte einschränken“: Bestätigung und Ergebnis der Umstellung mit Totmannschaltung. */
+function RestrictDialog({ device, onClose, onDone }: { device: Device; onClose: () => void; onDone: (r: RestrictResult) => void }) {
+  const { busy, error, run } = useAction();
+  return (
+    <Modal open onClose={onClose} title="Rechte des API-Benutzers einschränken" subtitle={device.name}
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Abbrechen</Button>
+        <Button icon={busy ? "loader" : "shield"} disabled={busy}
+          onClick={() => void run(async () => { onDone(await api.post<RestrictResult>(`/devices/${device.id}/restrict-api-user`)); onClose(); })}>
+          {busy ? "Stelle um …" : "Rechte einschränken"}</Button>
+      </>}>
+      <div className="flex flex-col gap-3">
+        <p>Der API-Benutzer wird von seiner bisherigen Gruppe auf die Gruppe <span className="font-mono">sdwan-api</span> mit genau den nötigen Rechten umgestellt.</p>
+        <Notice tone="blue" title="Totmannschaltung">
+          Vorher legt die Plattform auf dem Router einen Scheduler an, der die bisherige Gruppe nach ca. 3 Minuten automatisch wiederherstellt.
+          Er wird erst gelöscht, wenn eine neue Verbindung und der Selbsttest mit den neuen Rechten funktionieren.
+        </Notice>
+        <ErrorBox error={error} />
+      </div>
+    </Modal>
+  );
+}
+
+function RestrictNotice({ r, onRetest, busy }: { r: RestrictResult; onRetest: () => void; busy: boolean }) {
+  if (r.status === "ok" || r.status === "unchanged")
+    return <Notice tone="green" title="Rechte eingeschränkt">Der API-Benutzer ist in der Gruppe <span className="font-mono">sdwan-api</span>{r.status === "ok" ? `, vorher „${r.previous_group}“. Die Totmannschaltung wurde entfernt.` : "."}</Notice>;
+  if (r.status === "readback_mismatch")
+    return <Notice tone="red" title="Nicht umgestellt">{r.message ?? "Die Gruppe hat nach dem Anlegen nicht die erwarteten Policies."} Der Benutzer bleibt in „{r.previous_group}“.</Notice>;
+  return (
+    <Notice tone="orange" title={`Rechte werden in ca. ${r.revert_after.replace("m", " Minuten")} automatisch zurückgestellt`}>
+      <div className="flex flex-col gap-2">
+        <span>{r.message}. Der Scheduler <span className="font-mono">{r.scheduler}</span> stellt die Gruppe „{r.previous_group}“ wieder her. Danach den Selbsttest erneut ausführen.</span>
+        <span><Button size="sm" variant="secondary" icon="activity" disabled={busy} onClick={onRetest}>Selbsttest erneut ausführen</Button></span>
+        <details className="text-xs">
+          <summary className="cursor-pointer text-fg2">Letzte Rückfallebene, falls die automatische Rückstellung nicht greift</summary>
+          <div className="mt-2"><CodeBlock text={`/user set [find name="${r.api_user}"] group="${r.previous_group}"`} highlight={false} /></div>
+        </details>
+      </div>
+    </Notice>
+  );
+}
+
 const OVERALL: Record<St, string> = { ok: "Bestanden", warn: "Bestanden mit Warnungen", error: "Abweichungen gefunden" };
 
 function summaryLine(c: Check): string {
@@ -62,7 +109,11 @@ export default function SelftestCard({ device }: { device: Device }) {
   const last = useFetch<Selftest | null>(`/devices/${device.id}/selftest`);
   const [filter, setFilter] = useState<"issues" | "all">("issues");
   const { busy, error, run } = useAction();
+  const [restrictOpen, setRestrictOpen] = useState(false);
+  const [restrict, setRestrict] = useState<RestrictResult | null>(null);
   const t = last.data;
+  const rights = t?.checks.find((c) => c.key === "rights");
+  const runTest = () => void run(async () => { last.setData(await api.post<Selftest>(`/devices/${device.id}/selftest`)); });
   const exportJson = () => {
     if (!t) return;
     const payload = {
@@ -82,9 +133,21 @@ export default function SelftestCard({ device }: { device: Device }) {
       actions={<>
         {t && <Button size="sm" variant="secondary" icon="download" onClick={exportJson}>JSON</Button>}
         {can("technician") && <Button size="sm" icon={busy ? "loader" : "activity"} disabled={busy || device.status !== "online"}
-          onClick={() => void run(async () => { last.setData(await api.post<Selftest>(`/devices/${device.id}/selftest`)); })}>{busy ? "Läuft …" : "Selbsttest ausführen"}</Button>}
+          onClick={runTest}>{busy ? "Läuft …" : "Selbsttest ausführen"}</Button>}
       </>}>
       {error && <div className="px-4 pt-3"><ErrorBox error={error} /></div>}
+      {restrict && <div className="px-4 pt-3"><RestrictNotice r={restrict} onRetest={runTest} busy={busy} /></div>}
+      {!restrict && rights?.action === "restrict_api_user" && (
+        <div className="px-4 pt-3">
+          <Notice tone="orange" title="API-Benutzer in Gruppe full – Umstellung empfohlen">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="flex-1">Mit „Rechte einschränken“ erhält der Benutzer die Gruppe <span className="font-mono">sdwan-api</span> mit genau den nötigen Rechten. Die bisherige Gruppe wird automatisch wiederhergestellt, falls danach etwas nicht funktioniert.</span>
+              {can("technician") && <Button size="sm" icon="shield" disabled={device.status !== "online"} onClick={() => setRestrictOpen(true)}>Rechte einschränken</Button>}
+            </div>
+          </Notice>
+        </div>
+      )}
+      {restrictOpen && <RestrictDialog device={device} onClose={() => setRestrictOpen(false)} onDone={(r) => { setRestrict(r); if (r.selftest) last.setData(r.selftest); }} />}
       {last.data === null && !last.loading ? (
         <EmptyState compact title="Noch kein Selbsttest" text="Vor dem ersten Labortest ausführen: zeigt, ob der Router alle Pfade und Felder liefert, die die Plattform liest." />
       ) : !t ? <Loading rows={3} /> : (

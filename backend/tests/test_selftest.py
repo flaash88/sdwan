@@ -51,7 +51,7 @@ async def test_selftest_detects_deviations(client, msp, hub):
     rt.version = "6.49.10"
     rt.clock_skew_s = 600
     for g in rt.tables["/user/group"]:
-        if g["name"] == "full":
+        if g["name"] == "sdwan-api":
             g["policy"] = g["policy"].replace(",reboot", "").replace(",sensitive", "")
     for svc in rt.tables["/ip/service"]:
         if svc["name"] == "ssh":
@@ -89,7 +89,7 @@ async def test_selftest_sensitive_optional_and_update_hint(client, msp, hub):
     h, dev = await _dev(client, msp)
     rt = get_router(dev["tunnel_ip"])
     for g in rt.tables["/user/group"]:
-        if g["name"] == "full":
+        if g["name"] == "sdwan-api":
             g["policy"] = g["policy"].replace(",sensitive", "")
     rt._update_print = lambda p: [{"channel": "stable", "installed-version": rt.version, "status": ""}]  # vor check-for-updates
     c = _by_key((await client.post(f"/api/v1/devices/{dev['id']}/selftest", headers=h)).json())

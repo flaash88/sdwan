@@ -34,15 +34,22 @@ Die Tunnel-Adresse des Hubs ist die erste Adresse aus `WG_NETWORK` (Standard `10
       Für den Firmware-Test (Schritt 7) **nicht** vorab aktualisieren.
 - [ ] Uhrzeit: `/system ntp client set enabled=yes servers=pool.ntp.org` und Zeitzone setzen.
       **Erwartet:** `/system clock print` zeigt die richtige Uhrzeit (± wenige Sekunden).
-- [ ] Eigene Gruppe für den API-Benutzer mit genau den nötigen Policies:
+- [ ] **API-Gruppe:** Das Onboarding legt die Gruppe `sdwan-api` selbst an und setzt den API-Benutzer
+      `sdwan` hinein, nie in `full`. Existiert die Gruppe schon, werden nur ihre Policies gesetzt. Zur
+      Referenz die Policies (einzige Definition: `backend/app/routeros/schema.py`, `API_POLICIES`):
 
   ```
-  /user group add name=sdwan-api policy=api,read,write,policy,reboot,test,ssh,sensitive
+  read,write,api,policy,reboot,test,ssh,sensitive,winbox,web
   ```
 
-  `api, read, write` für alle Funktionen, `policy` für die temporären Fernzugriffs-Benutzer, `reboot` für
-  Neustart und Firmware, `test` für Ping, `ssh` für den Backup-Export. `sensitive` ist optional: Ohne diese
-  Policy fehlen Schlüssel und Passwörter im Export, das Backup reicht dann nicht für eine Wiederherstellung.
+  - `api, read, write`: alle Funktionen.
+  - `policy`: Gruppe und temporäre Benutzer für den Fernzugriff.
+  - `reboot`: Neustart und Firmware.
+  - `test`: Ping.
+  - `ssh`: Backup-Export.
+  - `sensitive`: Schlüssel und Passwörter im Export (ohne sie ist das Backup unvollständig).
+  - `winbox, web`: nötig, damit die Gruppe `sdwan-remote` für den Fernzugriff angelegt werden kann.
+    Ohne diese Policies funktioniert der Fernzugriff nicht.
 - [ ] Dienste auf das Nötige beschränken: `api` und `ssh` nur aus dem Tunnelnetz (Hub-Adresse), alles
       Unverschlüsselte aus:
 
@@ -57,16 +64,6 @@ Die Tunnel-Adresse des Hubs ist die erste Adresse aus `WG_NETWORK` (Standard `10
 
   Den WinBox-Zugang für die lokale Administration auf das eigene Verwaltungsnetz legen, im Beispiel das
   defconf-LAN `192.168.88.0/24`. Nach dieser Änderung geht SSH nur noch über den Tunnel.
-- [ ] **Hinweis Onboarding:** Das Onboarding-Skript legt den Benutzer `sdwan` derzeit in der Gruppe `full`
-      an und setzt `api` auf die Hub-Adresse. Nach Schritt 2 deshalb umstellen:
-
-  ```
-  /user set [find name=sdwan] group=sdwan-api
-  ```
-
-  **Erwartet:** Der Selbsttest (Schritt 3) zeigt „Rechte API-Benutzer“ grün. Fehlt `sensitive`,
-  ist die Zeile orange.
-
 ## 2. Onboarding
 
 - [ ] In der Oberfläche: Geräte → „Gerät hinzufügen“, Name z. B. `lab-l009`, Standort wählen.
@@ -78,7 +75,8 @@ Die Tunnel-Adresse des Hubs ist die erste Adresse aus `WG_NETWORK` (Standard `10
       Werte notieren. Fehlen sie, ist das kein Fehler; `/system health print` zum Vergleich ausführen.
 - [ ] Übersicht → „IP-Adressen“: Die DHCP-Adresse auf ether1 trägt die Kennzeichnung **DHCP**, die
       Bridge-Adresse `192.168.88.1/24` ist **statisch**, die Tunnel-Adresse ist als **Plattform** markiert.
-- [ ] Auf dem Router: `/user set [find name=sdwan] group=sdwan-api` (siehe Schritt 1).
+- [ ] Auf dem Router: `/user print` und `/user group print where name=sdwan-api`.
+      **Erwartet:** `sdwan` ist in der Gruppe `sdwan-api` mit genau den Policies aus Schritt 1.
 
 ## 3. Selbsttest
 
@@ -89,12 +87,30 @@ Die Tunnel-Adresse des Hubs ist die erste Adresse aus `WG_NETWORK` (Standard `10
     ist in Ordnung.
   - **Fehlende Felder** wie `rtt-avg`/`loss-percent` bei Netwatch oder `master`/`backup` bei VRRP:
     Feldnamen notieren. Die Rolle wird dann über `running` abgeleitet.
-  - **Rechte:** `sensitive` fehlt.
+  - **Rechte:** `sensitive`, `winbox` oder `web` fehlt (mit Begründung in der Zeile).
 - [ ] Zeile „Paket-Update“: `latest-version` fehlt vor der ersten Update-Prüfung. Das ist nur ein Hinweis.
 - [ ] Zeile „Uhrzeitabweichung“: unter 60 s.
 - [ ] Zeilen „Dienst api“ und „Dienst ssh“: aktiv und für `10.100.0.1` erlaubt.
       Zur Gegenprobe `/ip service set ssh address=192.168.88.0/24` setzen und den Selbsttest wiederholen.
       **Erwartet:** SSH-Zeile rot mit „Backup-Export schlägt fehl“. Danach zurückstellen.
+- [ ] Zeile „Rechte API-Benutzer“: grün, Gruppe `sdwan-api`.
+- [ ] **„Rechte einschränken“ mit Totmannschaltung** (gilt für Geräte, die vor dieser Version verbunden
+      wurden; im Labor nachstellen):
+  1. `/user set [find name=sdwan] group=full` setzen und den Selbsttest ausführen.
+     **Erwartet:** Zeile orange „API-Benutzer in Gruppe full – Umstellung empfohlen“ mit dem Button
+     „Rechte einschränken“.
+  2. Button ausführen und währenddessen `/system scheduler print detail` beobachten.
+     **Erwartet:** Kurz erscheint `sdwan-revert-api-group` mit `interval=3m`. Nach Erfolg zeigt die
+     Oberfläche „Rechte eingeschränkt“, der Scheduler ist gelöscht und die Gruppe ist `sdwan-api`.
+  3. **Annahme verifizieren:** Scheduler ohne `start-time`, aber mit `interval=3m` läuft zum ersten Mal ca.
+     3 Minuten nach dem Anlegen. Dazu von Hand anlegen und `next-run` ablesen:
+     `/system scheduler add name=probe interval=3m on-event=":log info probe"`.
+     Tatsächliches Verhalten: ______________________ (danach `probe` entfernen)
+  4. Fehlerfall: erneut `group=full` setzen, dann `/ip service set ssh address=192.168.88.0/24`, damit der
+     Selbsttest nach der Umstellung rot wird. Danach den Button ausführen.
+     **Erwartet:** orange „Rechte werden in ca. 3 Minuten automatisch zurückgestellt“, der Scheduler bleibt
+     stehen. Nach ca. 3 Minuten ist `sdwan` wieder in `full` und der Scheduler ist verschwunden. `ssh`
+     danach zurückstellen und den Selbsttest erneut ausführen.
 - [ ] „JSON“ exportieren und ablegen, als Referenz für RouterOS-Version und Modell.
 - [ ] **Nach Schritt 4 und 5 den Selbsttest wiederholen.** Erst dann sind Netwatch, Routen und VRRP
       befüllt. **Erwartet:** VRRP und Netwatch grün, oder orange mit einem notierten Feldnamen.

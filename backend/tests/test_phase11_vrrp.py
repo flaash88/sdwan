@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+import datetime as dt
+
+from sqlalchemy import select, update
 
 from app.db import system_session
-from app.models import StatusEvent
+from app.models import Alert, StatusEvent
 from app.routeros.simulator import get_router
+from app.services import mailer
+from app.services.alerts import evaluate_all
 from app.services.poller import poll_all
 from tests.conftest import make_paired_device, make_tenant, make_tenant_admin
 
@@ -153,3 +157,62 @@ async def test_vrrp_via_zero_touch(client, msp, hub):
     inst = (await client.get(f"/api/v1/devices/{dev_id}/vrrp", headers=h)).json()["instances"][0]
     assert inst["local_address"] == "192.168.110.22/24" and inst["linked_wan_slot"] == 1
     assert _vrrp_rows(get_router(dev["tunnel_ip"]))
+
+
+async def test_alerts_vrrp_master_and_backup_wan(client, msp, hub):
+    mailer.outbox.clear()
+    h, dev = await _setup(client, msp)
+    inst = (await client.put(f"/api/v1/devices/{dev['id']}/vrrp", json={"instances": [VRRP]}, headers=h)).json()["instances"][0]
+    rules = (await client.post("/api/v1/alert-rules/defaults", headers=h)).json()
+    vr = next(r for r in rules if r["type"] == "vrrp_master")
+    assert vr["severity"] == "warning" and vr["duration_s"] == 30
+    await client.post("/api/v1/alert-rules", json={"name": "Backup-WAN", "type": "wan_backup_active", "severity": "info", "duration_s": 0,
+                                                   "recipients": ["noc@x.example.com"]}, headers=h)
+    await poll_all()
+    await evaluate_all()
+    assert (await client.get("/api/v1/alerts", headers=h)).json() == []
+
+    rt = get_router(dev["tunnel_ip"])
+    rt.down_hosts.add("1.1.1.1")
+    await client.post(f"/api/v1/devices/{dev['id']}/vrrp/{inst['id']}/simulate?master=true", headers=h)
+    await poll_all()
+    await evaluate_all()
+    alerts = (await client.get("/api/v1/alerts", headers=h)).json()
+    by_subject = {a["subject"]: a for a in alerts}
+    # Backup-WAN sofort (Regel duration 0), VRRP-Master erst nach 30 s
+    wan5g = next(a for s_, a in by_subject.items() if s_.startswith("wanactive:"))
+    assert wan5g["status"] == "firing" and "5G" in wan5g["message"]
+    vr_alert = by_subject[f"vrrp:{inst['id']}"]
+    assert vr_alert["status"] == "pending" and "Master" in vr_alert["message"]
+    async with system_session() as db:
+        await db.execute(update(Alert).where(Alert.subject == f"vrrp:{inst['id']}").values(started_at=dt.datetime.now(dt.UTC) - dt.timedelta(minutes=1)))
+        await db.commit()
+    await evaluate_all()
+    alerts = {a["subject"]: a for a in (await client.get("/api/v1/alerts", headers=h)).json()}
+    assert alerts[f"vrrp:{inst['id']}"]["status"] == "firing"
+
+    # FortiGate zurück -> beide Alarme behoben
+    rt.down_hosts.clear()
+    await client.post(f"/api/v1/devices/{dev['id']}/vrrp/{inst['id']}/simulate?master=false", headers=h)
+    await poll_all()
+    await evaluate_all()
+    assert (await client.get("/api/v1/alerts", headers=h)).json() == []
+    resolved = (await client.get("/api/v1/alerts?state=resolved", headers=h)).json()
+    assert len(resolved) == 2
+    async with system_session() as db:
+        ev = (await db.execute(select(StatusEvent).where(StatusEvent.subject.like("wanactive:%")).order_by(StatusEvent.at))).scalars().all()
+        seq: dict[str, list[str]] = {}
+        for e in ev:
+            seq.setdefault(e.subject, []).append(e.status)
+        assert sorted(seq.values()) == [["active", "inactive"], ["active", "inactive", "active"]]
+
+
+async def test_no_backup_alert_in_loadbalance_mode(client, msp, hub):
+    t = await make_tenant(client, msp)
+    h = await make_tenant_admin(client, msp, t["id"])
+    dev = await make_paired_device(client, h)
+    await client.put(f"/api/v1/devices/{dev['id']}/wan", json={"mode": "loadbalance_ecmp", "links": WAN}, headers=h)
+    await client.post("/api/v1/alert-rules", json={"name": "Backup-WAN", "type": "wan_backup_active", "duration_s": 0}, headers=h)
+    await poll_all()
+    await evaluate_all()
+    assert (await client.get("/api/v1/alerts", headers=h)).json() == []

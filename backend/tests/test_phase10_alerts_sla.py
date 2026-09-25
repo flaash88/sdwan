@@ -42,7 +42,7 @@ async def test_alert_lifecycle_with_email(client, msp, hub):
     await client.put(f"/api/v1/devices/{dev['id']}/wan", json={"links": [
         {"name": "Glasfaser", "interface": "ether1", "gateway": "100.64.0.1", "check_target": "1.1.1.1"}]}, headers=h)
     r = await client.post("/api/v1/alert-rules/defaults", headers=h)
-    assert r.status_code == 201 and len(r.json()) == 4
+    assert r.status_code == 201 and len(r.json()) == 5
     rule = (await client.post("/api/v1/alert-rules", json={"name": "WAN sofort", "type": "wan_down", "severity": "critical", "duration_s": 0, "recipients": ["tech@acme.example.com"]}, headers=h)).json()
     await poll_all()
     await evaluate_all()

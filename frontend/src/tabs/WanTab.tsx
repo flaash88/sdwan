@@ -69,7 +69,7 @@ export default function WanTab({ device }: { device: Device }) {
               <td className="px-3 py-2 text-xs"><span className="font-mono">{l.interface}</span>{ifLabel(l.interface) !== l.interface && <div className="text-slate-500">{ifLabel(l.interface).slice(l.interface.length).replace(/^ – /, "")}</div>}</td>
               <td className="px-3 py-2 font-mono text-xs">{l.gateway}{l.resolved_gateway ? ` → ${l.resolved_gateway}` : ""}</td>
               <td className="px-3 py-2"><StatusBadge status={l.status ?? "unknown"} /></td>
-              <td className="px-3 py-2">{l.active ? <Badge color="green">trägt Traffic</Badge> : wan.data!.mode !== "failover" && l.status === "up" ? <Badge color="blue">LB</Badge> : "–"}</td>
+              <td className="px-3 py-2">{l.active ? (wan.data!.mode === "failover" && l.priority > Math.min(...wan.data!.links.filter((x) => x.enabled).map((x) => x.priority)) ? <Badge color="yellow">Backup trägt Traffic</Badge> : <Badge color="green">trägt Traffic</Badge>) : wan.data!.mode !== "failover" && l.status === "up" ? <Badge color="blue">LB</Badge> : "–"}</td>
               <td className="px-3 py-2">{l.last_latency_ms != null ? `${l.last_latency_ms.toFixed(1)} ms` : "–"}</td>
               <td className="px-3 py-2">{l.last_loss_pct != null ? `${l.last_loss_pct}%` : "–"}</td>
               <td className="px-3 py-2 text-slate-500">{fmtAgo(l.last_change_at)}</td>

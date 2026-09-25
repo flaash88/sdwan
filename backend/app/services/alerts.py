@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app import events
 from app.config import get_settings
 from app.db import system_session, utcnow
-from app.models import Alert, AlertRule, Device, DeviceStatus, PairingStatus, Tenant, VpnPeer, WanLink
+from app.models import Alert, AlertRule, Device, DeviceStatus, PairingStatus, Tenant, VpnPeer, VrrpInstance, WanLink
 from app.services.mailer import send_mail
 
 log = logging.getLogger(__name__)
@@ -29,12 +29,15 @@ TYPES = {
     "latency": "Latenz über Schwelle",
     "mesh_down": "VPN-Tunnel down",
     "cpu_high": "CPU-Last hoch",
+    "vrrp_master": "VRRP: Router ist Master (Hauptsystem ausgefallen)",
+    "wan_backup_active": "Backup-WAN aktiv",
 }
 DEFAULT_RULES = [
     {"name": "Gerät offline", "type": "device_offline", "severity": "critical", "duration_s": 300},
     {"name": "WAN-Link ausgefallen", "type": "wan_down", "severity": "warning", "duration_s": 120},
     {"name": "WAN-Latenz > 150 ms", "type": "latency", "severity": "warning", "duration_s": 300, "params": {"threshold": 150, "metric": "wan"}},
     {"name": "VPN-Tunnel down", "type": "mesh_down", "severity": "warning", "duration_s": 300},
+    {"name": "VRRP: Standort auf Backup (Master)", "type": "vrrp_master", "severity": "warning", "duration_s": 30},
 ]
 
 
@@ -89,6 +92,24 @@ async def conditions(db: AsyncSession, rule: AlertRule, devices: list[Device]) -
             a, b = by_id.get(pr.device_a_id), by_id.get(pr.device_b_id)
             if a and b:
                 out.append(Condition(a, f"mesh:{pr.id}", f"VPN-Tunnel {a.name} ↔ {b.name} ist down"))
+    elif rule.type == "vrrp_master":
+        insts = (await db.execute(select(VrrpInstance).where(VrrpInstance.device_id.in_(list(by_id)), VrrpInstance.enabled.is_(True),
+                                                              VrrpInstance.state == "master"))).scalars().all()
+        for inst in insts:
+            d = by_id[inst.device_id]
+            out.append(Condition(d, f"vrrp:{inst.id}", f"{d.name}: VRRP {inst.name} (VRID {inst.vrid}) ist Master – Hauptsystem nicht erreichbar, "
+                                                       f"Router übernimmt {inst.vip}", since=inst.last_change_at))
+    elif rule.type == "wan_backup_active":
+        links = (await db.execute(select(WanLink).where(WanLink.device_id.in_(list(by_id)), WanLink.enabled.is_(True)))).scalars().all()
+        best: dict[uuid.UUID, int] = {}
+        for lk in links:
+            best[lk.device_id] = min(best.get(lk.device_id, lk.priority), lk.priority)
+        for lk in links:
+            d = by_id[lk.device_id]
+            # nur Failover: bei Lastverteilung tragen alle Links planmäßig Traffic
+            if d.wan_mode == "failover" and lk.active and lk.priority > best[lk.device_id]:
+                out.append(Condition(d, f"wanactive:{lk.id}", f"{d.name}: Backup-WAN {lk.name} ({lk.interface}) trägt die Default-Route",
+                                     since=lk.active_since))
     elif rule.type == "cpu_high":
         thr = float(p.get("threshold", 90))
         for d in devs:

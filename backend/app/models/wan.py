@@ -35,6 +35,7 @@ class WanLink(IdMixin, TenantScoped, Base):
     # Laufzeitstatus (vom Poller)
     status: Mapped[str] = mapped_column(String(20), default="unknown")  # up | down | degraded | disabled | unknown
     active: Mapped[bool] = mapped_column(Boolean, default=False)  # trägt aktuell die Default-Route
+    active_since: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())  # letzter Wechsel von ``active``
     last_latency_ms: Mapped[float | None] = mapped_column(Float)
     last_loss_pct: Mapped[float | None] = mapped_column(Float)
     last_check_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())

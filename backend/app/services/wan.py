@@ -283,7 +283,14 @@ async def update_wan_status(db: AsyncSession, devices: list[Device]) -> None:
                 lk.status = "unknown"
             lk.last_latency_ms = rtt
             lk.last_loss_pct = info.get("loss_pct")
-            lk.active = bool(info.get("active"))
+            was_active, lk.active = lk.active, bool(info.get("active"))
+            if was_active != lk.active or lk.active_since is None:
+                lk.active_since = now
+                if was_active != lk.active:
+                    from app.services.state_log import record_subject_change
+
+                    # Basis für "Zeit auf Backup-WAN" (SLA) und den Alarm wan_backup_active
+                    await record_subject_change(db, lk.tenant_id, dev.id, f"wanactive:{lk.id}", "active" if lk.active else "inactive")
             lk.last_check_at = now
         if old != lk.status:
             lk.last_change_at = now

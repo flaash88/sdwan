@@ -38,6 +38,8 @@ _TABLE_PATHS = {
     "/certificate",
     "/ip/dhcp-client",
     "/ip/service",
+    "/user/group",
+    "/ip/firewall/connection",
     "/interface/vrrp",
 }
 
@@ -74,6 +76,8 @@ class SimRouter:
         for svc, port in (("ssh", 22), ("winbox", 8291), ("www", 80), ("api", 8728)):
             self._insert("/ip/service", {"name": svc, "port": str(port), "disabled": "false", "address": ""})
         self._insert("/ip/route", {"dst-address": "0.0.0.0/0", "gateway": "100.64.0.1", "distance": "1"})
+        self.clock_skew_s = 0.0  # Tests: Abweichung der Router-Uhr in Sekunden
+        _seed_extras(self)
         # weitere Ports wie beim L009UiGS (ether5–ether8, z. B. 5G-Modem an ether8)
         for name in ("ether5", "ether6", "ether7", "ether8"):
             self._insert("/interface", {"name": name, "type": "ether", "running": "true", "disabled": "false", "default-name": name})
@@ -145,7 +149,9 @@ class SimRouter:
             "/system/package/update/print": self._update_print,
             "/system/package/update/install": self._install,
             "/system/package/update/set": self._update_set,
-            "/system/reboot": lambda p: [],
+            "/system/reboot": self._reboot,
+            "/system/clock/print": self._clock,
+            "/system/health/print": self._health,
             "/ip/dns/print": lambda p: [dict(self.dns)],
             "/ip/dns/set": self._dns_set,
             "/ip/dns/cache/flush": lambda p: [],
@@ -162,6 +168,8 @@ class SimRouter:
     def _table_op(self, path: str, action: str, params: dict[str, Any]) -> list[dict[str, Any]]:
         if action == "print":
             rows = [dict(r) for r in self.tables[path]]
+            if "count-only" in params:
+                return [{"ret": str(len(rows))}]
             if path == "/interface":
                 for r in rows:
                     c = self.counters.setdefault(r["name"], [0, 0])
@@ -185,6 +193,9 @@ class SimRouter:
                 best = min((int(r.get("distance", 1)) for r in alive), default=None)
                 for r in mains:
                     r["active"] = "true" if r in alive and int(r.get("distance", 1)) == best else "false"
+                for r in rows:  # wie RouterOS: jede Route trägt das Flag active
+                    if r not in mains:
+                        r["active"] = "false" if r.get("disabled") in ("yes", "true") else "true"
             if path == "/interface/vrrp":
                 for r in rows:
                     off = r.get("disabled") in ("yes", "true")
@@ -195,6 +206,9 @@ class SimRouter:
                     r.setdefault("last-handshake", f"{self.rng.randint(1, 90)}s")
                     r.setdefault("rx", self.rng.randint(10**5, 10**8))
                     r.setdefault("tx", self.rng.randint(10**5, 10**8))
+            if params.get(".proplist"):
+                keep = set(str(params[".proplist"]).split(","))
+                rows = [{k: v for k, v in r.items() if k in keep} for r in rows]
             return rows
         if action == "add":
             before = params.pop("place-before", None)
@@ -238,11 +252,35 @@ class SimRouter:
         ]
 
     def _ping(self, p: dict[str, Any]) -> list[dict[str, Any]]:
+        # Wie RouterOS: jede Antwortzeile trägt die laufenden Zähler sent/received/packet-loss
         count = int(p.get("count", 3))
         base = self.rng.uniform(5, 40)
-        out = [{"seq": i, "host": p.get("address"), "time": f"{base + self.rng.uniform(0, 5):.1f}ms"} for i in range(count)]
-        out.append({"sent": count, "received": count, "packet-loss": 0, "avg-rtt": f"{base + 2:.1f}ms"})
+        down = p.get("address") in self.down_hosts
+        out = []
+        for i in range(count):
+            row: dict[str, Any] = {"seq": i, "host": p.get("address"), "sent": i + 1, "received": 0 if down else i + 1,
+                                   "packet-loss": 100 if down else 0}
+            if down:
+                row["status"] = "timeout"
+            else:
+                row["time"] = f"{base + self.rng.uniform(0, 5):.1f}ms"
+                row["avg-rtt"] = f"{base + 2:.1f}ms"
+            out.append(row)
         return out
+
+    def _clock(self, _p: dict[str, Any]) -> list[dict[str, Any]]:
+        t = time.gmtime(time.time() + self.clock_skew_s)
+        return [{"time": time.strftime("%H:%M:%S", t), "date": time.strftime("%Y-%m-%d", t), "time-zone-name": "UTC", "gmt-offset": "+00:00"}]
+
+    def _health(self, _p: dict[str, Any]) -> list[dict[str, Any]]:
+        # RouterOS-7-Format; virtuelle Router (CHR) liefern keine Sensorwerte
+        if self.board == "CHR":
+            return []
+        return [{"name": "cpu-temperature", "value": "47", "type": "C"}, {"name": "voltage", "value": "24.1", "type": "V"}]
+
+    def _reboot(self, _p: dict[str, Any]) -> list[dict[str, Any]]:
+        self.boot = time.time()
+        return []
 
     def _monitor_traffic(self, p: dict[str, Any]) -> list[dict[str, Any]]:
         return [{"name": p.get("interface"), "rx-bits-per-second": self.rng.randint(10**5, 10**8), "tx-bits-per-second": self.rng.randint(10**5, 10**7)}]
@@ -286,6 +324,29 @@ class SimRouter:
 _PERSIST = ("version", "channel", "identity", "board", "tables", "_next_id", "dns", "counters", "boot", "down_hosts", "vrrp_master")
 
 
+def _seed_extras(r: SimRouter) -> None:
+    """Einträge, die ein per Onboarding verbundener Router immer hat (auch für ältere gespeicherte Zustände)."""
+    from app.config import get_settings
+
+    s = get_settings()
+    for path in ("/user/group", "/ip/firewall/connection"):
+        r.tables.setdefault(path, [])
+    if not r.tables["/user/group"]:
+        for name, pol in (("read", "local,telnet,ssh,reboot,read,test,winbox,password,web,sniff,sensitive,api,romon,rest-api,!ftp,!write,!policy"),
+                          ("full", "local,telnet,ssh,ftp,reboot,read,write,policy,test,winbox,password,web,sniff,sensitive,api,romon,rest-api")):
+            r._insert("/user/group", {"name": name, "policy": pol})
+    if not any(u.get("name") == s.routeros_api_user for u in r.tables["/user"]):
+        r._insert("/user", {"name": s.routeros_api_user, "group": "full", "address": f"{s.wg_hub_ip}/32", "comment": "sdwan:mgmt"})
+    if not any(p.get("comment") == "sdwan:hub" for p in r.tables["/interface/wireguard/peers"]):
+        r._insert("/interface/wireguard/peers", {"interface": s.wg_device_interface, "public-key": _fake_key("hub"),
+                                                 "allowed-address": f"{s.wg_hub_ip}/32", "comment": "sdwan:hub"})
+    if not r.tables["/ip/firewall/connection"]:
+        r._insert("/ip/firewall/connection", {"protocol": "udp", "src-address": "100.64.0.2:13231", "dst-address": f"203.0.113.10:{s.wg_hub_port}",
+                                              "reply-src-address": f"203.0.113.10:{s.wg_hub_port}", "reply-dst-address": "100.64.0.2:13231"})
+        r._insert("/ip/firewall/connection", {"protocol": "tcp", "src-address": "192.168.88.10:51514", "dst-address": "1.1.1.1:443",
+                                              "reply-src-address": "1.1.1.1:443", "reply-dst-address": "100.64.0.2:51514", "connection-mark": "sdwan-wan1"})
+
+
 def _dump(r: SimRouter) -> str:
     import json
 
@@ -305,6 +366,7 @@ def _load(host: str, raw: str) -> SimRouter:
     r.vrrp_master = set(getattr(r, "vrrp_master", []) or [])
     for p in _TABLE_PATHS:
         r.tables.setdefault(p, [])
+    _seed_extras(r)
     return r
 
 

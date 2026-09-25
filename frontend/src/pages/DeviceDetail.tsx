@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Icon, type IconName } from "../components/Icon";
 import PairingBox from "../components/PairingBox";
+import SelftestCard from "../components/SelftestCard";
 import { DeviceStatusBadge } from "../components/fleet";
 import { Button, Card, EmptyState, ErrorBox, Input, Loading, Pill, Select, StatusBadge, Tabs, cls, useAction, type Tone } from "../components/ui";
 import { deviceTabs } from "../deviceTabs";
@@ -167,6 +168,7 @@ function Overview({ device: d, state, reload }: { device: Device; state?: Device
           </Card>
         </div>
       )}
+      {paired && <SelftestCard device={d} />}
       <DeviceAdmin device={d} reload={reload} />
     </>
   );

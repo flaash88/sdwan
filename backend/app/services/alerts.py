@@ -51,13 +51,28 @@ class Condition:
     since: dt.datetime | None = None  # seit wann die Bedingung bekannt anliegt
 
 
-REBOOT_SUPPRESS = dt.timedelta(minutes=5)
+# Dauer der Offline-Alarm-Unterdrückung je Anlass. Firmware: RouterOS-Update + RouterBOARD-Firmware =
+# zwei Neustarts, daher länger.
+REBOOT_SUPPRESS: dict[str, dt.timedelta] = {
+    "manual": dt.timedelta(minutes=5),
+    "firmware": dt.timedelta(minutes=10),
+}
+
+
+def mark_reboot(dev: Device, reason: str, by: str | None) -> dict[str, str | None]:
+    """Setzt ``facts.reboot`` vor einem von der Plattform ausgelösten Neustart (siehe ``reboot_suppressed``).
+    Ein erneuter Aufruf (z. B. zweiter Neustart beim Firmware-Update) verlängert die Unterdrückung."""
+    now = utcnow()
+    info: dict[str, str | None] = {"at": now.isoformat(), "by": by, "reason": reason, "until": (now + REBOOT_SUPPRESS[reason]).isoformat()}
+    dev.facts = {**(dev.facts or {}), "reboot": info}
+    return info
 
 
 def reboot_suppressed(dev: Device, now: dt.datetime | None = None) -> bool:
     """Offline-Alarm nach einem über die Plattform ausgelösten Neustart unterdrücken.
 
-    ``POST /devices/{id}/reboot`` setzt ``facts.reboot.until`` = Zeitpunkt + 5 Minuten. Bis dahin gilt
+    ``mark_reboot`` setzt ``facts.reboot.until`` = Zeitpunkt + Dauer je Anlass (manuell 5 min, Firmware 10 min,
+    siehe ``REBOOT_SUPPRESS``). Bis dahin gilt
     „offline“ als erwartet (Router bootet) und die Bedingung ``device_offline`` wird für dieses Gerät
     übersprungen. Andere Alarmtypen bleiben aktiv. Ist das Gerät nach Ablauf nicht zurück, alarmiert die
     Regel ganz normal – ``since`` ist dann der letzte Kontakt vor dem Neustart, die Verzögerung der Regel

@@ -193,8 +193,11 @@ FortiGate, Priorität 100 (kleiner als die FortiGate, z. B. 200), VIP `192.168.1
 - [ ] Update-Job nur für `lab-l009` (Batch 1). **Erwartet:** Zuerst entsteht ein Backup **Vor
       Firmware-Update** mit Job-Ersteller. Dann folgen Installation und Reboot. Die neue Version wird
       verifiziert, anschließend das RouterBOARD-Upgrade mit zweitem Reboot. Der Job endet „abgeschlossen“.
-- [ ] Hinweis: Der Firmware-Reboot nutzt die 5-Minuten-Unterdrückung **nicht**. Ein Offline-Alarm ist
-      möglich, wenn der Router länger als Poll-Kulanz plus Regel-Dauer weg ist. Beobachten und notieren.
+- [ ] **Offline-Alarm während des Updates unterdrückt:** Ab der Installation zeigen Kopf und Geräteliste
+      „Neustart läuft (Firmware-Update)“. Der Offline-Alarm ist 10 Minuten unterdrückt; vor dem
+      RouterBOARD-Neustart beginnen die 10 Minuten neu. **Erwartet:** keine Offline-Mail während des
+      Updates. Nach dem Job wird ein Ausfall wieder normal alarmiert. Gesamtdauer beider Neustarts notieren:
+      ______
 - [ ] Nach dem Update den Selbsttest wiederholen und die neue Version im JSON-Export vergleichen.
 
 ## 8. Fernzugriff

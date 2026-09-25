@@ -41,7 +41,7 @@ Installation auf einem Server: [INSTALL.md](INSTALL.md) · Aufbau und Design-Ent
 | 10 | Alerts & SLA: Regeln (offline, WAN down, Latenz, Mesh, CPU) mit E-Mail + Live-Toasts, Verfügbarkeit aus Statuswechseln, PDF-Berichte, Monatsversand | ✅ |
 | 11 | VRRP & Backup-Transparenz: VRRP-Backup hinter zentralem Master (z. B. FortiGate) mit gekoppeltem WAN, Verbindungs-Flush im Failover, Alarme VRRP-Master / Backup-WAN aktiv / Datenvolumen (80 %/100 %), Monatslimit je WAN, SLA-Zeiten auf Backup, Webhooks (JSON/Teams) | ✅ |
 | 12 | Branding & Mail-Layout: Produktname konfigurierbar, HTML-Mails (Outlook-tauglich, Klartext-Fallback) mit Statusbalken, Kontext je Alarmtyp, nächsten Schritten, lokaler Zeitzone je Mandant, einheitliche Betreffzeilen, Mail-Vorschau | ✅ |
-| 13 | Labortest-Werkzeuge: Hardware-Selbsttest (Pfade, Felder, Rechte, Dienste, Uhrzeit; JSON-Export), Neustart mit 5 Minuten Offline-Alarm-Unterdrückung, VRRP-Gegenstelle mit Ping, Backup-Auslöser/Ersteller/Prüfsumme und Backup nach Policy-Push, IP-Adressen je Interface, Temperatur/Spannung falls vorhanden. Checkliste: [`docs/LABORTEST.md`](docs/LABORTEST.md) | ✅ |
+| 13 | Labortest-Werkzeuge: Hardware-Selbsttest (Pfade, Felder, Rechte, Dienste, Uhrzeit; JSON-Export), Neustart mit Offline-Alarm-Unterdrückung (manuell 5 min, Firmware-Update 10 min), VRRP-Gegenstelle mit Ping, Backup-Auslöser/Ersteller/Prüfsumme und Backup nach Policy-Push, IP-Adressen je Interface, Temperatur/Spannung falls vorhanden. Checkliste: [`docs/LABORTEST.md`](docs/LABORTEST.md) | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

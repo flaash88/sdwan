@@ -24,7 +24,7 @@ export function VrrpPill({ state }: { state?: DeviceState | null }) {
 export function DeviceStatusBadge({ device }: { device: Device }) {
   if (device.pairing_status !== "paired") return <StatusBadge status={device.pairing_status} label={device.pairing_status === "pending" ? "Nicht verbunden" : undefined} />;
   const rb = rebootInfo(device);
-  if (rb) return <Pill tone="blue" icon="loader" title={`Neustart ausgelöst von ${rb.by ?? "?"} – Offline-Alarm bis ${new Date(rb.until).toLocaleTimeString("de-DE")} unterdrückt`}>Neustart läuft</Pill>;
+  if (rb) return <Pill tone="blue" icon="loader" title={`Neustart ausgelöst von ${rb.by ?? "System"} – Offline-Alarm bis ${new Date(rb.until).toLocaleTimeString("de-DE")} unterdrückt`}>{rb.reason === "firmware" ? "Neustart läuft (Firmware-Update)" : "Neustart läuft"}</Pill>;
   return <StatusBadge status={device.status} />;
 }
 
@@ -42,7 +42,7 @@ export function CpuBar({ value }: { value: number | null | undefined }) {
 }
 
 /** Laufender Neustart (facts.reboot, vom Poller entfernt, sobald das Gerät zurück ist oder 5 min vergangen sind). */
-export function rebootInfo(device: Device): { at: string; by?: string; until: string } | null {
-  const r = (device.facts as { reboot?: { at: string; by?: string; until: string } } | undefined)?.reboot;
+export function rebootInfo(device: Device): { at: string; by?: string | null; reason?: string; until: string } | null {
+  const r = (device.facts as { reboot?: { at: string; by?: string | null; reason?: string; until: string } } | undefined)?.reboot;
   return r && r.until ? r : null;
 }

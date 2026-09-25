@@ -89,7 +89,7 @@ _DISCONNECT = ("closed", "reset", "eof", "broken pipe", "timed out", "timeout", 
 async def reboot(device_id: uuid.UUID, ctx: Ctx = TechCtx) -> dict:
     """Router neu starten. Der Offline-Alarm wird für 5 Minuten unterdrückt (siehe alerts.reboot_suppressed)."""
     from app.routeros import RouterOSError, connect_device
-    from app.services.alerts import REBOOT_SUPPRESS
+    from app.services.alerts import mark_reboot
 
     dev = await get_or_404(ctx.db, Device, device_id, "Device")
     if dev.pairing_status != PairingStatus.paired:
@@ -102,9 +102,7 @@ async def reboot(device_id: uuid.UUID, ctx: Ctx = TechCtx) -> dict:
             await ctx.audit("device.reboot", target_type="device", target_id=dev.id, success=False, details={"error": str(exc)})
             await ctx.db.commit()
             raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Neustart fehlgeschlagen: {exc}") from exc
-    now = utcnow()
-    info = {"at": now.isoformat(), "by": ctx.user.email, "until": (now + REBOOT_SUPPRESS).isoformat()}
-    dev.facts = {**(dev.facts or {}), "reboot": info}
+    info = mark_reboot(dev, "manual", ctx.user.email)
     await ctx.audit("device.reboot", target_type="device", target_id=dev.id, details={"suppress_offline_until": info["until"]})
     await ctx.db.commit()
     await events.publish(dev.tenant_id, "device.reboot", {"id": str(dev.id), "name": dev.name, "state": "rebooting", **info})

@@ -52,6 +52,14 @@ async def check_updates(device: Device, channel: str | None = None) -> dict[str,
     return result
 
 
+async def _mark_reboot(dev: Device, job: FirmwareJob) -> None:
+    """Offline-Alarm während des Update-Neustarts unterdrücken (gleicher Mechanismus wie manueller Neustart)."""
+    from app.services.alerts import mark_reboot
+
+    info = mark_reboot(dev, "firmware", job.created_by)
+    await events.publish(dev.tenant_id, "device.reboot", {"id": str(dev.id), "name": dev.name, "state": "rebooting", **info})
+
+
 async def _start_item(db: AsyncSession, job: FirmwareJob, item: FirmwareJobItem, dev: Device) -> None:
     from app.services.backup import BackupError, take_backup
 
@@ -69,6 +77,7 @@ async def _start_item(db: AsyncSession, job: FirmwareJob, item: FirmwareJobItem,
         if not info["update_available"]:
             item.status, item.finished_at = "skipped", utcnow()
             return
+        await _mark_reboot(dev, job)
         async with connect_device(dev) as api:
             try:
                 await api.call("/system/package/update/install")
@@ -92,6 +101,7 @@ async def _verify_item(db: AsyncSession, job: FirmwareJob, item: FirmwareJobItem
                         rb = (await api.call("/system/routerboard/print") or [{}])[0]
                         if rb.get("upgrade-firmware") and rb.get("upgrade-firmware") != rb.get("current-firmware"):
                             await api.call("/system/routerboard/upgrade")
+                            await _mark_reboot(dev, job)  # zweiter Neustart: Unterdrückung erneuern
                             await api.call("/system/reboot")
                     except RouterOSError as exc:
                         log.info("RouterBOARD-Upgrade %s: %s", dev.name, exc)

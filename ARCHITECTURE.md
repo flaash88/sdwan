@@ -497,16 +497,20 @@ Die Checkliste für den Test steht in `docs/LABORTEST.md`.
 ### Neustart und Alarm-Unterdrückung
 
 * `POST /devices/{id}/reboot` (Techniker): `/system/reboot`, Audit `device.reboot`. Ein Verbindungsabbruch
-  direkt danach gilt als Erfolg. Die Plattform setzt `device.facts.reboot = {at, by, until}` mit
-  `until = at + 5 min`.
+  direkt danach gilt als Erfolg. Die Plattform setzt `device.facts.reboot = {at, by, reason, until}` mit
+  `until = at + Dauer je Anlass`.
 * `alerts.reboot_suppressed()`: Die Bedingung `device_offline` wird bis `until` übersprungen. Andere
   Alarmtypen bleiben aktiv. Kommt das Gerät bis dahin nicht zurück, greift danach die normale Alarmierung
   (Test `test_device_not_returning_alarms_after_five_minutes`).
 * Der Poller entfernt die Markierung, sobald das Gerät mit einer Uptime antwortet, die kleiner ist als die
   seit dem Neustart vergangene Zeit, oder wenn `until` erreicht ist. Bis dahin zeigt die Oberfläche
   „Neustart läuft“.
-* Die Bestätigung verlangt die Eingabe des Gerätenamens. Firmware-Updates nutzen diese Unterdrückung
-  (noch) nicht.
+* Die Bestätigung verlangt die Eingabe des Gerätenamens.
+* **Dauer je Anlass** (`alerts.REBOOT_SUPPRESS`): manuell 5 min, Firmware 10 min (RouterOS-Update und
+  RouterBOARD-Firmware bedeuten zwei Neustarts). `alerts.mark_reboot(dev, reason, by)` ist der einzige
+  Einstieg. Der Firmware-Job ruft ihn vor `/system/package/update/install` und erneut vor dem
+  RouterBOARD-Neustart auf. `facts.reboot.reason` steuert die Anzeige
+  („Neustart läuft (Firmware-Update)“).
 
 ### VRRP-Gegenstelle
 

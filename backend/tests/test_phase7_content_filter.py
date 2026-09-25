@@ -57,6 +57,7 @@ async def test_profile_sync_and_apply(client, msp, hub, fake_nextdns):
     h = await make_tenant_admin(client, msp, t["id"])
     site = (await client.post("/api/v1/sites", json={"name": "Campus", "lan_subnets": ["10.10.0.0/16"]}, headers=h)).json()
     dev = await make_paired_device(client, h, site_id=site["id"], name="campus rtr")
+    get_router(dev["tunnel_ip"]).tables["/ip/dhcp-client"].append({".id": "*D1", "interface": "ether1", "use-peer-dns": "yes", "gateway": "172.16.235.1"})
     r = await client.post("/api/v1/content-filter/profiles", json=PROFILE, headers=h)
     assert r.status_code == 201, r.text
     prof = r.json()
@@ -76,6 +77,8 @@ async def test_profile_sync_and_apply(client, msp, hub, fake_nextdns):
     rt = get_router(dev["tunnel_ip"])
     assert rt.dns["use-doh-server"] == "https://dns.nextdns.io/p00001/campus-rtr"
     assert rt.dns["verify-doh-cert"] == "yes" and rt.dns["servers"] == ""
+    # Provider-DNS vom DHCP-Client abgeschaltet (sonst Umgehung des Filters)
+    assert rt.tables["/ip/dhcp-client"][0]["use-peer-dns"] == "no"
     assert {s["address"] for s in rt.tables["/ip/dns/static"] if s.get("name") == "dns.nextdns.io"} == {"45.90.28.0", "45.90.30.0"}
     nat = [n for n in rt.tables["/ip/firewall/nat"] if str(n.get("comment", "")).startswith("sdwan:dns:force")]
     assert len(nat) == 2 and nat[0]["src-address"] == "10.10.0.0/16"
@@ -88,6 +91,7 @@ async def test_profile_sync_and_apply(client, msp, hub, fake_nextdns):
     # Zuweisung entfernen -> DNS wiederhergestellt
     r = await client.put("/api/v1/content-filter/assignment", json={"sites": {site["id"]: None}}, headers=h)
     assert rt.dns["use-doh-server"] == ""
+    assert rt.tables["/ip/dhcp-client"][0]["use-peer-dns"] == "yes"  # wiederhergestellt
     assert not [s for s in rt.tables["/ip/dns/static"] if str(s.get("comment", "")).startswith("sdwan:dns:")]
     # Löschen entfernt Profil bei NextDNS
     assert (await client.delete(f"/api/v1/content-filter/profiles/{prof['id']}", headers=h)).status_code == 204

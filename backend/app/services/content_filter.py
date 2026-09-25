@@ -94,6 +94,34 @@ async def _ensure_ca(api: DeviceAPI, device: Device) -> str:
     return "imported"
 
 
+PEER_DNS_PATHS = ("/ip/dhcp-client", "/interface/pppoe-client")
+
+
+async def _disable_peer_dns(api: DeviceAPI) -> list[list[str]]:
+    """Vom Provider gelernte DNS-Server (DHCP/PPPoE) abschalten – sonst umgeht RouterOS den DoH-Filter."""
+    changed: list[list[str]] = []
+    for path in PEER_DNS_PATHS:
+        try:
+            rows = await api.print(path)
+        except RouterOSError:
+            continue  # z. B. PPPoE-Paket nicht vorhanden
+        for r in rows:
+            if str(r.get("use-peer-dns", "no")).lower() in ("true", "yes"):
+                await api.set(path, r[".id"], **{"use-peer-dns": "no"})
+                changed.append([path, str(r.get("interface") or r.get("name"))])
+    return changed
+
+
+async def _restore_peer_dns(api: DeviceAPI, entries: list[list[str]]) -> None:
+    for path, ident in entries:
+        try:
+            for r in await api.print(path):
+                if str(r.get("interface") or r.get("name")) == ident:
+                    await api.set(path, r[".id"], **{"use-peer-dns": "yes"})
+        except RouterOSError as exc:
+            log.warning("use-peer-dns für %s nicht wiederherstellbar: %s", ident, exc)
+
+
 async def apply_dns(db: AsyncSession, device: Device) -> dict[str, Any]:
     profile = await profile_for_device(db, device)
     site = await db.get(Site, device.site_id) if device.site_id else None
@@ -110,6 +138,9 @@ async def apply_dns(db: AsyncSession, device: Device) -> dict[str, Any]:
             for i, ip in enumerate(NEXTDNS_BOOTSTRAP)
         ])
         url = doh_url(profile, device)
+        peer = await _disable_peer_dns(api)
+        known = facts["dns_backup"].setdefault("peer_dns", [])
+        known += [e for e in peer if e not in known]
         await api.call("/ip/dns/set", **{"use-doh-server": url, "verify-doh-cert": "yes", "servers": "", "allow-remote-requests": "yes"})
         await api.call("/ip/dns/cache/flush")
         nat: list[dict[str, Any]] = []
@@ -132,6 +163,7 @@ async def remove_dns(api: DeviceAPI, device: Device) -> dict[str, Any]:
     await api.sync_managed("/ip/firewall/nat", "dns:", [], ordered=True)
     await api.call("/ip/dns/set", **{"use-doh-server": backup.get("use-doh-server", ""), "servers": backup.get("servers", "")})
     await api.sync_managed("/ip/dns/static", "dns:", [])
+    await _restore_peer_dns(api, backup.get("peer_dns", []))
     await api.call("/ip/dns/cache/flush")
     facts.pop("dns_filter", None)
     device.facts = facts

@@ -71,3 +71,11 @@ export function useFleetState() {
   useLive(() => void f.reload(), ["wan.link", "vrrp.state", "device.status"]);
   return f;
 }
+
+/** Meldung ohne vorangestellten Gerätenamen ("rtr1: WAN … ausgefallen" -> "WAN … ausgefallen"). */
+export function alertTitle(a: AlertItem): string {
+  const m = a.message;
+  if (a.device && m.startsWith(`${a.device}: `)) return m.slice(a.device.length + 2);
+  if (a.device && m.startsWith(`${a.device} `)) return m.slice(a.device.length + 1).replace(/^./, (c) => c.toUpperCase());
+  return m;
+}

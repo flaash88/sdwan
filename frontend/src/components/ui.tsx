@@ -86,27 +86,36 @@ export function IconButton({ icon, label, className, ...p }: ButtonHTMLAttribute
 
 const control = "w-full rounded-md border border-line-strong bg-panel px-2.5 text-fg placeholder:text-fg3 focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue-bg disabled:opacity-60";
 
-function Field({ label, hint, children }: { label?: ReactNode; hint?: ReactNode; children: ReactNode }) {
+/** Beschriftung + Hinweis; der Hinweis ist per aria-describedby verknüpft (nicht Teil des Labels). */
+function Field({ label, hint, id, children }: { label?: ReactNode; hint?: ReactNode; id: string; children: ReactNode }) {
   if (!label && !hint) return <>{children}</>;
   return (
-    <label className="flex min-w-0 flex-col gap-1.5">
-      {label && <span className="font-medium text-fg">{label}</span>}
+    <div className="flex min-w-0 flex-col gap-1.5">
+      {label && <label htmlFor={id} className="font-medium text-fg">{label}</label>}
       {children}
-      {hint && <span className="text-xs text-fg3">{hint}</span>}
-    </label>
+      {hint && <span id={`${id}-hint`} className="text-xs text-fg3">{hint}</span>}
+    </div>
   );
 }
 
-export function Input({ label, hint, className, ...p }: InputHTMLAttributes<HTMLInputElement> & { label?: ReactNode; hint?: ReactNode }) {
-  return <Field label={label} hint={hint}><input {...p} className={cls(control, "h-[34px]", className)} /></Field>;
+function useFieldId(given?: string) {
+  const auto = useId();
+  return given ?? auto;
 }
 
-export function Textarea({ label, hint, className, ...p }: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: ReactNode; hint?: ReactNode }) {
-  return <Field label={label} hint={hint}><textarea {...p} className={cls(control, "py-2 font-mono text-xs leading-relaxed", className)} /></Field>;
+export function Input({ label, hint, className, id, ...p }: InputHTMLAttributes<HTMLInputElement> & { label?: ReactNode; hint?: ReactNode }) {
+  const fid = useFieldId(id);
+  return <Field label={label} hint={hint} id={fid}><input {...p} id={fid} aria-describedby={hint ? `${fid}-hint` : undefined} className={cls(control, "h-[34px]", className)} /></Field>;
 }
 
-export function Select({ label, hint, children, className, ...p }: SelectHTMLAttributes<HTMLSelectElement> & { label?: ReactNode; hint?: ReactNode }) {
-  return <Field label={label} hint={hint}><select {...p} className={cls(control, "h-[34px] cursor-pointer pr-7", className)}>{children}</select></Field>;
+export function Textarea({ label, hint, className, id, ...p }: TextareaHTMLAttributes<HTMLTextAreaElement> & { label?: ReactNode; hint?: ReactNode }) {
+  const fid = useFieldId(id);
+  return <Field label={label} hint={hint} id={fid}><textarea {...p} id={fid} aria-describedby={hint ? `${fid}-hint` : undefined} className={cls(control, "py-2 font-mono text-xs leading-relaxed", className)} /></Field>;
+}
+
+export function Select({ label, hint, children, className, id, ...p }: SelectHTMLAttributes<HTMLSelectElement> & { label?: ReactNode; hint?: ReactNode }) {
+  const fid = useFieldId(id);
+  return <Field label={label} hint={hint} id={fid}><select {...p} id={fid} aria-describedby={hint ? `${fid}-hint` : undefined} className={cls(control, "h-[34px] cursor-pointer pr-7", className)}>{children}</select></Field>;
 }
 
 export function Checkbox({ label, checked, onChange, disabled }: { label: ReactNode; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {

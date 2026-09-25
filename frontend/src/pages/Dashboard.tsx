@@ -4,7 +4,7 @@ import { Icon } from "../components/Icon";
 import { WanPill } from "../components/fleet";
 import { EmptyState, KpiTile, Loading, PageHeader, SeverityBadge, StatusDot, cls, type Tone } from "../components/ui";
 import { useAuth } from "../lib/auth";
-import { alarmState, firmwareUpdate, type DeviceState, useDevices, useFleetState, useOpenAlerts, useSites } from "../lib/fleet";
+import { alarmState, alertTitle, firmwareUpdate, type DeviceState, useDevices, useFleetState, useOpenAlerts, useSites } from "../lib/fleet";
 import { fmtShort, fmtSince } from "../lib/format";
 import type { Device, Site } from "../lib/types";
 
@@ -84,7 +84,7 @@ export default function Dashboard() {
                   return (
                     <Link key={a.id} to={a.device_id ? `/devices/${a.device_id}` : "/alerts"} className="grid h-11 grid-cols-[104px_minmax(0,1fr)_110px_150px_90px] items-center gap-3 border-b border-line px-4 text-fg last:border-b-0 hover:bg-hover hover:no-underline">
                       <span><SeverityBadge severity={a.severity} /></span>
-                      <span className="flex min-w-0 flex-col leading-tight"><span className="truncate font-medium" title={a.message}>{a.message}</span><span className="text-[11.5px] text-fg3">{ack ? `Quittiert · ${a.acknowledged_by}` : `Aktiv seit ${fmtShort(a.fired_at ?? a.started_at)}`}</span></span>
+                      <span className="flex min-w-0 flex-col leading-tight"><span className="truncate font-medium" title={a.message}>{alertTitle(a)}</span><span className="text-[11.5px] text-fg3">{ack ? `Quittiert · ${a.acknowledged_by}` : `Aktiv seit ${fmtShort(a.fired_at ?? a.started_at)}`}</span></span>
                       <span className="truncate">{d ? siteName(d.site_id) : "–"}</span>
                       <span className="truncate font-mono text-xs text-fg2">{a.device ?? "–"}</span>
                       <span className="text-right text-fg2">{fmtSince(a.started_at)}</span>

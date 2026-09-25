@@ -226,8 +226,19 @@ FortiGate, Priorität 100 (kleiner als die FortiGate, z. B. 200), VIP `192.168.1
       kein temporärer Benutzer, kein Ausweichen auf `full`.
       Tatsächliches Verhalten von RouterOS: ______________________
       Danach `winbox` wieder ergänzen (oder den Selbsttest-Hinweis beachten).
-- [ ] Hinweis: WebFig-Fernzugriff schaltet den Dienst `www` ein (nur Hub-Adresse). Nach dem Test
-      `/ip service print` prüfen und `www` wieder abschalten.
+- [ ] **Dienstzustand wird wiederhergestellt (WebFig):** Vorher `/ip service print` notieren
+      (`www` laut Schritt 1 deaktiviert). WebFig-Sitzung starten.
+      **Erwartet:** `www` ist aktiv, die Hub-Adresse ist ergänzt. Sitzung beenden.
+      **Erwartet:** `www` ist wieder exakt wie vorher (deaktiviert, gleiche `address`).
+- [ ] Zwei WebFig-Sitzungen parallel starten und die erste beenden. **Erwartet:** `www` bleibt aktiv.
+      Nach dem Ende der zweiten ist `www` wieder deaktiviert.
+- [ ] Eine WebFig-Sitzung mit kurzer Dauer (z. B. 5 min) ablaufen lassen, dabei den Plattform-Container
+      neu starten (`docker compose restart api worker`). **Erwartet:** Nach dem Ablauf stellt der Worker
+      `www` zurück (spätestens 30 s nach Ablauf).
+- [ ] Gegenprobe: `www` vorher aktivieren (`disabled=no`), Sitzung starten und beenden.
+      **Erwartet:** `www` bleibt aktiv; die Plattform stellt nur zurück, was sie selbst geändert hat.
+      Danach `www` wieder deaktivieren.
+- [ ] Gleiches Verhalten für WinBox/SSH, falls diese vorher deaktiviert bzw. eingeschränkt waren.
 
 ## 9. Neustart
 

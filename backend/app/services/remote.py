@@ -48,8 +48,11 @@ async def allocate_port(db: AsyncSession) -> int:
     raise RemoteError("Kein freier Proxy-Port – bitte bestehende Sessions beenden")
 
 
-async def _ensure_service(api: DeviceAPI, service: str) -> int:
-    """Dienst aktivieren und Hub-Adresse erlauben (falls der Dienst auf Adressen beschränkt ist)."""
+async def _ensure_service(api: DeviceAPI, service: str) -> tuple[int, dict[str, Any]]:
+    """Dienst aktivieren und Hub-Adresse erlauben (falls der Dienst auf Adressen beschränkt ist).
+
+    Rückgabe: (Port, Zustand vorher). Der Zustand ``{service, disabled, address, changed}`` wird in der Sitzung
+    gespeichert und beim Ende wiederhergestellt, falls die Plattform etwas geändert hat."""
     rows = await api.print("/ip/service", name=service)
     if not rows:
         raise RemoteError(f"Dienst {service} nicht gefunden")
@@ -61,9 +64,42 @@ async def _ensure_service(api: DeviceAPI, service: str) -> int:
     addr = str(svc.get("address", "") or "")
     if addr and hub not in addr.split(","):
         changes["address"] = f"{addr},{hub}"
+    before = {"service": service, "disabled": str(svc.get("disabled", "false")), "address": addr, "changed": bool(changes)}
     if changes:
         await api.set("/ip/service", svc[".id"], **changes)
-    return int(svc.get("port", PROTOCOLS.get(service, ("", 0))[1]) or 0)
+    return int(svc.get("port", PROTOCOLS.get(service, ("", 0))[1]) or 0), before
+
+
+async def _other_active(db: AsyncSession, sess: RemoteSession) -> list[RemoteSession]:
+    """Andere aktive Sitzungen auf demselben Gerät, die denselben RouterOS-Dienst nutzen."""
+    service = PROTOCOLS[sess.protocol][0]
+    rows = (await db.execute(select(RemoteSession).where(
+        RemoteSession.device_id == sess.device_id, RemoteSession.status == "active", RemoteSession.id != sess.id,
+    ).order_by(RemoteSession.created_at))).scalars().all()
+    return [r for r in rows if PROTOCOLS.get(r.protocol, ("",))[0] == service]
+
+
+async def _restore_service(db: AsyncSession, sess: RemoteSession, device: Device) -> None:
+    """Ursprünglichen Dienstzustand wiederherstellen – nur wenn die Plattform ihn geändert hat und keine andere
+    aktive Sitzung den Dienst noch braucht. Bei Fehler bleibt ``pending`` gesetzt; der Worker versucht es erneut."""
+    st = dict(sess.service_restore or {})
+    if not st.get("changed") or st.get("restored"):
+        return
+    if await _other_active(db, sess):
+        st["pending"] = False
+        st["handed_over"] = True  # eine andere Sitzung trägt denselben Ursprungszustand und stellt zurück
+        sess.service_restore = st
+        return
+    try:
+        async with connect_device(device) as api:
+            for r in await api.print("/ip/service", name=st["service"]):
+                await api.set("/ip/service", r[".id"], disabled=st["disabled"], address=st["address"])
+        st.update(pending=False, restored=True)
+    except RouterOSError as exc:
+        st["pending"] = True
+        sess.last_error = f"Dienst {st['service']} konnte nicht zurückgestellt werden: {exc}"
+        log.warning("Remote-Session %s: %s", sess.id, exc)
+    sess.service_restore = st
 
 
 async def open_session(db: AsyncSession, device: Device, user: Any, protocol: str, minutes: int, allowed_cidr: str, reason: str | None) -> tuple[RemoteSession, str | None]:
@@ -79,9 +115,13 @@ async def open_session(db: AsyncSession, device: Device, user: Any, protocol: st
     db.add(sess)
     await db.flush()
     password: str | None = None
+    # Läuft schon eine Sitzung mit demselben Dienst, gilt deren Ursprungszustand (nicht der bereits geänderte)
+    inherited = next((o.service_restore for o in await _other_active(db, sess) if o.service_restore), None)
     try:
         async with connect_device(device) as api:
-            sess.target_port = await _ensure_service(api, service) or default_port
+            port, before = await _ensure_service(api, service)
+            sess.target_port = port or default_port
+            sess.service_restore = dict(inherited) if inherited else before
             if protocol in ("ssh", "winbox", "webfig"):
                 await _ensure_remote_group(api)
                 username = f"sdwan-rs-{sess.id.hex[:8]}"
@@ -90,12 +130,19 @@ async def open_session(db: AsyncSession, device: Device, user: Any, protocol: st
                                address=f"{get_settings().wg_hub_ip}/32", comment=f"sdwan:remote:{sess.id}")
                 sess.ros_username = username
     except RemoteError as exc:
-        sess.status, sess.last_error, sess.closed_at = "failed", str(exc), utcnow()
+        _failed(sess, str(exc), inherited)
         raise
     except RouterOSError as exc:
-        sess.status, sess.last_error, sess.closed_at = "failed", str(exc), utcnow()
+        _failed(sess, str(exc), inherited)
         raise RemoteError(f"Gerät nicht erreichbar: {exc}") from exc
     return sess, password
+
+
+def _failed(sess: RemoteSession, error: str, inherited: dict[str, Any] | None) -> None:
+    sess.status, sess.last_error, sess.closed_at = "failed", error, utcnow()
+    # Dienst wurde evtl. schon eingeschaltet -> vom Worker zurückstellen lassen (nicht, wenn eine andere Sitzung ihn nutzt)
+    if sess.service_restore and sess.service_restore.get("changed") and not inherited:
+        sess.service_restore = {**sess.service_restore, "pending": True}
 
 
 async def _ensure_remote_group(api: DeviceAPI) -> None:
@@ -125,12 +172,25 @@ async def close_session(db: AsyncSession, sess: RemoteSession, status: str, by: 
         except RouterOSError as exc:
             sess.last_error = f"Temp-User konnte nicht entfernt werden: {exc}"
             log.warning("Remote-Session %s: %s", sess.id, exc)
+    if device is not None:
+        await db.flush()  # Status 'closed' sichtbar für die Prüfung auf weitere aktive Sitzungen
+        await _restore_service(db, sess, device)
     await events.publish(sess.tenant_id, "remote.session", {"id": str(sess.id), "status": status})
 
 
 async def expire_sessions() -> None:
-    """Worker-Job: abgelaufene Sessions schließen und Temp-User entfernen."""
+    """Worker-Job: abgelaufene Sessions schließen, Temp-User entfernen, Dienste zurückstellen.
+
+    Liest alles aus der Datenbank – funktioniert daher auch nach einem Neustart der Plattform. Fehlgeschlagene
+    Rückstellungen (Router war nicht erreichbar) werden hier erneut versucht."""
     async with system_session() as db:
+        since = utcnow() - dt.timedelta(days=7)
+        for sess in (await db.execute(select(RemoteSession).where(
+                RemoteSession.status != "active", RemoteSession.closed_at >= since, RemoteSession.service_restore.is_not(None)))).scalars().all():
+            if (sess.service_restore or {}).get("pending"):
+                device = await db.get(Device, sess.device_id)
+                if device is not None:
+                    await _restore_service(db, sess, device)
         rows = (await db.execute(select(RemoteSession).where(RemoteSession.status == "active", RemoteSession.expires_at <= utcnow()))).scalars().all()
         for sess in rows:
             await close_session(db, sess, "expired", "system")

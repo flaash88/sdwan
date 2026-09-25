@@ -8,7 +8,7 @@ import uuid
 from sqlalchemy import BigInteger, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import Base, IdMixin, TenantScoped, UTCDateTime
+from app.db import Base, IdMixin, JSONType, TenantScoped, UTCDateTime
 
 
 class RemoteSession(IdMixin, TenantScoped, Base):
@@ -32,3 +32,7 @@ class RemoteSession(IdMixin, TenantScoped, Base):
     bytes_in: Mapped[int] = mapped_column(BigInteger().with_variant(Integer(), "sqlite"), default=0)
     bytes_out: Mapped[int] = mapped_column(BigInteger().with_variant(Integer(), "sqlite"), default=0)
     last_error: Mapped[str | None] = mapped_column(Text)
+    # Ursprünglicher Zustand des RouterOS-Dienstes (/ip service) vor der Sitzung:
+    # {service, disabled, address, changed, pending}. Wird beim Ende der letzten Sitzung dieses Dienstes
+    # wiederhergestellt, aber nur wenn die Plattform ihn geändert hat (changed).
+    service_restore: Mapped[dict | None] = mapped_column(JSONType)

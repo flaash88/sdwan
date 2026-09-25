@@ -494,6 +494,19 @@ Die Checkliste für den Test steht in `docs/LABORTEST.md`.
   ersten Mal ca. 3 Minuten nach dem Anlegen. So entfallen die versionsabhängigen Datumsformate von
   `start-date`.
 
+### Fernzugriff: Dienstzustand wiederherstellen
+
+* Vor dem Einschalten eines Dienstes (`www` für WebFig, `winbox`, `ssh`) speichert die Sitzung dessen
+  Zustand in `remote_sessions.service_restore` (Migration 0019): `{service, disabled, address, changed}`.
+  `changed` ist nur gesetzt, wenn die Plattform den Dienst eingeschaltet oder die Hub-Adresse ergänzt hat.
+* **Parallele Sitzungen:** Eine neue Sitzung übernimmt den gespeicherten Ursprungszustand einer schon
+  laufenden Sitzung desselben Dienstes, nicht den bereits geänderten. Beim Beenden oder Ablauf wird nur
+  zurückgestellt, wenn keine andere aktive Sitzung den Dienst noch nutzt. Zurückgestellt wird genau
+  `disabled` und `address` von vorher.
+* **Robustheit:** Scheitert eine Sitzung nach dem Einschalten oder ist der Router beim Beenden nicht
+  erreichbar, bleibt `pending` gesetzt. Der Worker-Job `expire_sessions` (alle 30 s) versucht es erneut.
+  Er liest alles aus der Datenbank und räumt deshalb auch nach einem Neustart der Plattform auf.
+
 ### Neustart und Alarm-Unterdrückung
 
 * `POST /devices/{id}/reboot` (Techniker): `/system/reboot`, Audit `device.reboot`. Ein Verbindungsabbruch
@@ -592,7 +605,7 @@ Anzeige kommt aus der API. Was das Backend nicht liefert, fehlt in der Oberfläc
   * `GET /devices/{id}/events`: state_log für Rollenverlauf, Ereignisse und Failover-Markierungen.
   * `GET /devices/{id}/wan/routes`: verwaltete `sdwan:wan`-Routen live vom Router.
   * Phase 13: `GET/POST /devices/{id}/selftest`, `POST /devices/{id}/reboot`, `POST /devices/{id}/restrict-api-user`,
-    `GET /devices/{id}/addresses`, `POST /devices/{id}/vrrp/{inst}/ping`.
+    `GET /devices/{id}/addresses`, `POST /devices/{id}/vrrp/{inst}/ping`. Migrationen 0016–0019.
 
   Bestehende Endpunkte blieben unverändert.
 * **Kontrast:** Badge-Text auf Badge-Grund ≥ 4,5:1 in beiden Themes, Sekundärtext ≥ 4,6:1. Primär-Buttons

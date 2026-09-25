@@ -38,6 +38,28 @@ async def poll_device(device: Device) -> dict[str, Any]:
         return result
 
 
+async def _finish_reboot(dev: Device) -> None:
+    """Neustart-Markierung entfernen, sobald das Gerät nach dem Neustart wieder antwortet (Uptime kleiner als
+    die seither vergangene Zeit) oder die Unterdrückungszeit abgelaufen ist."""
+    from app.routeros.util import parse_duration
+
+    info = (dev.facts or {}).get("reboot")
+    if not info:
+        return
+    now = utcnow()
+    try:
+        at, until = dt.datetime.fromisoformat(info["at"]), dt.datetime.fromisoformat(info["until"])
+    except (KeyError, ValueError):
+        at = until = now
+    up = parse_duration(dev.uptime) if getattr(dev, "_poll_ok", False) else None
+    back = up is not None and up < (now - at).total_seconds() + 60 and (now - at).total_seconds() > 5
+    if back or now >= until:
+        facts = dict(dev.facts or {})
+        facts.pop("reboot", None)
+        dev.facts = facts
+        await events.publish(dev.tenant_id, "device.reboot", {"id": str(dev.id), "name": dev.name, "state": "done" if back else "expired"})
+
+
 async def poll_all(only: set[str] | None = None) -> None:
     """Pollt alle gepairten Geräte (oder nur ``only`` – Live-Modus)."""
     s = get_settings()
@@ -85,6 +107,7 @@ async def poll_all(only: set[str] | None = None) -> None:
                     # Offline: 2 Fehlversuche in Folge, WireGuard-Tunnel ohne Handshake, oder Kulanzzeit überschritten
                     if fails >= 2 or tunnel_down or dev.last_seen_at is None or utcnow() - dev.last_seen_at > grace:
                         dev.status = DeviceStatus.offline
+                await _finish_reboot(dev)
                 if dev.status != old:
                     await events.publish(dev.tenant_id, "device.status", {"id": str(dev.id), "name": dev.name, "status": dev.status.value, "previous": old.value})
                     from app.services.state_log import record_state_change

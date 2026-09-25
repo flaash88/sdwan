@@ -51,6 +51,27 @@ class Condition:
     since: dt.datetime | None = None  # seit wann die Bedingung bekannt anliegt
 
 
+REBOOT_SUPPRESS = dt.timedelta(minutes=5)
+
+
+def reboot_suppressed(dev: Device, now: dt.datetime | None = None) -> bool:
+    """Offline-Alarm nach einem über die Plattform ausgelösten Neustart unterdrücken.
+
+    ``POST /devices/{id}/reboot`` setzt ``facts.reboot.until`` = Zeitpunkt + 5 Minuten. Bis dahin gilt
+    „offline“ als erwartet (Router bootet) und die Bedingung ``device_offline`` wird für dieses Gerät
+    übersprungen. Andere Alarmtypen bleiben aktiv. Ist das Gerät nach Ablauf nicht zurück, alarmiert die
+    Regel ganz normal – ``since`` ist dann der letzte Kontakt vor dem Neustart, die Verzögerung der Regel
+    läuft also bereits.
+    """
+    until = ((dev.facts or {}).get("reboot") or {}).get("until")
+    if not until:
+        return False
+    try:
+        return (now or utcnow()) < dt.datetime.fromisoformat(until)
+    except ValueError:
+        return False
+
+
 def _in_scope(rule: AlertRule, dev: Device) -> bool:
     if rule.device_ids and str(dev.id) not in rule.device_ids:
         return False
@@ -66,7 +87,7 @@ async def conditions(db: AsyncSession, rule: AlertRule, devices: list[Device]) -
     p = rule.params or {}
     if rule.type == "device_offline":
         for d in devs:
-            if d.status == DeviceStatus.offline:
+            if d.status == DeviceStatus.offline and not reboot_suppressed(d):
                 out.append(Condition(d, "device", f"{d.name} ist offline (zuletzt gesehen {d.last_seen_at:%d.%m. %H:%M} UTC)" if d.last_seen_at else f"{d.name} ist offline", since=d.last_seen_at))
     elif rule.type in ("wan_down", "latency"):
         links = (await db.execute(select(WanLink).where(WanLink.device_id.in_(list(by_id)), WanLink.enabled.is_(True)))).scalars().all()

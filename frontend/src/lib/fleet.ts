@@ -46,7 +46,7 @@ export function useDevices() {
       const d = e.data as { id: string; status: Device["status"]; uptime: string; last_seen_at: string; cpu_load: number };
       devices.setData((prev) => prev?.map((x) => (x.id === d.id ? { ...x, status: d.status, uptime: d.uptime, last_seen_at: d.last_seen_at, facts: { ...x.facts, cpu_load: d.cpu_load } } : x)) ?? prev);
     } else void devices.reload();
-  }, ["device.status", "device.paired", "device.poll"]);
+  }, ["device.status", "device.paired", "device.poll", "device.reboot"]);
   return devices;
 }
 

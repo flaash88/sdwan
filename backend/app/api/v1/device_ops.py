@@ -1,4 +1,4 @@
-"""Geräte-Werkzeuge: Hardware-Selbsttest (Labortest-Vorbereitung)."""
+"""Geräte-Werkzeuge: Hardware-Selbsttest (Labortest-Vorbereitung), Neustart."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
+from app import events
 from app.api.v1.common import get_or_404
 from app.db import utcnow
 from app.deps import Ctx, ReadCtx, TechCtx
@@ -47,3 +48,33 @@ async def run_selftest_endpoint(device_id: uuid.UUID, ctx: Ctx = TechCtx) -> dic
                     details={"status": res["status"], "summary": res.get("summary")})
     await ctx.db.commit()
     return _selftest_out(t)
+
+
+# Verbindungsabbruch direkt nach /system/reboot ist erwartet (der Router trennt die API-Sitzung)
+_DISCONNECT = ("closed", "reset", "eof", "broken pipe", "timed out", "timeout", "connection")
+
+
+@router.post("/{device_id}/reboot")
+async def reboot(device_id: uuid.UUID, ctx: Ctx = TechCtx) -> dict:
+    """Router neu starten. Der Offline-Alarm wird für 5 Minuten unterdrückt (siehe alerts.reboot_suppressed)."""
+    from app.routeros import RouterOSError, connect_device
+    from app.services.alerts import REBOOT_SUPPRESS
+
+    dev = await get_or_404(ctx.db, Device, device_id, "Device")
+    if dev.pairing_status != PairingStatus.paired:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Gerät ist nicht verbunden")
+    try:
+        async with connect_device(dev) as api:
+            await api.call("/system/reboot")
+    except RouterOSError as exc:
+        if not any(k in str(exc).lower() for k in _DISCONNECT):
+            await ctx.audit("device.reboot", target_type="device", target_id=dev.id, success=False, details={"error": str(exc)})
+            await ctx.db.commit()
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Neustart fehlgeschlagen: {exc}") from exc
+    now = utcnow()
+    info = {"at": now.isoformat(), "by": ctx.user.email, "until": (now + REBOOT_SUPPRESS).isoformat()}
+    dev.facts = {**(dev.facts or {}), "reboot": info}
+    await ctx.audit("device.reboot", target_type="device", target_id=dev.id, details={"suppress_offline_until": info["until"]})
+    await ctx.db.commit()
+    await events.publish(dev.tenant_id, "device.reboot", {"id": str(dev.id), "name": dev.name, "state": "rebooting", **info})
+    return {"ok": True, **info}

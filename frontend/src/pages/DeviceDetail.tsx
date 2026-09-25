@@ -3,8 +3,8 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { Icon, type IconName } from "../components/Icon";
 import PairingBox from "../components/PairingBox";
 import SelftestCard from "../components/SelftestCard";
-import { DeviceStatusBadge } from "../components/fleet";
-import { Button, Card, EmptyState, ErrorBox, Input, Loading, Pill, Select, StatusBadge, Tabs, cls, useAction, type Tone } from "../components/ui";
+import { DeviceStatusBadge, rebootInfo } from "../components/fleet";
+import { Button, Card, EmptyState, ErrorBox, Input, Loading, Modal, Notice, Pill, Select, StatusBadge, Tabs, cls, useAction, type Tone } from "../components/ui";
 import { deviceTabs } from "../deviceTabs";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -39,7 +39,7 @@ export default function DeviceDetail() {
   const dev = useFetch<Device>(`/devices/${id}`);
   const fleet = useFleetState();
   const sites = useSites();
-  useLive((e) => { if ((e.data as { id?: string }).id === id) void dev.reload(); }, ["device.status", "device.paired", "device.poll"]);
+  useLive((e) => { if ((e.data as { id?: string }).id === id) void dev.reload(); }, ["device.status", "device.paired", "device.poll", "device.reboot"]);
   const d = dev.data;
   if (!d) return dev.error ? <ErrorBox error={dev.error} /> : <Loading rows={5} />;
   const st = fleet.data?.devices[d.id];
@@ -67,6 +67,7 @@ export default function DeviceDetail() {
 function DeviceHeader({ device: d, state, site, onTab, children }: { device: Device; state?: DeviceState; site?: Site; onTab: (t: string) => void; children: React.ReactNode }) {
   const { can } = useAuth();
   const [bk, setBk] = useState<0 | 1 | 2>(0);
+  const [rebootOpen, setRebootOpen] = useState(false);
   const { error, run } = useAction();
   const paired = d.pairing_status === "paired";
   const backupNow = () => void run(async () => { setBk(1); try { await api.post(`/devices/${d.id}/backups`); setBk(2); setTimeout(() => setBk(0), 3000); } catch (e) { setBk(0); throw e; } });
@@ -97,12 +98,37 @@ function DeviceHeader({ device: d, state, site, onTab, children }: { device: Dev
             <Button variant="secondary" icon={bk === 2 ? "check" : "archive"} disabled={bk === 1 || d.status !== "online"} onClick={backupNow}>
               {bk === 1 ? "Backup läuft …" : bk === 2 ? "Backup erstellt" : "Backup jetzt"}
             </Button>
+            <Button variant="danger-outline" icon="power" disabled={d.status !== "online" || !!rebootInfo(d)} onClick={() => setRebootOpen(true)}>Neustart</Button>
           </div>
         )}
+        {rebootOpen && <RebootDialog device={d} onClose={() => setRebootOpen(false)} />}
       </div>
       {error && <div className="px-5 pb-3"><ErrorBox error={error} /></div>}
       {children}
     </section>
+  );
+}
+
+function RebootDialog({ device: d, onClose }: { device: Device; onClose: () => void }) {
+  const [name, setName] = useState("");
+  const { busy, error, run } = useAction();
+  const ok = name === d.name;
+  return (
+    <Modal open onClose={onClose} title="Gerät neu starten" subtitle={`${d.name} · ${d.tunnel_ip}`}
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Abbrechen</Button>
+        <Button variant="danger" icon={busy ? "loader" : "power"} disabled={!ok || busy}
+          onClick={() => void run(async () => { await api.post(`/devices/${d.id}/reboot`); onClose(); })}>{busy ? "Starte neu …" : "Jetzt neu starten"}</Button>
+      </>}>
+      <div className="flex flex-col gap-3">
+        <Notice tone="orange" title="Der Standort ist während des Neustarts offline">
+          Der Router startet sofort neu (ca. 1–2 Minuten). Der Offline-Alarm für dieses Gerät wird 5 Minuten lang unterdrückt; kommt es bis dahin nicht zurück, wird normal alarmiert.
+        </Notice>
+        <ErrorBox error={error} />
+        <Input label={<>Zur Bestätigung den Gerätenamen <span className="font-mono">{d.name}</span> eingeben</>} value={name} autoFocus
+          autoComplete="off" spellCheck={false} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && ok && !busy) void run(async () => { await api.post(`/devices/${d.id}/reboot`); onClose(); }); }} />
+      </div>
+    </Modal>
   );
 }
 

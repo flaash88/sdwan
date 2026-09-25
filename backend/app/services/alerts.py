@@ -139,33 +139,26 @@ def _recipients(rule: AlertRule, tenant: Tenant | None) -> list[str]:
     return [tenant.contact_email] if tenant and tenant.contact_email else []
 
 
-async def _notify(rule: AlertRule, alert: Alert, tenant: Tenant | None, resolved: bool) -> None:
-    to = _recipients(rule, tenant)
-    tag = "BEHOBEN" if resolved else alert.severity.upper()
-    subject = f"[SD-WAN][{tag}] {alert.message}"
-    base = get_settings().public_url.rstrip("/")
-    body = (
-        f"Mandant: {tenant.name if tenant else '-'}\nRegel: {rule.name} ({TYPES.get(rule.type, rule.type)})\n"
-        f"Status: {'behoben' if resolved else 'aktiv'}\nMeldung: {alert.message}\n"
-        f"Beginn: {alert.started_at:%d.%m.%Y %H:%M:%S} UTC\n"
-        + (f"Ende: {alert.resolved_at:%d.%m.%Y %H:%M:%S} UTC\n" if resolved and alert.resolved_at else "")
-        + (f"\nGerät: {base}/devices/{alert.device_id}\n" if alert.device_id else "")
-    )
-    if await send_mail(to, subject, body):
+async def _notify(db: AsyncSession, rule: AlertRule, alert: Alert, tenant: Tenant | None, resolved: bool) -> None:
+    from app.services import mail_render
+
+    ctx = await mail_render.alert_context(db, rule, alert, tenant, resolved)
+    subject, text, html = mail_render.render_alert(ctx)
+    if await send_mail(_recipients(rule, tenant), subject, text, html=html):
         alert.notified = True
     if rule.webhook_url_enc:
         from app.security import decrypt_secret
         from app.services import webhook
 
         payload = webhook.build_payload(
-            rule.webhook_format, title=f"[{tag}] {rule.name}", text=alert.message, severity=alert.severity, resolved=resolved,
-            facts={"Mandant": tenant.name if tenant else "-", "Typ": TYPES.get(rule.type, rule.type), "Status": "behoben" if resolved else "aktiv",
-                   "Beginn": f"{alert.started_at:%d.%m.%Y %H:%M:%S} UTC",
-                   "Ende": f"{alert.resolved_at:%d.%m.%Y %H:%M:%S} UTC" if resolved and alert.resolved_at else ""},
-            link=f"{base}/devices/{alert.device_id}" if alert.device_id else None,
+            rule.webhook_format, title=subject, text=ctx["headline"], severity=alert.severity, resolved=resolved,
+            facts={"Mandant": ctx["tenant"] or "-", "Standort": ctx["site"] or "", "Gerät": ctx["device_line"] or "",
+                   "Typ": ctx["type_label"], "Status": "behoben" if resolved else "aktiv",
+                   "Beginn": ctx["start"], "Ende": ctx["end"] or "", "Dauer": ctx["duration"]},
+            link=ctx["device_url"],
             extra={"event": "alert.resolved" if resolved else "alert.firing", "alert_id": str(alert.id), "rule": rule.name, "type": rule.type,
                    "tenant": tenant.name if tenant else None, "device_id": str(alert.device_id) if alert.device_id else None,
-                   "subject": alert.subject, "value": alert.value, "started_at": alert.started_at.isoformat(),
+                   "subject": alert.subject, "message": alert.message, "value": alert.value, "started_at": alert.started_at.isoformat(),
                    "resolved_at": alert.resolved_at.isoformat() if resolved and alert.resolved_at else None},
         )
         if await webhook.send(decrypt_secret(rule.webhook_url_enc), payload):
@@ -199,7 +192,7 @@ async def evaluate_tenant(db: AsyncSession, tenant: Tenant) -> dict[str, int]:
                 if (now - alert.started_at).total_seconds() >= rule.duration_s:
                     alert.status, alert.fired_at = "firing", now
                     stats["fired"] += 1
-                    await _notify(rule, alert, tenant, resolved=False)
+                    await _notify(db, rule, alert, tenant, resolved=False)
                     await events.publish(tenant.id, "alert.firing", {"rule": rule.name, "message": alert.message, "severity": alert.severity,
                                                                      "device_id": str(c.device.id)})
                 else:
@@ -213,7 +206,7 @@ async def evaluate_tenant(db: AsyncSession, tenant: Tenant) -> dict[str, int]:
                 alert.status, alert.resolved_at = "resolved", now
                 stats["resolved"] += 1
                 if rule.notify_resolved:
-                    await _notify(rule, alert, tenant, resolved=True)
+                    await _notify(db, rule, alert, tenant, resolved=True)
                 await events.publish(tenant.id, "alert.resolved", {"rule": rule.name, "message": alert.message, "device_id": str(alert.device_id)})
             by_key.pop(key)
     return stats

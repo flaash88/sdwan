@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "_macros.html" import button, info_table, grid %}
+{% block bar %}
+<tr><td bgcolor="{{ a.color }}" style="background-color:{{ a.color }};padding:12px 24px;font-size:14px;font-weight:bold;letter-spacing:0.5px;color:#ffffff;">
+{{ "BEHOBEN" if a.resolved else "AUSGELÖST" }} &middot; {{ a.type_label }}
+</td></tr>
+{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 16px 0;font-size:20px;line-height:26px;color:#111827;font-weight:bold;">{{ a.headline }}</h1>
+{{ info_table([
+  ("Mandant", a.tenant), ("Standort", a.site), ("Gerät", a.device_line), ("Regel", a.rule),
+  ("Schweregrad", a.severity_label), ("Beginn", a.start), ("Ende", a.end if a.resolved else None), ("Dauer", a.duration),
+]) }}
+{% set b = a.block %}
+{% if b and b.kind == "wan" %}
+<h2 style="margin:0 0 8px 0;font-size:15px;color:#111827;">WAN-Links des Geräts</h2>
+{{ grid(["WAN", "Interface", "Status", "Aktiv", "Latenz", "Verlust"], b.rows) }}
+{% if b.volume %}<p style="margin:-8px 0 20px 0;font-size:13px;color:#334155;">{{ b.volume }}</p>{% endif %}
+{% elif b and b.kind == "vrrp" %}
+<h2 style="margin:0 0 8px 0;font-size:15px;color:#111827;">VRRP</h2>
+{{ info_table([("Instanz", b.name), ("Interface", b.interface), ("VIP", b.vip), ("VRID", b.vrid), ("Master seit", b.since), ("Verknüpftes WAN", b.wan)]) }}
+{% elif b and b.kind == "value" %}
+<h2 style="margin:0 0 8px 0;font-size:15px;color:#111827;">Messwert</h2>
+{{ info_table([(b.label, b.value), ("Schwelle", b.threshold)]) }}
+{% elif b and b.kind == "offline" %}
+<h2 style="margin:0 0 8px 0;font-size:15px;color:#111827;">Letzter Kontakt</h2>
+{{ info_table([("Zuletzt gesehen", b.last_seen), ("Letzte Management-RTT", b.rtt)]) }}
+{% elif b and b.kind == "mesh" %}
+<h2 style="margin:0 0 8px 0;font-size:15px;color:#111827;">Betroffener Tunnel</h2>
+{{ info_table([("Gegenstelle", b.peer), ("Topologie", b.topology)]) }}
+{% endif %}
+{% if a.resolved %}
+<p style="margin:0 0 20px 0;font-size:14px;color:#14532d;">{{ a.summary }}</p>
+{% elif a.steps %}
+<h2 style="margin:0 0 8px 0;font-size:15px;color:#111827;">Empfohlene nächste Schritte</h2>
+<ol style="margin:0 0 20px 20px;padding:0;font-size:14px;color:#111827;">
+{% for s in a.steps %}<li style="margin:0 0 4px 0;">{{ s }}</li>{% endfor %}
+</ol>
+{% endif %}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+{% if a.device_url %}<td style="padding-right:16px;">{{ button(a.device_url, "Gerät öffnen", brand.accent) }}</td>{% endif %}
+<td><a href="{{ a.alerts_url }}" style="color:{{ brand.accent }};font-size:14px;font-weight:bold;text-decoration:underline;">Alarm quittieren</a></td>
+</tr></table>
+{% endblock %}
+{% block reason %}<br>Sie erhalten diese Nachricht wegen der Alarmregel „{{ a.rule }}“{% if a.tenant %} des Mandanten {{ a.tenant }}{% endif %}.{% endblock %}

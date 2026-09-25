@@ -6,23 +6,30 @@ import { fmtDate } from "../lib/format";
 import type { Tenant } from "../lib/types";
 import { useFetch } from "../lib/useFetch";
 
+const ZONES = ["Europe/Vienna", "Europe/Berlin", "Europe/Zurich", "Europe/Rome", "Europe/Prague", "Europe/Budapest", "Europe/Ljubljana", "Europe/London", "UTC"];
+
 export default function Tenants() {
   const { reload, switchTenant } = useAuth();
   const tenants = useFetch<Tenant[]>("/tenants");
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ name: "", slug: "", contact_email: "", mesh_topology: "hub_spoke" });
+  const [f, setF] = useState({ name: "", slug: "", contact_email: "", mesh_topology: "hub_spoke", timezone: "Europe/Vienna" });
   const { busy, error, run } = useAction();
   return (
     <>
       <PageHeader title="Mandanten" subtitle="Kunden des MSP – strikt voneinander isoliert" actions={<Button onClick={() => setOpen(true)}>+ Mandant</Button>} />
       <Card>
-        <Table head={["Name", "Slug", "Kontakt", "Mesh", "Status", "Angelegt", ""]} empty={tenants.data?.length === 0}>
+        <Table head={["Name", "Slug", "Kontakt", "Mesh", "Zeitzone", "Status", "Angelegt", ""]} empty={tenants.data?.length === 0}>
           {tenants.data?.map((t) => (
             <tr key={t.id} className="hover:bg-slate-50">
               <td className="px-3 py-2 font-medium">{t.name}</td>
               <td className="px-3 py-2 font-mono text-xs">{t.slug}</td>
               <td className="px-3 py-2">{t.contact_email ?? "–"}</td>
               <td className="px-3 py-2">{t.mesh_topology}</td>
+              <td className="px-3 py-2">
+                <select className="rounded border border-slate-300 px-1 py-0.5 text-xs" value={t.timezone} onChange={(e) => void run(async () => { await api.patch(`/tenants/${t.id}`, { timezone: e.target.value }); await tenants.reload(); })}>
+                  {(ZONES.includes(t.timezone) ? ZONES : [t.timezone, ...ZONES]).map((z) => <option key={z} value={z}>{z}</option>)}
+                </select>
+              </td>
               <td className="px-3 py-2">{t.is_active ? <Badge color="green">aktiv</Badge> : <Badge color="red">deaktiviert</Badge>}</td>
               <td className="px-3 py-2 text-slate-500">{fmtDate(t.created_at)}</td>
               <td className="px-3 py-2 text-right">
@@ -56,6 +63,9 @@ export default function Tenants() {
             <option value="hub_spoke">Hub-and-Spoke (Standard)</option>
             <option value="full_mesh">Full-Mesh</option>
             <option value="none">Kein Site-to-Site-VPN</option>
+          </Select>
+          <Select label="Zeitzone (Zeiten in Mails und Berichten)" value={f.timezone} onChange={(e) => setF({ ...f, timezone: e.target.value })}>
+            {ZONES.map((z) => <option key={z} value={z}>{z}</option>)}
           </Select>
           <div className="flex justify-end gap-2"><Button disabled={busy}>Anlegen</Button></div>
         </form>

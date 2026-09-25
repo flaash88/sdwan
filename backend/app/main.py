@@ -54,6 +54,8 @@ def create_app() -> FastAPI:
             "hub_endpoint": f"{s.wg_hub_endpoint}:{s.wg_hub_port}",
             "management_network": s.wg_network,
             "smtp_configured": bool(s.smtp_host),
+            "product_name": s.product_name,
+            "product_short": s.product_short,
         }
 
     app.include_router(api_router)

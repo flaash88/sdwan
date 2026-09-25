@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_macros.html" import info_table, grid %}
+{% block bar %}
+<tr><td bgcolor="{{ brand.accent }}" style="background-color:{{ brand.accent }};padding:12px 24px;font-size:14px;font-weight:bold;color:#ffffff;">SLA-BERICHT &middot; {{ period }}</td></tr>
+{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 16px 0;font-size:20px;line-height:26px;color:#111827;">Verfügbarkeitsbericht {{ tenant }}</h1>
+{{ info_table([("Zeitraum", period_long), ("Gesamtverfügbarkeit", fleet), ("Geräte", devices|length|string), ("Alarme", alerts)]) }}
+{% if devices %}
+<h2 style="margin:0 0 8px 0;font-size:15px;color:#111827;">Verfügbarkeit je Gerät</h2>
+{{ grid(["Gerät", "Standort", "Verfügbarkeit", "Ausfallzeit", "Auf Backup", "VRRP-Master"], devices) }}
+{% endif %}
+<p style="margin:0;color:#475569;">Der vollständige Bericht mit allen Ausfällen liegt als PDF bei.</p>
+{% endblock %}
+{% block reason %}<br>Sie erhalten diesen Bericht als Berichtsempfänger des Mandanten {{ tenant }}.{% endblock %}

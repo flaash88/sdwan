@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="de" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+{# Nur helles Schema deklarieren: Clients zeigen es unverändert oder invertieren komplett – beides bleibt lesbar #}
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>{{ title }}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f1f5f9;color:#111827;font-family:Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f1f5f9" style="background-color:#f1f5f9;">
+<tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:600px;max-width:600px;background-color:#ffffff;border:1px solid #e2e8f0;">
+  <tr><td style="padding:16px 24px;border-bottom:1px solid #e2e8f0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      {% if brand.logo_url %}<td width="1" style="padding-right:12px;"><img src="{{ brand.logo_url }}" alt="{{ brand.name }}" height="32" style="display:block;height:32px;border:0;"></td>{% endif %}
+      <td style="font-size:15px;font-weight:bold;color:#111827;">{{ brand.name }}</td>
+    </tr></table>
+  </td></tr>
+  {% block bar %}{% endblock %}
+  <tr><td style="padding:24px;font-size:14px;line-height:21px;color:#111827;">
+    {% block content %}{% endblock %}
+  </td></tr>
+  <tr><td bgcolor="#f8fafc" style="padding:16px 24px;background-color:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;line-height:18px;color:#475569;">
+    <strong style="color:#334155;">{{ brand.name }}</strong>{% if brand.footer %}<br>{{ brand.footer }}{% endif %}
+    {% block reason %}{% endblock %}
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

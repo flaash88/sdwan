@@ -68,6 +68,18 @@ class TenantCreate(BaseModel):
     slug: str
     contact_email: EmailStr | None = None
     mesh_topology: str = "hub_spoke"
+    timezone: str = "Europe/Vienna"
+
+    @field_validator("timezone")
+    @classmethod
+    def check_tz(cls, v: str) -> str:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        try:
+            ZoneInfo(v)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError("timezone: IANA-Zeitzone, z. B. Europe/Vienna") from None
+        return v
 
     @field_validator("slug")
     @classmethod
@@ -89,6 +101,12 @@ class TenantUpdate(BaseModel):
     contact_email: EmailStr | None = None
     is_active: bool | None = None
     mesh_topology: str | None = None
+    timezone: str | None = None
+
+    @field_validator("timezone")
+    @classmethod
+    def check_tz(cls, v: str | None) -> str | None:
+        return TenantCreate.check_tz(v) if v else v
 
     @field_validator("mesh_topology")
     @classmethod
@@ -104,6 +122,7 @@ class TenantOut(ORM):
     is_active: bool
     mesh_topology: str
     mesh_subnet: str | None
+    timezone: str
     created_at: dt.datetime
 
 

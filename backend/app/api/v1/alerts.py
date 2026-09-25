@@ -7,13 +7,13 @@ import uuid
 from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, status
-from fastapi.responses import Response
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 
 from app.api.v1.common import get_or_404
 from app.db import utcnow
-from app.deps import AdminCtx, Ctx, ReadCtx, TechCtx
+from app.deps import AdminCtx, Ctx, ReadCtx, SuperCtx, TechCtx
 from app.models import Alert, AlertRule, Device, SlaReport, Tenant
 from app.services.alerts import TYPES, create_default_rules, evaluate_tenant
 from app.services.mailer import send_mail
@@ -165,16 +165,34 @@ async def test_rule(rule_id: uuid.UUID, ctx: Ctx = AdminCtx) -> dict:
     to = r.recipients or ([tenant.contact_email] if tenant.contact_email else [])
     if not to and not r.webhook_url_enc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Keine Empfänger (Regel oder Mandanten-Kontakt) und kein Webhook")
-    ok = await send_mail(to, f"[SD-WAN][TEST] {r.name}", f"Test-Benachrichtigung der Alert-Regel '{r.name}' für {tenant.name}.") if to else False
+    from app.services.mail_render import render_test
+
+    subject, text, html = render_test(r.name, tenant)
+    ok = await send_mail(to, subject, text, html=html) if to else False
     hook: bool | None = None
     if r.webhook_url_enc:
         from app.security import decrypt_secret
         from app.services import webhook
 
-        payload = webhook.build_payload(r.webhook_format, title=f"[TEST] {r.name}", text=f"Test-Benachrichtigung der Alert-Regel '{r.name}' für {tenant.name}.",
+        payload = webhook.build_payload(r.webhook_format, title=subject, text=f"Test-Benachrichtigung der Alert-Regel '{r.name}' für {tenant.name}.",
                                         severity=r.severity, resolved=False, facts={"Mandant": tenant.name}, link=None, extra={"event": "test"})
         hook = await webhook.send(decrypt_secret(r.webhook_url_enc), payload)
     return {"sent": ok, "to": to, "webhook": hook}
+
+
+@router.get("/alerts/mail-preview", response_model=None)
+async def mail_preview(type: str = Query(...), state: Literal["firing", "resolved"] = "firing", format: Literal["html", "text"] = "html",
+                       _ctx: Ctx = SuperCtx) -> Response:
+    """Entwicklung: Alarm-Mail mit Beispieldaten rendern (nur MSP-Admins)."""
+    from app.services.mail_render import render_alert, sample_context
+
+    if type not in TYPES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"type: {list(TYPES)}")
+    subject, text, html = render_alert(sample_context(type, state == "resolved"))
+    from urllib.parse import quote
+
+    headers = {"X-Mail-Subject": quote(subject)}  # URL-kodiert (Emoji/Umlaute sind in Headern nicht erlaubt)
+    return HTMLResponse(html, headers=headers) if format == "html" else PlainTextResponse(f"Betreff: {subject}\n\n{text}", headers=headers)
 
 
 @router.post("/alerts/evaluate")

@@ -383,3 +383,51 @@ Fällt die FortiGate bzw. die Glasfaser aus, übernimmt der MikroTik die VIP und
   Interne Ziele werden abgelehnt: bei der Eingabe per Name/IP und vor jedem Versand per DNS-Auflösung
   (SSRF-Schutz). Die URL wird verschlüsselt gespeichert, weil Workflow-URLs eine Signatur enthalten, und
   in API und Audit-Log nur maskiert angezeigt. Migration `0014`.
+
+## Phase 12 – Branding & Mail-Layout
+
+* **Positionierung:** Das Produkt heißt „MikroTik-Fleet-Management“: Konfigurations- und
+  Flottenmanagement für MikroTik-Router. SD-WAN, VPN-Mesh und WAN-Failover bleiben als Funktionen
+  (Menüpunkte, Doku-Abschnitte) bestehen, sind aber nicht mehr der Produktname.
+* **Branding per Einstellung:** `PRODUCT_NAME`, `PRODUCT_SHORT` (Betreff), `MAIL_ACCENT_COLOR`,
+  `MAIL_LOGO_URL`, `MAIL_FOOTER_TEXT`, `MAIL_SUBJECT_EMOJI`. Das Frontend holt Name und Kurzname zur
+  Laufzeit aus dem öffentlichen `GET /api/v1/meta` (auch der Seitentitel). Im Build steht kein
+  Produktname, ein Rebranding braucht also keinen neuen Frontend-Build. PDF-Berichte tragen den
+  Produktnamen im Kopf, in den Metadaten und in der Fußzeile.
+* **Bewusst NICHT umbenannt:** Der Kommentar-Präfix `sdwan:` auf den Routern, die Interfaces
+  `sdwan-mgmt`/`sdwan-mesh`, der API-Benutzer `sdwan`, DB-Namen und -Tabellen, Docker-Dienste,
+  Installationspfad `/opt/sdwan`, Grafana-UIDs und die Log-/Hinweistexte in den Router-Skripten
+  (Netwatch, VRRP, Onboarding, ZTP). `sync_managed` erkennt verwaltete Einträge am Präfix. Eine
+  Umbenennung würde bestehende Router-Konfigurationen verwaisen lassen bzw. auf jedem Router ein Update
+  der Skripte auslösen, ohne funktionalen Nutzen. Grafana-Dashboards und der Ordner bekommen nur neue
+  *Titel* („MikroTik-Flotte · …“), die UIDs bleiben.
+* **Mails:** `send_mail(..., html=...)` erzeugt multipart/alternative. Der Klartext steht immer
+  zuerst und dient als Fallback, danach kommt HTML, Anhänge machen daraus multipart/mixed. Die
+  Templates liegen unter `backend/app/templates/mail/` (Jinja2, Autoescape für HTML):
+  `base.html` (Kopf, Balken, Inhalt, Fußzeile), `alert.html`/`alert.txt`, `test.html`, `sla.html`.
+  Outlook-Regeln: nur Tabellenlayout, nur Inline-CSS (kein `<style>`), 600 px Breite, Systemschriften,
+  kein JavaScript, Button als Tabellenzelle mit `bgcolor`, Logo nur mit `MAIL_LOGO_URL`.
+  **Dark Mode:** Deklariert wird nur das helle Schema (`color-scheme: light`). Clients zeigen es
+  unverändert oder invertieren komplett, beides bleibt lesbar. Farbbalken und Button nutzen weiße
+  Schrift auf kräftiger Farbe und funktionieren in beiden Fällen.
+* **Alarm-Mail:** Statusbalken (kritisch rot, Warnung orange, Info blau, behoben grün) mit
+  „AUSGELÖST“/„BEHOBEN“ und Alarmtyp. Darunter eine Überschrift „Standort X – Gerät: Kurzmeldung“ und
+  eine Info-Tabelle (Mandant, Standort, Gerät mit Modell und RouterOS-Version, Regel, Schweregrad,
+  Beginn, Ende, Dauer). Es folgt ein Kontextblock je Alarmtyp aus der DB: WAN-Tabelle, VRRP-Instanz,
+  Messwert mit Schwelle, letzter Kontakt oder Mesh-Gegenstelle. Dann statische „Empfohlene nächste
+  Schritte“ je Typ (`mail_render.NEXT_STEPS`), bei „behoben“ stattdessen eine Zusammenfassung. Am Ende
+  „Gerät öffnen“ und „Alarm quittieren“ sowie eine Fußzeile mit dem Grund des Empfangs (Regelname).
+* **Betreff:** `[KURZ] 🔴 KRITISCH | Standort – Gerät: Kurzmeldung` (🟠 WARNUNG, 🔵 INFO),
+  behoben `[KURZ] ✅ BEHOBEN | … (Dauer 24 min)`. Die Emojis lassen sich mit `MAIL_SUBJECT_EMOJI=false`
+  abschalten. Die Kurzmeldung wird je Typ aus den Objekten erzeugt, nicht aus der langen Alarmmeldung;
+  diese steht weiter im Klartext und in der Alarmliste.
+* **Zeitzone je Mandant:** `tenants.timezone` (IANA, Standard `Europe/Vienna`, Migration `0015`).
+  Alle Zeiten in Mails und SLA-PDFs werden umgerechnet, Format „25.09.2026, 11:39 Uhr“. In der DB bleibt
+  alles UTC. `tzdata` ist als Python-Paket in den Requirements, damit die Zeitzonen auch im
+  schlanken Container verfügbar sind.
+* **Test-Mail und SLA-Mail** nutzen dasselbe Grundlayout. Die SLA-Mail zeigt die Verfügbarkeit je
+  Gerät, einschließlich Zeit auf Backup-WAN bzw. als VRRP-Master; das PDF bleibt Anhang.
+  Webhooks übernehmen Betreff, Überschrift und die lokalen Zeiten.
+* **Vorschau:** `GET /api/v1/alerts/mail-preview?type=<typ>&state=firing|resolved[&format=text]`
+  (nur MSP-Admins) rendert die Mail mit Beispieldaten, ohne DB-Zugriff. Der Betreff steht URL-kodiert
+  im Header `X-Mail-Subject`.

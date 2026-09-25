@@ -1,4 +1,8 @@
-"""E-Mail-Versand (SMTP). Ohne SMTP_HOST landen Mails nur im Log/``outbox`` (Dev/Tests)."""
+"""E-Mail-Versand (SMTP). Ohne SMTP_HOST landen Mails nur im Log/``outbox`` (Dev/Tests).
+
+Mit ``html`` wird eine multipart/alternative-Mail erzeugt: Klartext zuerst (Fallback für Clients ohne
+HTML), dann die HTML-Variante; Anhänge machen daraus multipart/mixed.
+"""
 
 from __future__ import annotations
 
@@ -24,7 +28,8 @@ def _send_sync(msg: EmailMessage) -> None:
         smtp.send_message(msg)
 
 
-async def send_mail(to: list[str], subject: str, body: str, attachments: list[tuple[str, bytes, str]] | None = None) -> bool:
+async def send_mail(to: list[str], subject: str, body: str, attachments: list[tuple[str, bytes, str]] | None = None,
+                    html: str | None = None) -> bool:
     if not to:
         return False
     s = get_settings()
@@ -33,6 +38,8 @@ async def send_mail(to: list[str], subject: str, body: str, attachments: list[tu
     msg["To"] = ", ".join(to)
     msg["Subject"] = subject
     msg.set_content(body)
+    if html:
+        msg.add_alternative(html, subtype="html")
     for name, data, mime in attachments or []:
         maintype, subtype = mime.split("/", 1)
         msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=name)

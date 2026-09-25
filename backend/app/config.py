@@ -13,7 +13,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # --- Allgemein ---------------------------------------------------------
-    app_name: str = "MikroTik SD-WAN Control Plane"
+    # Branding (UI, Mails, PDF-Berichte). Technische Bezeichner ("sdwan:"-Kommentare, Interfaces,
+    # DB, Docker-Dienste) bleiben bewusst unverändert, sonst verwaisen bestehende Router-Konfigurationen.
+    product_name: str = "MikroTik-Fleet-Management"
+    product_short: str = "MFM"  # Betreffzeilen und knappe Stellen
     environment: str = "development"
     # Öffentlich erreichbare Basis-URL der Control-Plane (für Onboarding-Scripts)
     public_url: str = "http://localhost:8000"
@@ -83,6 +86,10 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = "sdwan@example.com"
     smtp_starttls: bool = True
+    mail_accent_color: str = "#0f766e"  # Hex, Buttons/Akzente im HTML-Mail-Layout
+    mail_logo_url: str = ""  # optional, https-URL eines Logos (max. ~180 px breit)
+    mail_footer_text: str = ""  # z. B. "Netzwarte GmbH · Support: +43 … · support@…"
+    mail_subject_emoji: bool = True  # 🔴/🟠/🔵/✅ im Betreff
 
     # --- NextDNS -------------------------------------------------------------
     nextdns_api_key: str = ""
@@ -94,6 +101,10 @@ class Settings(BaseSettings):
     remote_session_max_minutes: int = 240
     # Nur Tests/Simulator: Proxy-Ziel statt Tunnel-IP (z. B. 127.0.0.1)
     remote_proxy_target_override: str = ""
+
+    @property
+    def app_name(self) -> str:
+        return self.product_name
 
     @property
     def wg_net(self) -> ipaddress.IPv4Network:

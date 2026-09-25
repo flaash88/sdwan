@@ -56,7 +56,7 @@ async def test_alert_lifecycle_with_email(client, msp, hub):
     assert len(alerts) == 1 and alerts[0]["severity"] == "critical" and "Glasfaser" in alerts[0]["message"]
     assert alerts[0]["notified"] is True
     mail = mailer.outbox[-1]
-    assert mail["To"] == "tech@acme.example.com" and "[CRITICAL]" in mail["Subject"]
+    assert mail["To"] == "tech@acme.example.com" and "KRITISCH |" in mail["Subject"]
     # Default-Regel (120 s Verzögerung) noch pending -> nicht sichtbar
     assert len(alerts) == 1
     r = await client.post(f"/api/v1/alerts/{alerts[0]['id']}/ack", headers=h)
@@ -69,7 +69,7 @@ async def test_alert_lifecycle_with_email(client, msp, hub):
     assert (await client.get("/api/v1/alerts", headers=h)).json() == []
     hist = (await client.get("/api/v1/alerts?state=resolved", headers=h)).json()
     assert len(hist) == 1 and hist[0]["resolved_at"]
-    assert "[BEHOBEN]" in mailer.outbox[-1]["Subject"]
+    assert "✅ BEHOBEN |" in mailer.outbox[-1]["Subject"]
     # Pending-Alert der Default-Regel wurde verworfen
     async with system_session() as db:
         from sqlalchemy import select
@@ -171,14 +171,14 @@ async def test_offline_detection_stops_live_metrics_and_alerts(client, msp, hub)
     await evaluate_all()
     alerts = (await client.get("/api/v1/alerts", headers=h)).json()
     assert len(alerts) == 1 and alerts[0]["status"] == "firing"
-    assert "[CRITICAL]" in mailer.outbox[-1]["Subject"] and mailer.outbox[-1]["To"] == "noc@off.example.com"
+    assert "KRITISCH |" in mailer.outbox[-1]["Subject"] and mailer.outbox[-1]["To"] == "noc@off.example.com"
 
     # wieder online -> behoben
     get_router(dev["tunnel_ip"]).offline = False
     await poll_all()
     await evaluate_all()
     assert (await client.get("/api/v1/alerts", headers=h)).json() == []
-    assert "[BEHOBEN]" in mailer.outbox[-1]["Subject"]
+    assert "✅ BEHOBEN |" in mailer.outbox[-1]["Subject"]
 
 
 async def test_pending_alert_visible_with_due_time(client, msp, hub):

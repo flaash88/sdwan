@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { useLiveConnected } from "../lib/live";
+import { useMeta } from "../lib/meta";
 import { NAV } from "../nav";
 import AlertToasts from "./AlertToasts";
 import { cls } from "./ui";
@@ -9,6 +10,7 @@ import { cls } from "./ui";
 export default function Layout({ children }: { children: ReactNode }) {
   const { me, logout, switchTenant, can } = useAuth();
   const live = useLiveConnected();
+  const meta = useMeta();
   if (!me) return null;
   const items = NAV.filter((n) => (!n.superuser || me.user.is_superuser) && (!n.role || can(n.role)));
   return (
@@ -17,8 +19,8 @@ export default function Layout({ children }: { children: ReactNode }) {
         <div className="flex items-center gap-2 px-5 py-5">
           <img src="/favicon.svg" className="h-7 w-7" alt="" />
           <div>
-            <div className="font-semibold text-white">SD-WAN Control</div>
-            <div className="text-xs text-slate-500">MikroTik Fleet</div>
+            <div className="font-semibold leading-tight text-white">{meta?.product_name ?? "\u00a0"}</div>
+            <div className="text-xs text-slate-500">Konfiguration & Flotte</div>
           </div>
         </div>
         {me.user.is_superuser ? (

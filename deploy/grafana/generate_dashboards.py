@@ -68,7 +68,7 @@ scope_t = flt("")
 scope_s = flt('  |> filter(fn: (r) => contains(value: r.site_id, set: ${site:json}))\n')
 scope_d = '  |> filter(fn: (r) => r.device_id == "${device}")\n'
 
-fleet = dashboard("sdwan-tenant", "SD-WAN · Mandant", [tenant_var], [
+fleet = dashboard("sdwan-tenant", "MikroTik-Flotte · Mandant", [tenant_var], [
     stat_panel(1, "Geräte mit Daten", q("system", "cpu_load", scope_t, []).replace("aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)", 'last() |> group() |> count()'), "none", 0, 0),
     stat_panel(2, "WAN-Links down", q("wan", "up", scope_t, ["device", "wan"]).replace("aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)", 'last() |> filter(fn: (r) => r._value == 0) |> group() |> count()'), "none", 6, 0,
                {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "red", "value": 1}]}),
@@ -81,7 +81,7 @@ fleet = dashboard("sdwan-tenant", "SD-WAN · Mandant", [tenant_var], [
     ts_panel(8, "Durchsatz RX je Standort", q("interface", "rx_bps", scope_t + '  |> filter(fn: (r) => r.interface !~ /^sdwan-/)\n', ["site"], "sum"), "bps", 12, 12, stack=True),
 ])
 
-site = dashboard("sdwan-site", "SD-WAN · Standort", [tenant_var, site_var], [
+site = dashboard("sdwan-site", "MikroTik-Flotte · Standort", [tenant_var, site_var], [
     ts_panel(1, "CPU", q("system", "cpu_load", scope_s, ["device"]), "percent", 0, 0),
     ts_panel(2, "Speicher belegt", q("system", "mem_used", scope_s, ["device"]), "bytes", 12, 0),
     ts_panel(3, "WAN-Latenz", q("wan", "rtt_ms", scope_s, ["device", "wan"]), "ms", 0, 8),
@@ -90,7 +90,7 @@ site = dashboard("sdwan-site", "SD-WAN · Standort", [tenant_var, site_var], [
     ts_panel(6, "Durchsatz TX", q("interface", "tx_bps", scope_s, ["device", "interface"]), "bps", 12, 16),
 ])
 
-device = dashboard("sdwan-device", "SD-WAN · Gerät", [tenant_var, device_var], [
+device = dashboard("sdwan-device", "MikroTik-Flotte · Gerät", [tenant_var, device_var], [
     stat_panel(1, "CPU", q("system", "cpu_load", scope_d, []).replace("aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)", "last()"), "percent", 0, 0,
                {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 70}, {"color": "red", "value": 90}]}),
     stat_panel(2, "Management-Latenz", q("system", "mgmt_rtt_ms", scope_d, []).replace("aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)", "last()"), "ms", 6, 0),

@@ -137,7 +137,7 @@ async def build_report(db: AsyncSession, tenant: Tenant, start: dt.datetime, end
         total_measured += a["measured_s"]
     alerts = (await db.execute(select(Alert).where(Alert.tenant_id == tenant.id, Alert.fired_at >= start, Alert.fired_at <= end))).scalars().all()
     return {
-        "tenant": tenant.name, "tenant_id": str(tenant.id), "period_start": start, "period_end": end, "generated_at": utcnow(),
+        "tenant": tenant.name, "tenant_id": str(tenant.id), "timezone": tenant.timezone, "period_start": start, "period_end": end, "generated_at": utcnow(),
         "fleet_availability_pct": round(100 * total_up / total_measured, 3) if total_measured else None,
         "device_count": len(rows), "alert_count": len(alerts),
         "alerts_by_severity": {s: sum(1 for a in alerts if a.severity == s) for s in ("critical", "warning", "info")},
@@ -161,14 +161,24 @@ def render_pdf(rep: dict[str, Any]) -> bytes:
     from reportlab.lib.units import mm
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+    from app.config import get_settings
+    from app.services.mail_render import tzinfo
+
+    product = get_settings().product_name
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=18 * mm, bottomMargin=18 * mm,
-                            title=f"SLA-Bericht {rep['tenant']}")
+                            title=f"SLA-Bericht {rep['tenant']}", author=product, creator=product)
     st = getSampleStyleSheet()
-    fmt = "%d.%m.%Y %H:%M"
+    tz = tzinfo(rep.get("timezone"))
+    tzname = rep.get("timezone") or "Europe/Vienna"
+
+    def loc(ts: dt.datetime) -> str:
+        return ts.astimezone(tz).strftime("%d.%m.%Y %H:%M")
+
     story: list[Any] = [
+        Paragraph(product, st["Heading4"]),
         Paragraph(f"SLA-Verfügbarkeitsbericht – {rep['tenant']}", st["Title"]),
-        Paragraph(f"Zeitraum: {rep['period_start']:{fmt}} – {rep['period_end']:{fmt}} UTC · erstellt {rep['generated_at']:{fmt}} UTC", st["Normal"]),
+        Paragraph(f"Zeitraum: {loc(rep['period_start'])} – {loc(rep['period_end'])} · erstellt {loc(rep['generated_at'])} (Zeitzone {tzname})", st["Normal"]),
         Spacer(1, 6 * mm),
     ]
     fa = rep["fleet_availability_pct"]
@@ -218,10 +228,18 @@ def render_pdf(rep: dict[str, Any]) -> bytes:
     outs = [(d["device"], o) for d in rep["devices"] for o in d["outages"]]
     if outs:
         story += [Spacer(1, 6 * mm), Paragraph("Ausfälle", st["Heading2"])]
-        ot = Table([["Gerät", "Beginn", "Ende", "Dauer"]] + [[n, f"{o['start']:{fmt}}", f"{o['end']:{fmt}}" if o["end"] else "andauernd", _dur(o["duration_s"])] for n, o in outs[:200]], repeatRows=1)
+        ot = Table([["Gerät", "Beginn", "Ende", "Dauer"]] + [[n, loc(o["start"]), loc(o["end"]) if o["end"] else "andauernd", _dur(o["duration_s"])] for n, o in outs[:200]], repeatRows=1)
         ot.setStyle(TableStyle(style[:5]))
         story.append(ot)
-    doc.build(story)
+    def footer(canvas: Any, _doc: Any) -> None:
+        canvas.saveState()
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(colors.HexColor("#64748b"))
+        canvas.drawString(18 * mm, 10 * mm, f"{product} · {rep['tenant']}")
+        canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"Seite {canvas.getPageNumber()}")
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=footer, onLaterPages=footer)
     return buf.getvalue()
 
 
@@ -243,11 +261,10 @@ async def generate_and_store(db: AsyncSession, tenant: Tenant, start: dt.datetim
     db.add(report)
     recipients = list(dict.fromkeys([*((tenant.settings or {}).get("report_recipients") or []), *([tenant.contact_email] if tenant.contact_email else [])]))
     if send and recipients:
-        fa = rep["fleet_availability_pct"]
-        ok = await send_mail(recipients, f"[SD-WAN] SLA-Bericht {tenant.name} {start:%m/%Y}",
-                             f"Anbei der SLA-Verfügbarkeitsbericht für {start:%d.%m.%Y} – {end:%d.%m.%Y}.\n"
-                             f"Gesamtverfügbarkeit: {f'{fa:.3f} %' if fa is not None else 'keine Daten'}\n" + _backup_lines(rep),
-                             [(f"sla-{tenant.slug}-{start:%Y-%m}.pdf", pdf, "application/pdf")])
+        from app.services.mail_render import render_sla
+
+        subject, text, html = render_sla(rep, tenant, start, end)
+        ok = await send_mail(recipients, subject, text, [(f"sla-{tenant.slug}-{start:%Y-%m}.pdf", pdf, "application/pdf")], html=html)
         if ok:
             report.sent_to = recipients
     await db.flush()

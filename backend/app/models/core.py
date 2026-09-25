@@ -33,6 +33,8 @@ class Tenant(IdMixin, Base):
     # /24 aus settings.mesh_network, wird bei Bedarf vergeben
     mesh_subnet: Mapped[str | None] = mapped_column(String(32), unique=True)
     settings: Mapped[dict] = mapped_column(JSONType, default=dict)
+    # IANA-Zeitzone für Zeitangaben in Mails/Berichten
+    timezone: Mapped[str] = mapped_column(String(64), default="Europe/Vienna", server_default="Europe/Vienna")
 
     sites: Mapped[list[Site]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
 

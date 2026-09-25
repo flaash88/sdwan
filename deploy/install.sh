@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# MikroTik SD-WAN Control Plane – Installer für einen (bestehenden) Linux-Server
+# MikroTik-Fleet-Management – Installer für einen (bestehenden) Linux-Server
 #
 #   sudo DOMAIN=sdwan.networkx.cc ADMIN_EMAIL=admin@networkx.cc bash deploy/install.sh
 #
@@ -275,7 +275,7 @@ docker compose logs wireguard-hub 2>/dev/null | grep -q "Hub Public-Key" && c_ok
 # ----------------------------------------------------------------------------- 11. Zusammenfassung
 CRED="$INSTALL_DIR/ZUGANGSDATEN.txt"
 {
-  echo "MikroTik SD-WAN – Zugangsdaten ($(date -Iseconds))"
+  echo "MikroTik-Fleet-Management – Zugangsdaten ($(date -Iseconds))"
   echo "Dashboard:   https://$DOMAIN"
   echo "Login:       $(getenv BOOTSTRAP_ADMIN_EMAIL)"
   echo "Passwort:    $(getenv BOOTSTRAP_ADMIN_PASSWORD)   (nach erstem Login ändern)"

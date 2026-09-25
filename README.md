@@ -1,7 +1,23 @@
-# MikroTik SD-WAN Control Plane
+# MikroTik-Fleet-Management
 
-Cloud-basierte, mandantenfähige SD-WAN-Management-Plattform für MikroTik-Router (RouterOS 7) –
-gebaut für den Einsatz durch MSPs, selbst gehostet per Docker Compose (Hetzner-vServer, Proxmox-VM/LXC).
+Selbst gehostetes, mandantenfähiges **Konfigurations- und Flottenmanagement für MikroTik-Router**
+(RouterOS 7). Gebaut für MSPs, die viele Standorte zentral betreiben: Konfiguration ausrollen,
+Router per Zero-Touch in Betrieb nehmen, sichern, aktualisieren und aus der Ferne erreichen.
+Betrieb per Docker Compose (Hetzner-vServer, Proxmox-VM/LXC).
+
+Die Plattform ist **kein allgemeines RMM** (keine Clients, Server, Tickets) und **kein reines
+SD-WAN-Produkt**. WAN-Failover, VRRP und Site-to-Site-VPN-Mesh sind Funktionen unter mehreren:
+
+* **Konfiguration & Rollout:** Firewall-Policies mit Versionierung und Rollback, Zero-Touch-Provisioning
+  per Template, Content-Filter (NextDNS).
+* **Betrieb der Flotte:** Tägliche Backups mit Diff, Firmware-Updates in Batches, Fernzugriff
+  (SSH/Winbox/WebFig) mit Audit.
+* **Konnektivität:** WAN-Failover/Load-Balancing, VRRP als Backup hinter einem zentralen Master,
+  VPN-Mesh zwischen Standorten.
+* **Überwachung:** Metriken, Alarme per E-Mail (HTML) und Webhook, SLA-Berichte.
+
+Produktname, Kurzname und Mail-Branding lassen sich per `.env` anpassen (`PRODUCT_NAME`,
+`PRODUCT_SHORT`, `MAIL_*`).
 
 * **Kein Public-IP nötig:** Jeder Router baut ausgehend einen WireGuard-Tunnel zum Hub auf (CGNAT-tauglich).
 * **Ein Befehl zum Onboarding** im RouterOS-Terminal.
@@ -24,6 +40,7 @@ Installation auf einem Server: [INSTALL.md](INSTALL.md) · Aufbau und Design-Ent
 | 9 | Backups & Firmware: tägliche Exporte mit Diff-Ansicht, Dedupe, Retention; Fleet-Updates mit Batches, Pause bei Fehlern, Pre-Update-Backup | ✅ |
 | 10 | Alerts & SLA: Regeln (offline, WAN down, Latenz, Mesh, CPU) mit E-Mail + Live-Toasts, Verfügbarkeit aus Statuswechseln, PDF-Berichte, Monatsversand | ✅ |
 | 11 | VRRP & Backup-Transparenz: VRRP-Backup hinter zentralem Master (z. B. FortiGate) mit gekoppeltem WAN, Verbindungs-Flush im Failover, Alarme VRRP-Master / Backup-WAN aktiv / Datenvolumen (80 %/100 %), Monatslimit je WAN, SLA-Zeiten auf Backup, Webhooks (JSON/Teams) | ✅ |
+| 12 | Branding & Mail-Layout: Produktname konfigurierbar, HTML-Mails (Outlook-tauglich, Klartext-Fallback) mit Statusbalken, Kontext je Alarmtyp, nächsten Schritten, lokaler Zeitzone je Mandant, einheitliche Betreffzeilen, Mail-Vorschau | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block bar %}
+<tr><td bgcolor="{{ brand.accent }}" style="background-color:{{ brand.accent }};padding:12px 24px;font-size:14px;font-weight:bold;color:#ffffff;">TEST &middot; Alarmregel</td></tr>
+{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 16px 0;font-size:20px;line-height:26px;color:#111827;">Test-Benachrichtigung</h1>
+<p style="margin:0 0 12px 0;">Dies ist eine Test-Nachricht der Alarmregel „{{ rule }}“ für den Mandanten {{ tenant }}.</p>
+<p style="margin:0;color:#475569;">Wenn Sie diese Mail lesen können, kommen Alarme dieser Regel bei Ihnen an. Gesendet am {{ sent_at }}.</p>
+{% endblock %}
+{% block reason %}<br>Sie erhalten diese Nachricht, weil ein Administrator die Regel „{{ rule }}“ getestet hat.{% endblock %}

@@ -1,0 +1,36 @@
+{{ "BEHOBEN" if a.resolved else "AUSGELÖST" }} – {{ a.type_label }}
+{{ a.headline }}
+
+Mandant:     {{ a.tenant or "-" }}
+{% if a.site %}Standort:    {{ a.site }}
+{% endif %}Gerät:       {{ a.device_line or "-" }}
+Regel:       {{ a.rule }}
+Schweregrad: {{ a.severity_label }}
+Beginn:      {{ a.start }}
+{% if a.resolved %}Ende:        {{ a.end }}
+{% endif %}Dauer:       {{ a.duration }}
+Meldung:     {{ a.message }}
+{% set b = a.block %}{% if b and b.kind == "wan" %}
+WAN-Links:
+{% for r in b.rows %}  - {{ r | join(" | ") }}
+{% endfor %}{% if b.volume %}  {{ b.volume }}
+{% endif %}{% elif b and b.kind == "vrrp" %}
+VRRP: {{ b.name }} auf {{ b.interface }}, VIP {{ b.vip }}, VRID {{ b.vrid }}, Master seit {{ b.since }}, verknüpftes WAN {{ b.wan }}
+{% elif b and b.kind == "value" %}
+{{ b.label }}: {{ b.value }} (Schwelle {{ b.threshold }})
+{% elif b and b.kind == "offline" %}
+Zuletzt gesehen: {{ b.last_seen }}, letzte Management-RTT: {{ b.rtt }}
+{% elif b and b.kind == "mesh" %}
+Tunnel zur Gegenstelle {{ b.peer }}
+{% endif %}
+{% if a.resolved %}{{ a.summary }}
+{% elif a.steps %}Empfohlene nächste Schritte:
+{% for s in a.steps %}{{ loop.index }}. {{ s }}
+{% endfor %}{% endif %}
+{% if a.device_url %}Gerät öffnen:     {{ a.device_url }}
+{% endif %}Alarm quittieren: {{ a.alerts_url }}
+
+--
+{{ brand.name }}{% if brand.footer %}
+{{ brand.footer }}{% endif %}
+Sie erhalten diese Nachricht wegen der Alarmregel „{{ a.rule }}“.

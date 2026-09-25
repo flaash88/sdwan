@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Button, ErrorBox, Input, useAction } from "../components/ui";
 import { useAuth } from "../lib/auth";
+import { useMeta } from "../lib/meta";
 
 export default function Login() {
   const { login } = useAuth();
+  const meta = useMeta();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const { busy, error, run } = useAction();
@@ -22,8 +24,8 @@ export default function Login() {
         <div className="flex items-center gap-3">
           <img src="/favicon.svg" className="h-9 w-9" alt="" />
           <div>
-            <h1 className="text-lg font-semibold">SD-WAN Control</h1>
-            <p className="text-xs text-slate-500">MikroTik Fleet Management</p>
+            <h1 className="text-lg font-semibold">{meta?.product_name ?? "\u00a0"}</h1>
+            <p className="text-xs text-slate-500">Konfigurations- & Flottenmanagement für MikroTik-Router</p>
           </div>
         </div>
         <ErrorBox error={error} />

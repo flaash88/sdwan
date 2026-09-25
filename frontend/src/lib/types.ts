@@ -19,6 +19,7 @@ export interface Tenant {
   is_active: boolean;
   mesh_topology: "hub_spoke" | "full_mesh" | "none";
   mesh_subnet: string | null;
+  timezone: string;
   created_at: string;
 }
 

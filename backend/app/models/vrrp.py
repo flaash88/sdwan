@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, IdMixin, TenantScoped, UTCDateTime
@@ -27,7 +27,13 @@ class VrrpInstance(IdMixin, TenantScoped, Base):
     local_address: Mapped[str | None] = mapped_column(String(64))  # z. B. 192.168.110.21/24 auf dem Parent
     linked_wan_slot: Mapped[int | None] = mapped_column(Integer)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Gegenstelle (z. B. FortiGate) – nur zur Erreichbarkeitsprüfung, wird nicht auf den Router geschrieben
+    peer_address: Mapped[str | None] = mapped_column(String(64))  # IP ohne Präfix, im Netz von local_address
+    peer_description: Mapped[str | None] = mapped_column(String(100))
 
     # Laufzeit
     state: Mapped[str] = mapped_column(String(20), default="unknown")  # master | backup | disabled | unknown
     last_change_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
+    peer_reachable: Mapped[bool | None] = mapped_column(Boolean)
+    peer_rtt_ms: Mapped[float | None] = mapped_column(Float)
+    peer_checked_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())

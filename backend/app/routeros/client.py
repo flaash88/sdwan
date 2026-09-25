@@ -58,6 +58,7 @@ class LibRouterOSConnection:
     def __init__(self, api: Any) -> None:
         self._api = api
         self._lock = asyncio.Lock()
+        self._broken = False
 
     async def call(self, cmd: str, **params: Any) -> list[dict[str, Any]]:
         params = {k: _to_ros(v) for k, v in params.items() if v is not None}
@@ -66,8 +67,15 @@ class LibRouterOSConnection:
             return list(self._api(cmd, **params))
 
         async with self._lock:
+            if self._broken:
+                raise RouterOSError(f"{cmd}: Verbindung nach Zeitüberschreitung verworfen")
             try:
                 return await asyncio.to_thread(_run)
+            except asyncio.CancelledError:
+                # Aufrufer hat abgebrochen (z. B. asyncio.wait_for), der Thread liest aber weiter vom Socket –
+                # weitere Befehle auf dieser Verbindung würden dessen Antworten lesen.
+                self._broken = True
+                raise
             except Exception as exc:  # librouteros wirft diverse Typen
                 raise RouterOSError(f"{cmd}: {exc}") from exc
 

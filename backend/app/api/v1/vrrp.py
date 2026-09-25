@@ -14,7 +14,8 @@ from app.config import get_settings
 from app.deps import Ctx, ReadCtx, TechCtx
 from app.models import Device, PairingStatus, VrrpInstance
 from app.routeros import RouterOSError
-from app.services.vrrp import VrrpError, apply_vrrp, validate_set
+from app.routeros import connect_device
+from app.services.vrrp import VrrpError, apply_vrrp, peer_targets, ping_peer, store_peer_result, validate_set
 
 router = APIRouter(prefix="/devices/{device_id}/vrrp", tags=["vrrp"])
 
@@ -32,6 +33,8 @@ class VrrpIn(BaseModel):
     local_address: str | None = None
     linked_wan_slot: int | None = Field(default=None, ge=1, le=4)
     enabled: bool = True
+    peer_address: str | None = None
+    peer_description: str | None = Field(default=None, max_length=100)
 
 
 class VrrpConfigIn(BaseModel):
@@ -39,12 +42,15 @@ class VrrpConfigIn(BaseModel):
     push: bool = True
 
 
-FIELDS = ("name", "interface", "vrid", "priority", "interval_ms", "preemption", "version", "vip", "local_address", "linked_wan_slot", "enabled")
+FIELDS = ("name", "interface", "vrid", "priority", "interval_ms", "preemption", "version", "vip", "local_address", "linked_wan_slot", "enabled",
+          "peer_address", "peer_description")
 
 
 def _out(i: VrrpInstance) -> dict:
     return {"id": str(i.id), **{k: getattr(i, k) for k in FIELDS}, "state": i.state,
-            "last_change_at": i.last_change_at.isoformat() if isinstance(i.last_change_at, dt.datetime) else None}
+            "last_change_at": i.last_change_at.isoformat() if isinstance(i.last_change_at, dt.datetime) else None,
+            "peer_reachable": i.peer_reachable, "peer_rtt_ms": i.peer_rtt_ms,
+            "peer_checked_at": i.peer_checked_at.isoformat() if isinstance(i.peer_checked_at, dt.datetime) else None}
 
 
 async def _instances(ctx: Ctx, dev: Device) -> list[VrrpInstance]:
@@ -75,6 +81,7 @@ async def put_vrrp(device_id: uuid.UUID, data: VrrpConfigIn, ctx: Ctx = TechCtx)
     except VrrpError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     existing = {i.id: i for i in await _instances(ctx, dev)}
+    before = {iid: i.peer_address for iid, i in existing.items()}
     keep: set[uuid.UUID] = set()
     for item in items:
         inst = existing.get(item["id"]) if item.get("id") else None
@@ -92,6 +99,11 @@ async def put_vrrp(device_id: uuid.UUID, data: VrrpConfigIn, ctx: Ctx = TechCtx)
         if iid not in keep:
             await ctx.db.delete(inst)
     await ctx.db.flush()
+    current = await _instances(ctx, dev)
+    for inst in current:  # geänderte Gegenstelle: altes Ergebnis verwerfen
+        if inst.peer_address is None or (inst.id in existing and inst.peer_address != before.get(inst.id)):
+            inst.peer_reachable = inst.peer_rtt_ms = inst.peer_checked_at = None
+    dev.facts = {**(dev.facts or {}), "vrrp_peers": peer_targets(current)}
     result = await _apply(ctx, dev) if data.push and dev.pairing_status == PairingStatus.paired else None
     await ctx.audit("vrrp.update", target_type="device", target_id=dev.id,
                     details={"instances": [{k: v for k, v in i.items() if k != "id"} for i in items], "pushed": bool(result and result.get("ok"))})
@@ -106,6 +118,29 @@ async def apply(device_id: uuid.UUID, ctx: Ctx = TechCtx) -> dict:
     await ctx.audit("vrrp.apply", target_type="device", target_id=dev.id, success=res.get("ok", False), details={"error": res.get("error")})
     await ctx.db.commit()
     return res
+
+
+@router.post("/{instance_id}/ping")
+async def ping(device_id: uuid.UUID, instance_id: uuid.UUID, ctx: Ctx = TechCtx) -> dict:
+    """„Peer prüfen“: einmaliger Ping zur Gegenstelle (3 Pakete, Quelle = lokale Adresse); Ergebnis wird gespeichert."""
+    import ipaddress
+
+    dev = await get_or_404(ctx.db, Device, device_id, "Device")
+    inst = await get_or_404(ctx.db, VrrpInstance, instance_id, "VRRP-Instanz")
+    if inst.device_id != dev.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "VRRP-Instanz nicht gefunden")
+    if not inst.peer_address or not inst.local_address:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Keine Gegenstelle konfiguriert")
+    if dev.pairing_status != PairingStatus.paired:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Gerät ist nicht gepairt")
+    try:
+        async with connect_device(dev) as api:
+            res = await ping_peer(api, inst.peer_address, str(ipaddress.ip_interface(inst.local_address).ip))
+    except RouterOSError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Router nicht erreichbar: {exc}") from exc
+    store_peer_result(inst, res)
+    await ctx.db.commit()
+    return {**_out(inst), "ping": res}
 
 
 @router.post("/{instance_id}/simulate")

@@ -89,7 +89,7 @@ def validate_template(c: dict[str, Any]) -> dict[str, Any]:
         from app.services.vrrp import VrrpError, validate_set
 
         try:
-            out["vrrp"] = [{k: v for k, v in i.items() if k not in ("id", "state", "last_change_at")} for i in validate_set(list(vrrp))]
+            out["vrrp"] = [{k: v for k, v in i.items() if k not in ("id", "state", "last_change_at", "peer_reachable", "peer_rtt_ms", "peer_checked_at")} for i in validate_set(list(vrrp))]
         except (VrrpError, TypeError, ValueError) as exc:
             raise TemplateError(f"VRRP-Vorlage ungültig: {exc}") from exc
     return out
@@ -245,7 +245,8 @@ async def provision_device(db: AsyncSession, device: Device) -> list[str]:
                 for i in items:
                     db.add(VrrpInstance(tenant_id=device.tenant_id, device_id=device.id,
                                         **{k: v for k, v in i.items() if k in ("name", "interface", "vrid", "priority", "interval_ms", "preemption",
-                                                                               "version", "vip", "local_address", "linked_wan_slot", "enabled")}))
+                                                                               "version", "vip", "local_address", "linked_wan_slot", "enabled",
+                                                                               "peer_address", "peer_description")}))
                 await db.flush()
             except VrrpError as exc:
                 errors.append(f"VRRP: {exc}")

@@ -7,6 +7,7 @@ Test-Double in der Test-Suite. Der Zustand lebt pro Tunnel-IP im Prozess.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import random
 import time
@@ -59,6 +60,8 @@ class SimRouter:
         self.dns: dict[str, Any] = {"servers": "", "use-doh-server": "", "verify-doh-cert": "no", "allow-remote-requests": "yes"}
         self.fail_next: set[str] = set()  # Tests: Befehle, die einmal fehlschlagen sollen
         self.down_hosts: set[str] = set()  # Tests: Netwatch-Ziele, die als "down" gelten
+        self.hang_hosts: set[str] = set()  # Tests: /ping auf diese Ziele antwortet nicht (hängt)
+        self.ping_log: list[dict[str, Any]] = []  # Tests: Parameter der letzten Pings
         self.vrrp_master: set[str] = set()  # Namen der VRRP-Interfaces, die gerade Master sind
         self.counters: dict[str, list[int]] = {}
         for i, name in enumerate(["ether1", "ether2", "ether3", "ether4", "bridge", "sdwan-mgmt"]):
@@ -429,6 +432,10 @@ class SimulatedConnection:
             self.router = _STATE[self.host] = _load(self.host, raw)
 
     async def call(self, cmd: str, **params: Any) -> list[dict[str, Any]]:
+        if cmd == "/ping":
+            self.router.ping_log = [*self.router.ping_log[-19:], dict(params)]
+            if params.get("address") in self.router.hang_hosts:
+                await asyncio.sleep(30)  # simuliert eine ausbleibende Antwort
         return self.router.call(cmd, dict(params))
 
     async def close(self) -> None:

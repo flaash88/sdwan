@@ -26,14 +26,19 @@ interface VrrpInstance {
   local_address: string | null;
   linked_wan_slot: number | null;
   enabled: boolean;
+  peer_address: string | null;
+  peer_description: string | null;
   state?: string;
   last_change_at?: string | null;
+  peer_reachable?: boolean | null;
+  peer_rtt_ms?: number | null;
+  peer_checked_at?: string | null;
 }
 interface VrrpConfig { instances: VrrpInstance[]; last_error: string | null }
 interface WanSlot { slot: number; name: string; interface: string; active?: boolean }
 
 const DAYS = 14;
-const blank = (i: number): VrrpInstance => ({ name: `vrrp${i + 1}`, interface: "", vrid: 1, priority: 100, interval_ms: 1000, preemption: true, version: 3, vip: "", local_address: null, linked_wan_slot: null, enabled: true });
+const blank = (i: number): VrrpInstance => ({ name: `vrrp${i + 1}`, interface: "", vrid: 1, priority: 100, interval_ms: 1000, preemption: true, version: 3, vip: "", local_address: null, linked_wan_slot: null, enabled: true, peer_address: null, peer_description: null });
 /** VIP auf dem MikroTik ist immer /32 */
 const vip32 = (v: string) => (v.includes("/") ? v : `${v}/32`);
 const interval = (ms: number) => (ms % 1000 === 0 ? `${ms / 1000} s` : `${ms} ms`);
@@ -106,6 +111,36 @@ function InstanceFacts({ v, wan }: { v: VrrpInstance; wan: WanSlot[] }) {
   );
 }
 
+/** Gegenstelle (z. B. FortiGate): Erreichbarkeit per Ping von der lokalen Adresse aus. Priorität der Gegenstelle bewusst nicht angezeigt. */
+function PeerCard({ v, device, editable, onChanged }: { v: VrrpInstance; device: Device; editable: boolean; onChanged: () => void }) {
+  const { busy, error, run } = useAction();
+  const offline = device.status !== "online";
+  if (!v.peer_address) {
+    return (
+      <Card title="Gegenstelle">
+        <p className="text-fg2">Keine Gegenstelle hinterlegt. Unter „Konfigurieren“ kann die echte IP des Hauptsystems eingetragen werden – sie wird bei jeder Abfrage angepingt.</p>
+      </Card>
+    );
+  }
+  const st = v.peer_checked_at == null || v.peer_reachable == null
+    ? <Pill tone="gray" icon="minusCircle">Noch nicht geprüft</Pill>
+    : v.peer_reachable ? <Pill tone="green" icon="checkCircle">Erreichbar</Pill> : <Pill tone="red" icon="xCircle">Nicht erreichbar</Pill>;
+  return (
+    <Card title="Gegenstelle" subtitle={v.peer_description ?? undefined}
+      actions={editable && v.id && <Button size="sm" variant="secondary" icon={busy ? "loader" : "activity"} disabled={busy || offline}
+        onClick={() => void run(async () => { await api.post(`/devices/${device.id}/vrrp/${v.id}/ping`); onChanged(); })}>{busy ? "Prüfe …" : "Peer prüfen"}</Button>}>
+      <ErrorBox error={error} />
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <span className="font-mono text-[13px] font-medium">{v.peer_address}</span>
+        {st}
+        {v.peer_reachable && v.peer_rtt_ms != null && <span className="text-fg2">RTT {v.peer_rtt_ms.toLocaleString("de-DE")} ms</span>}
+        {v.peer_checked_at && <span className="text-xs text-fg3" title={fmtFull(v.peer_checked_at)}>geprüft vor {fmtSince(v.peer_checked_at)}</span>}
+      </div>
+      <p className="mt-2 text-xs text-fg3">3 Pakete von {v.local_address ? <span className="font-mono">{v.local_address.split("/")[0]}</span> : "der lokalen Adresse"} aus, bei jeder Abfrage.</p>
+    </Card>
+  );
+}
+
 function History({ v, events }: { v: VrrpInstance; events: EventsResponse | null }) {
   if (!v.id) return null;
   const subject = `vrrp:${v.id}`;
@@ -174,7 +209,7 @@ export default function VrrpTab({ device }: { device: Device }) {
   const wan = useFetch<{ links: WanSlot[] }>(`/devices/${device.id}/wan`);
   const events = useFetch<EventsResponse>(`/devices/${device.id}/events?prefix=vrrp&days=${DAYS}`);
   const [editing, setEditing] = useState(false);
-  useLive((e) => { if ((e.data as { device_id?: string }).device_id === device.id) { void vrrp.reload(); void events.reload(); } }, ["vrrp.state", "wan.link"]);
+  useLive((e) => { if ((e.data as { device_id?: string }).device_id === device.id) { void vrrp.reload(); void events.reload(); } }, ["vrrp.state", "vrrp.peer", "wan.link"]);
   const editable = can("technician");
   if (!vrrp.data) return vrrp.error ? <ErrorBox error={vrrp.error} /> : <Loading rows={4} />;
   const slots = wan.data?.links ?? [];
@@ -191,7 +226,10 @@ export default function VrrpTab({ device }: { device: Device }) {
         <div key={v.id} className="flex flex-col gap-4">
           <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
             <RoleCard v={v} device={device} wan={slots} simulator={!!meta?.simulator} editable={editable} onChanged={reload} />
-            <InstanceFacts v={v} wan={slots} />
+            <div className="flex min-w-0 flex-col gap-4">
+              <InstanceFacts v={v} wan={slots} />
+              <PeerCard v={v} device={device} editable={editable} onChanged={reload} />
+            </div>
           </div>
           <History v={v} events={events.data} />
         </div>
@@ -240,6 +278,8 @@ function VrrpEditor({ device, initial, slots, onSaved, onClose }: { device: Devi
                   <option value="">– keines –</option>
                   {slots.map((l) => <option key={l.slot} value={l.slot}>WAN{l.slot} – {l.name} ({l.interface})</option>)}
                 </Select>
+                <Input label="Gegenstelle (IP)" hint="optional, im Netz der lokalen Adresse" placeholder="192.168.110.2" value={v.peer_address ?? ""} onChange={(e) => set(i, { peer_address: e.target.value || null })} className="font-mono" />
+                <Input label="Beschreibung Gegenstelle" hint="optional, z. B. FortiGate Zentrale" maxLength={100} value={v.peer_description ?? ""} onChange={(e) => set(i, { peer_description: e.target.value || null })} />
                 <Input label="Intervall (ms)" type="number" min={10} value={v.interval_ms} onChange={(e) => set(i, { interval_ms: Number(e.target.value) })} />
                 <Select label="VRRP-Version" value={v.version} onChange={(e) => set(i, { version: Number(e.target.value) })}>
                   <option value={3}>3 (Standard RouterOS 7)</option>

@@ -1,139 +1,153 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { color, LineChart, Sparkline, type Series } from "../components/Chart";
-import { Button, Card, ErrorBox, Select, StatusDot, Table } from "../components/ui";
+import { useEffect, useMemo, useState } from "react";
+import { LineChart, type Marker, type Series } from "../components/Chart";
+import { Button, Card, ErrorBox, Notice, Segment, StatusBadge, Table } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { fmtAgo, fmtBps, fmtBytes, fmtDate } from "../lib/format";
+import { fmtAgo, fmtBps, fmtDate } from "../lib/format";
+import { ifaceLabel } from "../lib/interfaces";
 import { useLive } from "../lib/live";
 import type { Device } from "../lib/types";
 import { useFetch } from "../lib/useFetch";
-import { ifaceLabel, METRIC_LABELS } from "../lib/interfaces";
+import type { EventsResponse } from "../pages/DeviceDetail";
 
 interface Live {
   id: string;
   cpu_load: number | null;
-  mem_used: number | null;
-  mem_total: number | null;
   mgmt_rtt_ms: number | null;
-  uptime: string | null;
   rx_bps: number;
   tx_bps: number;
   interfaces: Record<string, { rx_bps: number | null; tx_bps: number | null; running: boolean; comment?: string | null; default_name?: string | null }>;
-  wan: Record<string, { status: string; rtt_ms: number | null; loss_pct: number | null; active?: boolean }>;
 }
 type Row = { time: number; [k: string]: number | string };
+type Range = "15m" | "1h" | "6h" | "24h" | "7d" | "30d";
+const RANGES: { value: Range; label: string; s: number }[] = [
+  { value: "15m", label: "15 min", s: 900 }, { value: "1h", label: "1 h", s: 3600 }, { value: "6h", label: "6 h", s: 21600 },
+  { value: "24h", label: "24 h", s: 86400 }, { value: "7d", label: "7 T", s: 604800 }, { value: "30d", label: "30 T", s: 2592000 },
+];
+interface WanCfg { mode: string; links: { slot: number; name: string; interface: string; priority: number; enabled: boolean }[] }
 
-function Tile({ label, value, history, c, online = true }: { label: string; value: string; history: number[]; c: string; online?: boolean }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-panel p-4 shadow-sm">
-      <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-slate-500">
-        {label}
-        {online ? <span className="flex items-center gap-1 normal-case text-emerald-600"><StatusDot status="online" /> live</span> : <span className="normal-case text-red-600">offline</span>}
-      </div>
-      <div className={`mt-1 text-2xl font-semibold ${online ? "text-slate-900" : "text-slate-300"}`}>{online ? value : "–"}</div>
-      <Sparkline values={history} color={c} />
-    </div>
-  );
+const mbps = (v: number) => (v / 1e6).toLocaleString("de-DE", { maximumFractionDigits: v < 1e7 ? 1 : 0 });
+
+/** Summe je Zeitpunkt über die gewählten Interfaces. */
+function sumBy(rows: Row[], field: string, keep: (iface: string) => boolean) {
+  const m = new Map<number, number>();
+  for (const r of rows) {
+    if (typeof r[field] !== "number" || !keep(String(r.interface))) continue;
+    const t = Math.round(r.time);
+    m.set(t, (m.get(t) ?? 0) + (r[field] as number));
+  }
+  return [...m.entries()].sort((a, b) => a[0] - b[0]).map(([t, v]) => ({ t, v }));
 }
 
-function groupSeries(rows: Row[], field: string, by?: string, scale = 1, label: (k: string) => string = (k) => k): Series[] {
-  const groups = new Map<string, { t: number; v: number }[]>();
-  for (const r of rows) {
-    if (typeof r[field] !== "number") continue;
-    const k = by ? label(String(r[by])) : METRIC_LABELS[field] ?? field;
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k)!.push({ t: r.time, v: (r[field] as number) * scale });
+/** Backup-Phasen (Backup-WAN aktiv oder VRRP-Master) aus dem Statusverlauf. */
+function backupMarkers(ev: EventsResponse | null, wan: WanCfg | null, from: number, to: number): Marker[] {
+  if (!ev) return [];
+  const best = Math.min(...(wan?.links.filter((l) => l.enabled).map((l) => l.priority) ?? [1]));
+  const backupSlots = new Set((wan?.mode === "failover" ? wan.links.filter((l) => l.priority > best) : []).map((l) => `WAN${l.slot}`));
+  const relevant = (subject: string, label: string) => subject.startsWith("vrrp:") || (subject.startsWith("wanactive:") && [...backupSlots].some((s) => label.startsWith(s + " ")));
+  const on = (subject: string, status: string) => (subject.startsWith("vrrp:") ? status === "master" : status === "active");
+  const subjects = new Map<string, { label: string; spans: [number, number | null][]; open: number | null }>();
+  for (const [s, i] of Object.entries(ev.initial)) if (relevant(s, i.label)) subjects.set(s, { label: i.label, spans: [], open: on(s, i.status) ? from : null });
+  for (const e of [...ev.events].reverse()) {
+    if (!relevant(e.subject, e.label)) continue;
+    const x = subjects.get(e.subject) ?? { label: e.label, spans: [], open: null };
+    const t = new Date(e.at).getTime() / 1000;
+    if (on(e.subject, e.status) && x.open == null) x.open = t;
+    if (!on(e.subject, e.status) && x.open != null) { x.spans.push([x.open, t]); x.open = null; }
+    subjects.set(e.subject, x);
   }
-  return [...groups.entries()].map(([name, points], i) => ({ name, points, color: color(i) }));
+  const out: Marker[] = [];
+  for (const [s, x] of subjects) {
+    if (x.open != null) x.spans.push([x.open, null]);
+    for (const [a, b] of x.spans) if ((b ?? to) >= from) out.push({ t: a, until: b ?? to, label: s.startsWith("vrrp:") ? `VRRP ${x.label}: Master` : `Failover auf ${x.label}`, tone: "orange" });
+  }
+  return out;
 }
 
 export default function MetricsTab({ device }: { device: Device }) {
   const { me } = useAuth();
+  const [range, setRange] = useState<Range>("24h");
   const [live, setLive] = useState<Live | null>(null);
-  const hist = useRef<Live[]>([]);
-  const [range, setRange] = useState("1h");
+  const span = RANGES.find((r) => r.value === range)!.s;
+  const days = Math.max(1, Math.ceil(span / 86400));
   const sys = useFetch<{ points: Row[] }>(`/devices/${device.id}/metrics?measurement=system&range=${range}`);
   const ifc = useFetch<{ points: Row[] }>(`/devices/${device.id}/metrics?measurement=interface&range=${range}`);
-  const wan = useFetch<{ points: Row[] }>(`/devices/${device.id}/metrics?measurement=wan&range=${range}`);
+  const wanM = useFetch<{ points: Row[] }>(`/devices/${device.id}/metrics?measurement=wan&range=${range}`);
+  const wan = useFetch<WanCfg>(`/devices/${device.id}/wan`);
+  const events = useFetch<EventsResponse>(`/devices/${device.id}/events?days=${days + 1}&limit=2000`);
+  const online = device.status === "online";
 
-  // Live-Modus anfordern und alle 60 s erneuern
+  // Live-Modus (schnelles Polling) anfordern und alle 60 s erneuern
   useEffect(() => {
     let stop = false;
     const req = () => api.post<{ snapshot: Live | null }>(`/devices/${device.id}/metrics/live`).then((r) => !stop && setLive((cur) => (r.snapshot ? cur ?? r.snapshot : null))).catch(() => undefined);
     void req();
     const t = setInterval(req, 60000);
     return () => { stop = true; clearInterval(t); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [device.id]);
+  useEffect(() => { if (!online) setLive(null); }, [online]);
+  useLive((e) => { const d = e.data as unknown as Live; if (d.id === device.id && online) setLive(d); }, ["device.metrics"]);
+  useLive((e) => { if ((e.data as { device_id?: string }).device_id === device.id) void events.reload(); }, ["wan.link", "vrrp.state"]);
 
-  const online = device.status === "online";
-  useEffect(() => {
-    if (!online) {
-      setLive(null);
-      hist.current = [];
-    }
-  }, [online]);
-
-  useLive((e) => {
-    const d = e.data as unknown as Live;
-    if (d.id !== device.id || !online) return;
-    hist.current = [...hist.current.slice(-59), d];
-    setLive(d);
-  }, ["device.metrics"]);
-
-  const h = hist.current;
-  const facts = (device.facts?.interfaces ?? {}) as Record<string, { comment?: string | null; default_name?: string | null }>;
-  const ifName = (n: string) => ifaceLabel(n, live?.interfaces?.[n] ?? facts[n]);
-  const ifaceRows = useMemo(() => Object.entries(live?.interfaces ?? {}).sort(([a], [b]) => a.localeCompare(b)), [live]);
-  const grafana = me?.user.is_superuser;
+  const now = Date.now() / 1000;
+  const xr: [number, number] = [now - span, now];
+  const wanIfaces = new Set(wan.data?.links.map((l) => l.interface) ?? []);
+  const keep = (n: string) => (wanIfaces.size ? wanIfaces.has(n) : !n.startsWith("sdwan-") && !n.startsWith("bridge") && n !== "lo");
+  const ifcRows = ifc.data?.points ?? [];
+  const thr: Series[] = [
+    { name: "Empfangen", color: "var(--blue)", fill: true, points: sumBy(ifcRows, "rx_bps", keep) },
+    { name: "Senden", color: "var(--c2)", points: sumBy(ifcRows, "tx_bps", keep) },
+  ];
+  const slotName = (tag: string) => wan.data?.links.find((l) => `WAN${l.slot}` === tag)?.name ?? tag;
+  const latency: Series[] = useMemo(() => {
+    const g = new Map<string, { t: number; v: number }[]>();
+    for (const r of wanM.data?.points ?? []) if (typeof r.rtt_ms === "number") { const k = String(r.wan); g.set(k, [...(g.get(k) ?? []), { t: r.time, v: r.rtt_ms }]); }
+    return [...g.entries()].sort().map(([k, pts], i) => ({ name: slotName(k), color: ["var(--blue)", "var(--c2)", "var(--orange)", "var(--red)"][i % 4], points: pts }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wanM.data, wan.data]);
+  const cpu: Series[] = [{ name: "Auslastung", color: "var(--blue)", fill: true, points: (sys.data?.points ?? []).filter((r) => typeof r.cpu_load === "number").map((r) => ({ t: r.time, v: r.cpu_load as number })) }];
+  const markers = backupMarkers(events.data, wan.data, xr[0], xr[1]);
+  const lastMarker = markers.reduce<Marker | null>((a, m) => (!a || m.t > a.t ? m : a), null);
+  const cores = Number(device.facts?.cpu_count ?? 0);
 
   return (
-    <div className="space-y-6">
-      {!online && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          <b>Gerät nicht erreichbar.</b> Keine Live-Werte – zuletzt gesehen {fmtAgo(device.last_seen_at)}{device.last_seen_at ? ` (${fmtDate(device.last_seen_at)})` : ""}. Der Verlauf unten zeigt die Daten bis dahin.
-        </div>
+    <>
+      {!online && device.pairing_status === "paired" && (
+        <Notice tone="red" title="Gerät nicht erreichbar">Keine Live-Werte – zuletzt gesehen {fmtAgo(device.last_seen_at)}{device.last_seen_at ? ` (${fmtDate(device.last_seen_at)})` : ""}. Der Verlauf zeigt die Daten bis dahin.</Notice>
       )}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <Tile online={online} label="CPU-Auslastung" value={live?.cpu_load != null ? `${live.cpu_load}%` : "–"} history={h.map((x) => x.cpu_load ?? 0)} c={color(0)} />
-        <Tile online={online} label="Arbeitsspeicher" value={live?.mem_total ? `${Math.round(((live.mem_used ?? 0) / live.mem_total) * 100)}%` : "–"} history={h.map((x) => (x.mem_total ? (x.mem_used ?? 0) / x.mem_total : 0))} c={color(1)} />
-        <Tile online={online} label="Download" value={fmtBps(live?.rx_bps)} history={h.map((x) => x.rx_bps)} c={color(4)} />
-        <Tile online={online} label="Upload" value={fmtBps(live?.tx_bps)} history={h.map((x) => x.tx_bps)} c={color(2)} />
-        <Tile online={online} label="Latenz Cloud" value={live?.mgmt_rtt_ms != null ? `${live.mgmt_rtt_ms} ms` : "–"} history={h.map((x) => x.mgmt_rtt_ms ?? 0)} c={color(5)} />
+      <div className="flex flex-wrap items-center gap-3">
+        <Segment label="Zeitraum" value={range} onChange={setRange} options={RANGES.map((r) => ({ value: r.value, label: r.label }))} />
+        <span className="text-xs text-fg3">{lastMarker ? `Letzter Backup-Betrieb ab ${new Date(lastMarker.t * 1000).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })} markiert` : "Kein Backup-Betrieb im Zeitraum"}</span>
+        <div className="flex-1" />
+        {markers.length > 0 && <span className="flex items-center gap-1.5 text-xs text-orange-text"><span className="w-3.5 border-t-[1.5px] border-dashed border-orange" />Backup-Betrieb (Failover/VRRP-Master)</span>}
+        {me?.user.is_superuser && <Button size="sm" variant="secondary" icon="external" onClick={() => void api.get<{ url: string }>(`/devices/${device.id}/metrics/grafana`).then((r) => window.open(r.url, "_blank", "noopener"))}>Grafana</Button>}
       </div>
-
-      <Card title={online ? "Interfaces (live)" : "Interfaces (Gerät offline)"}>
-        <Table head={["", "Interface", "RX", "TX"]} empty={ifaceRows.length === 0}>
-          {ifaceRows.map(([n, i]) => (
-            <tr key={n}>
-              <td className="px-3 py-1.5"><StatusDot status={i.running ? "up" : "down"} /></td>
-              <td className="px-3 py-1.5"><span className="font-mono text-xs">{n}</span>{(i.comment || (i.default_name && i.default_name !== n)) && <span className="ml-2 text-xs text-slate-500">{ifaceLabel(n, i).slice(n.length).replace(/^ – /, "")}</span>}</td>
-              <td className="px-3 py-1.5">{fmtBps(i.rx_bps)}</td>
-              <td className="px-3 py-1.5">{fmtBps(i.tx_bps)}</td>
-            </tr>
-          ))}
-        </Table>
+      <ErrorBox error={sys.error ?? ifc.error} />
+      <Card title="Durchsatz" subtitle={`Mbit/s · ${wanIfaces.size ? "alle WAN-Leitungen" : "alle Interfaces"}`}>
+        <LineChart series={thr} height={190} yMin={0} format={mbps} markers={markers} range={xr} />
       </Card>
-
-      <Card
-        title="Verlauf"
-        actions={
-          <>
-            <Select value={range} onChange={(e) => setRange(e.target.value)}>
-              {["15m", "1h", "6h", "24h", "7d", "30d"].map((r) => <option key={r}>{r}</option>)}
-            </Select>
-            {grafana && <Button variant="secondary" onClick={() => void api.get<{ url: string }>(`/devices/${device.id}/metrics/grafana`).then((r) => window.open(r.url, "_blank"))}>Grafana ↗</Button>}
-          </>
-        }
-      >
-        <ErrorBox error={sys.error} />
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div><h4 className="mb-1 text-sm font-medium text-slate-600">CPU-Auslastung (%)</h4><LineChart series={groupSeries(sys.data?.points ?? [], "cpu_load")} yMin={0} /></div>
-          <div><h4 className="mb-1 text-sm font-medium text-slate-600">Speicher belegt</h4><LineChart series={groupSeries(sys.data?.points ?? [], "mem_used")} format={fmtBytes} /></div>
-          <div><h4 className="mb-1 text-sm font-medium text-slate-600">Download je Interface</h4><LineChart series={groupSeries((ifc.data?.points ?? []).filter((p) => !String(p.interface).startsWith("sdwan-")), "rx_bps", "interface", 1, ifName)} format={fmtBps} /></div>
-          <div><h4 className="mb-1 text-sm font-medium text-slate-600">WAN-Latenz (ms)</h4><LineChart series={groupSeries(wan.data?.points ?? [], "rtt_ms", "wan")} /></div>
-        </div>
-      </Card>
-    </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card title="Latenz" subtitle={`ms · Netwatch-Prüfziel je Leitung`}>
+          {latency.length || wan.data?.links.length ? <LineChart series={latency} yMin={0} format={(v) => v.toFixed(0)} markers={markers} range={xr} /> : <p className="py-10 text-center text-fg3">Keine WAN-Leitungen mit Prüfung</p>}
+        </Card>
+        <Card title="CPU" subtitle={`%${cores ? ` · ${cores} ${cores === 1 ? "Kern" : "Kerne"}` : ""}`}>
+          <LineChart series={cpu} yMin={0} yMax={100} format={(v) => v.toFixed(0)} markers={markers} range={xr} />
+        </Card>
+      </div>
+      {online && live && (
+        <Card title="Interfaces" subtitle="live" flush>
+          <Table head={["Status", "Interface", "Empfangen", "Senden"]}>
+            {Object.entries(live.interfaces).sort(([a], [b]) => a.localeCompare(b)).map(([n, i]) => (
+              <tr key={n}>
+                <td className="px-3 py-2"><StatusBadge status={i.running ? "up" : "down"} label={i.running ? "Up" : "Kein Link"} /></td>
+                <td className="px-3 py-2"><span className="font-mono text-xs">{n}</span><span className="ml-2 text-xs text-fg3">{ifaceLabel(n, i).slice(n.length).replace(/^ – /, "")}</span></td>
+                <td className="px-3 py-2">{fmtBps(i.rx_bps)}</td>
+                <td className="px-3 py-2">{fmtBps(i.tx_bps)}</td>
+              </tr>
+            ))}
+          </Table>
+        </Card>
+      )}
+    </>
   );
 }

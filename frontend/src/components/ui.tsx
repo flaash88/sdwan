@@ -167,7 +167,8 @@ const STATUS: Record<string, [string, Tone, IconName]> = {
   updating: ["Aktualisiert", "blue", "loader"], rebooting: ["Neustart", "blue", "loader"], active: ["Aktiv", "green", "checkCircle"],
   closed: ["Beendet", "gray", "minusCircle"], expired: ["Abgelaufen", "gray", "clock"],
   staged: ["Vorbereitet", "gray", "clock"], connected: ["Verbunden", "blue", "loader"], provisioning: ["Wird eingerichtet", "blue", "loader"],
-  provisioned: ["Provisioniert", "green", "checkCircle"], master: ["Master", "orange", "alert"], backup: ["Backup", "neutral", "pause"],
+  provisioned: ["Provisioniert", "green", "checkCircle"], deployed: ["Übertragen", "green", "checkCircle"], partial: ["Teilweise", "orange", "alert"],
+  rolled_back: ["Zurückgerollt", "orange", "rotate"], deploying: ["Wird übertragen", "blue", "loader"], draft: ["Entwurf", "gray", "edit"], master: ["Master", "orange", "alert"], backup: ["Backup", "neutral", "pause"],
 };
 export function statusInfo(status: string): [string, Tone, IconName] {
   return STATUS[status] ?? [status, "gray", "info"];

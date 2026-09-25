@@ -155,3 +155,45 @@ async def device_interfaces(device_id: uuid.UUID, ctx: Ctx = ReadCtx) -> list[di
             rows.append({"name": n, "type": i.get("type"), "comment": i.get("comment"), "default_name": i.get("default_name"),
                          "running": bool(i.get("running")), "disabled": False})
     return sorted((r for r in rows if not r["name"].startswith("sdwan-")), key=lambda r: r["name"])
+
+
+@router.get("/{device_id}/events")
+async def device_events(device_id: uuid.UUID, ctx: Ctx = ReadCtx, prefix: str | None = Query(default=None, pattern="^(device|wan|wanactive|vrrp)$"),
+                        days: int = Query(default=30, ge=1, le=400), limit: int = Query(default=500, le=5000)) -> dict:
+    """Statuswechsel (state_log) des Geräts: Gerät online/offline, WAN up/down, WAN aktiv, VRRP-Rolle.
+
+    ``initial`` = letzter Zustand je Subjekt vor Beginn des Zeitraums (für Zeitleisten).
+    """
+    import datetime as dt
+
+    from app.db import utcnow
+    from app.models import StatusEvent, VrrpInstance, WanLink
+
+    dev = await get_or_404(ctx.db, Device, device_id, "Device")
+    since = utcnow() - dt.timedelta(days=days)
+    q = select(StatusEvent).where(StatusEvent.device_id == dev.id)
+    if prefix == "device":
+        q = q.where(StatusEvent.subject == "device")
+    elif prefix:
+        q = q.where(StatusEvent.subject.like(f"{prefix}:%"))
+    rows = (await ctx.db.execute(q.where(StatusEvent.at >= since).order_by(StatusEvent.at.desc()).limit(limit))).scalars().all()
+    before = (await ctx.db.execute(q.where(StatusEvent.at < since).order_by(StatusEvent.at.desc()))).scalars().all()
+    initial: dict[str, str] = {}
+    for e in before:
+        initial.setdefault(e.subject, e.status)
+    links = {str(lk.id): lk for lk in (await ctx.db.execute(select(WanLink).where(WanLink.device_id == dev.id))).scalars()}
+    insts = {str(i.id): i for i in (await ctx.db.execute(select(VrrpInstance).where(VrrpInstance.device_id == dev.id))).scalars()}
+
+    def label(subject: str) -> str:
+        kind, _, ref = subject.partition(":")
+        if kind in ("wan", "wanactive") and ref in links:
+            return f"WAN{links[ref].slot} {links[ref].name}"
+        if kind == "vrrp" and ref in insts:
+            return insts[ref].name
+        return "Gerät" if subject == "device" else subject
+
+    return {
+        "since": since.isoformat(),
+        "events": [{"subject": e.subject, "kind": e.subject.partition(":")[0], "label": label(e.subject), "status": e.status, "at": e.at.isoformat()} for e in rows],
+        "initial": {s: {"status": st, "label": label(s)} for s, st in initial.items()},
+    }

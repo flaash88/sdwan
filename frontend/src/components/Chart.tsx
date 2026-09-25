@@ -29,7 +29,7 @@ const PALETTE = ["var(--blue)", "var(--c2)", "var(--orange)", "var(--red)", "var
 export const color = (i: number) => PALETTE[i % PALETTE.length];
 
 const fmtClock = (t: number) => new Date(t * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-const fmtDay = (t: number) => new Date(t * 1000).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + ".";
+const fmtDay = (t: number) => new Date(t * 1000).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
 
 /** Schlanker SVG-Linienchart ohne externe Abhängigkeiten (Design: Raster, 5 Zeitmarken, Failover-Markierungen). */
 export function LineChart({ series, height = 180, format = (v: number) => v.toFixed(1), yMin, yMax, markers = [], range }: {

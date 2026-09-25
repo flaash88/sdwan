@@ -18,8 +18,8 @@ export function ifaceLabel(name: string, i?: Partial<Iface> | null): string {
   return l;
 }
 
-export function useInterfaces(deviceId: string) {
-  return useFetch<Iface[]>(`/devices/${deviceId}/interfaces`);
+export function useInterfaces(deviceId: string | null) {
+  return useFetch<Iface[]>(deviceId ? `/devices/${deviceId}/interfaces` : null);
 }
 
 /** Lesbare Namen für Metrik-Felder. */

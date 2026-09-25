@@ -13,7 +13,7 @@ from app.api.v1.common import get_or_404
 from app.config import get_settings
 from app.deps import Ctx, ReadCtx, TechCtx
 from app.models import Device, PairingStatus, WanLink
-from app.routeros import RouterOSError
+from app.routeros import RouterOSError, connect_device
 from app.services.wan import MODES, WanError, apply_wan, test_link, validate_links
 
 router = APIRouter(prefix="/devices/{device_id}/wan", tags=["wan"])
@@ -204,3 +204,28 @@ async def simulate_outage(device_id: uuid.UUID, slot: int, down: bool = True, ct
     await ctx.audit("wan.simulate_outage", target_type="device", target_id=dev.id, details={"slot": slot, "down": down})
     await ctx.db.commit()
     return {"slot": slot, "down": down}
+
+
+@router.get("/routes")
+async def managed_routes(device_id: uuid.UUID, ctx: Ctx = ReadCtx) -> dict:
+    """Die von der Plattform verwalteten WAN-Routen (Kommentar ``sdwan:wan:*``), live vom Router."""
+    dev = await _device(ctx, device_id)
+    if dev.pairing_status != "paired":
+        return {"live": False, "error": "Gerät nicht verbunden", "routes": []}
+    try:
+        async with connect_device(dev) as api:
+            rows = [r for r in await api.print("/ip/route") if str(r.get("comment", "")).startswith("sdwan:wan:")]
+    except RouterOSError as exc:
+        return {"live": False, "error": str(exc), "routes": []}
+    flag = lambda v: str(v).lower() in ("true", "yes")  # noqa: E731
+    out = []
+    for r in rows:
+        parts = str(r["comment"]).split(":")  # sdwan:wan:<art>:<slot>[:table]
+        out.append({
+            "comment": str(r["comment"]), "kind": parts[2] if len(parts) > 2 else "", "slot": int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else None,
+            "dst_address": r.get("dst-address"), "gateway": r.get("gateway"), "distance": int(r["distance"]) if str(r.get("distance", "")).isdigit() else None,
+            "routing_table": r.get("routing-table") or "main", "check_gateway": r.get("check-gateway") or None,
+            "active": flag(r.get("active", False)), "disabled": flag(r.get("disabled", False)),
+        })
+    out.sort(key=lambda x: (x["kind"] != "default", x["routing_table"] != "main", x["slot"] or 0, x["distance"] or 0))
+    return {"live": True, "error": None, "routes": out}

@@ -433,3 +433,25 @@ async def test_vrrp_put_without_id_updates_same_name(client, msp, hub):
     assert r.status_code == 200, r.text
     (b,) = r.json()["instances"]
     assert b["id"] == a["id"] and b["priority"] == 90
+
+
+async def test_device_events_and_managed_routes(client, msp, hub):
+    h, dev = await _setup(client, msp)
+    inst = (await client.put(f"/api/v1/devices/{dev['id']}/vrrp", json={"instances": [VRRP]}, headers=h)).json()["instances"][0]
+    await poll_all()
+    r = (await client.get(f"/api/v1/devices/{dev['id']}/wan/routes", headers=h)).json()
+    assert r["live"] is True
+    defaults = [x for x in r["routes"] if x["kind"] == "default" and x["routing_table"] == "main"]
+    assert [(x["slot"], x["distance"], x["active"]) for x in defaults] == [(1, 1, True), (2, 2, False)]
+    assert all(x["comment"].startswith("sdwan:wan:") for x in r["routes"])
+    get_router(dev["tunnel_ip"]).down_hosts.add("1.1.1.1")
+    await client.post(f"/api/v1/devices/{dev['id']}/vrrp/{inst['id']}/simulate?master=true", headers=h)
+    await poll_all()
+    ev = (await client.get(f"/api/v1/devices/{dev['id']}/events?prefix=vrrp", headers=h)).json()
+    assert [e["status"] for e in ev["events"]] == ["master", "backup"]  # neueste zuerst
+    assert ev["events"][0]["label"] == "vrrp-kassen"
+    allev = (await client.get(f"/api/v1/devices/{dev['id']}/events", headers=h)).json()
+    kinds = {e["kind"] for e in allev["events"]}
+    assert {"device", "wan", "wanactive", "vrrp"} <= kinds
+    assert any(e["label"].startswith("WAN2 5G") for e in allev["events"] if e["kind"] == "wanactive")
+    assert (await client.get(f"/api/v1/devices/{dev['id']}/events?prefix=bogus", headers=h)).status_code == 422

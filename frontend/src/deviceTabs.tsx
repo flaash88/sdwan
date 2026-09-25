@@ -16,10 +16,10 @@ export interface DeviceTab {
 
 /** Tabs späterer Phasen (WAN, Metriken, Backups, Remote-Zugriff, …). */
 export const deviceTabs: DeviceTab[] = [
-  { key: "metrics", label: "Metriken", pairedOnly: true, component: MetricsTab },
   { key: "wan", label: "WAN", pairedOnly: true, component: WanTab },
   { key: "vrrp", label: "VRRP", pairedOnly: true, component: VrrpTab },
+  { key: "metrics", label: "Metriken", pairedOnly: true, component: MetricsTab },
+  { key: "backups", label: "Backups", pairedOnly: true, component: BackupsTab },
   { key: "policies", label: "Firewall", pairedOnly: true, component: PoliciesTab },
   { key: "remote", label: "Fernzugriff", pairedOnly: true, component: RemoteTab },
-  { key: "backups", label: "Backups", pairedOnly: true, component: BackupsTab },
 ];

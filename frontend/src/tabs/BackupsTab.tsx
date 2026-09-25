@@ -1,52 +1,151 @@
-import { useState } from "react";
-import DiffView from "../components/DiffView";
-import { Badge, Button, Card, ErrorBox, Select, Table, cls, useAction } from "../components/ui";
+import { useEffect, useMemo, useState } from "react";
+import { Button, Card, EmptyState, ErrorBox, IconButton, Loading, Segment, cls, useAction } from "../components/ui";
 import { api, download } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import { fmtBytes, fmtDate } from "../lib/format";
+import { fmtBytes, fmtFull } from "../lib/format";
 import type { Device } from "../lib/types";
 import { useFetch } from "../lib/useFetch";
 
 interface Backup { id: string; trigger: string; routeros_version: string | null; size: number; pinned: boolean; note: string | null; created_at: string; added: number; removed: number; previous_id: string | null }
+interface Diff { from: string | null; to: string; added: number; removed: number; lines: string[] }
+
+const TRIGGER: Record<string, string> = { scheduled: "Geplant · täglich", manual: "Manuell", "pre-update": "Vor Firmware-Update" };
+const why = (b: Backup) => [TRIGGER[b.trigger] ?? b.trigger, b.note].filter(Boolean).join(" · ");
+
+type Side = { n: number | ""; text: string; mark: "" | "-" | "+" };
+type Row = { l: Side; r: Side; kind: "ctx" | "chg" | "gap" };
+
+/** Unified Diff -> Zeilen nebeneinander (links alt, rechts neu); Löschungen/Hinzufügungen werden gepaart. */
+function sideBySide(lines: string[]): Row[] {
+  const rows: Row[] = [];
+  let ln = 0, rn = 0;
+  let del: string[] = [], add: string[] = [];
+  const flush = () => {
+    for (let k = 0; k < Math.max(del.length, add.length); k++) {
+      const d = del[k], a = add[k];
+      rows.push({ kind: "chg", l: d != null ? { n: ++ln, text: d, mark: "-" } : { n: "", text: "", mark: "" }, r: a != null ? { n: ++rn, text: a, mark: "+" } : { n: "", text: "", mark: "" } });
+    }
+    del = []; add = [];
+  };
+  for (const l of lines) {
+    if (l.startsWith("---") || l.startsWith("+++")) continue;
+    if (l.startsWith("@@")) {
+      flush();
+      const m = l.match(/-(\d+)(?:,\d+)? \+(\d+)/);
+      if (m) { if (rows.length) rows.push({ kind: "gap", l: { n: "", text: "…", mark: "" }, r: { n: "", text: "…", mark: "" } }); ln = Number(m[1]) - 1; rn = Number(m[2]) - 1; }
+      continue;
+    }
+    if (l.startsWith("-")) del.push(l.slice(1));
+    else if (l.startsWith("+")) add.push(l.slice(1));
+    else { flush(); const t = l.slice(1); rows.push({ kind: "ctx", l: { n: ++ln, text: t, mark: "" }, r: { n: ++rn, text: t, mark: "" } }); }
+  }
+  flush();
+  return rows;
+}
+
+function Chip({ label, on, blue, onClick, title }: { label: string; on: boolean; blue?: boolean; onClick: () => void; title: string }) {
+  return (
+    <button type="button" aria-pressed={on} title={title} aria-label={title} onClick={onClick}
+      className={cls("flex h-[22px] w-[22px] cursor-pointer items-center justify-center rounded-[5px] border text-[11px] font-semibold",
+        on ? (blue ? "border-blue bg-blue text-white" : "border-fg bg-fg text-panel") : "border-line-strong bg-panel text-fg3 hover:text-fg")}>{label}</button>
+  );
+}
 
 export default function BackupsTab({ device }: { device: Device }) {
   const { can } = useAuth();
   const list = useFetch<Backup[]>(`/devices/${device.id}/backups`);
-  const [sel, setSel] = useState<string | null>(null);
-  const [against, setAgainst] = useState<string>("");
+  const [a, setA] = useState<string | null>(null);
+  const [b, setB] = useState<string | null>(null);
   const [view, setView] = useState<"diff" | "content">("diff");
-  const cur = sel ?? list.data?.[0]?.id ?? null;
-  const diff = useFetch<{ lines: string[]; added: number; removed: number }>(cur ? `/backups/${cur}/diff${against ? `?against=${against}` : ""}` : null);
-  const full = useFetch<{ content: string }>(cur && view === "content" ? `/backups/${cur}` : null);
   const { busy, error, run } = useAction();
-  const b = list.data?.find((x) => x.id === cur);
+  const items = list.data ?? [];
+  // Standard: B = neuester Stand, A = dessen Vorgänger
+  useEffect(() => {
+    if (!items.length) return;
+    if (!b || !items.some((x) => x.id === b)) setB(items[0].id);
+    if (!a || !items.some((x) => x.id === a)) setA(items[0].previous_id && items.some((x) => x.id === items[0].previous_id) ? items[0].previous_id : items[1]?.id ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [list.data]);
+  const diff = useFetch<Diff>(b && a && a !== b && view === "diff" ? `/backups/${b}/diff?against=${a}&context=3` : null);
+  const full = useFetch<{ content: string }>(b && view === "content" ? `/backups/${b}` : null);
+  const byId = (id: string | null) => items.find((x) => x.id === id);
+  const left = byId(diff.data?.from ?? a), right = byId(diff.data?.to ?? b);
+  const rows = useMemo(() => sideBySide(diff.data?.lines ?? []), [diff.data]);
+
   return (
-    <div className="grid gap-6 xl:grid-cols-3">
-      <Card title="Konfigurations-Backups" actions={can("technician") && <Button disabled={busy} onClick={() => void run(async () => { await api.post(`/devices/${device.id}/backups`); await list.reload(); setSel(null); })}>Backup jetzt</Button>}>
-        <ErrorBox error={error} />
-        <p className="mb-3 text-xs text-slate-500">Tägliches Backup (nur bei Änderungen gespeichert). Exporte ohne Passwörter/Schlüssel.</p>
-        <Table head={["Zeitpunkt", "Änderung", ""]} empty={list.data?.length === 0}>
-          {list.data?.map((x) => (
-            <tr key={x.id} onClick={() => { setSel(x.id); setAgainst(""); }} className={cls("cursor-pointer", x.id === cur ? "bg-brand-50" : "hover:bg-slate-50")}>
-              <td className="px-3 py-2">{fmtDate(x.created_at)}<div className="text-xs text-slate-500">{x.routeros_version} · {fmtBytes(x.size)}</div></td>
-              <td className="px-3 py-2 text-xs"><span className="text-emerald-700">+{x.added}</span> / <span className="text-red-700">−{x.removed}</span></td>
-              <td className="px-3 py-2">{x.trigger !== "scheduled" && <Badge color={x.trigger === "manual" ? "blue" : "yellow"}>{x.trigger}</Badge>}</td>
-            </tr>
-          ))}
-        </Table>
+    <>
+      <ErrorBox error={error ?? list.error} />
+      <Card flush title="Konfig-Stände" subtitle={`${items.length} gespeichert · täglich automatisch (nur bei Änderungen) und manuell`}
+        actions={<>
+          <span className="hidden text-xs text-fg3 md:inline">A und B zum Vergleich wählen</span>
+          {can("technician") && <Button size="sm" icon="archive" disabled={busy || device.status !== "online"} onClick={() => void run(async () => { await api.post(`/devices/${device.id}/backups`); await list.reload(); setB(null); setA(null); })}>{busy ? "Backup läuft …" : "Backup jetzt"}</Button>}
+        </>}>
+        {!list.data ? <Loading rows={4} /> : items.length === 0 ? <EmptyState compact title="Noch keine Backups" text="Das erste Backup entsteht in der nächsten Nacht oder mit „Backup jetzt“." /> : (
+          <div className="overflow-x-auto">
+            <div className="min-w-[680px]">
+              <div className="grid grid-cols-[64px_160px_minmax(0,1fr)_110px_80px_110px_48px] gap-3 border-b border-line bg-panel2 px-4 py-2 text-xs font-medium text-fg3">
+                <span>Vergleich</span><span>Zeitpunkt</span><span>Auslöser</span><span>RouterOS</span><span>Größe</span><span>Änderung</span><span />
+              </div>
+              {items.map((x) => (
+                <div key={x.id} className={cls("grid h-[42px] grid-cols-[64px_160px_minmax(0,1fr)_110px_80px_110px_48px] items-center gap-3 border-b border-line px-4 last:border-b-0", (x.id === a || x.id === b) && "bg-panel2")}>
+                  <span className="flex gap-1">
+                    <Chip label="A" title={`Stand ${fmtFull(x.created_at)} als A wählen`} on={x.id === a} onClick={() => { setA(x.id); setView("diff"); }} />
+                    <Chip label="B" blue title={`Stand ${fmtFull(x.created_at)} als B wählen`} on={x.id === b} onClick={() => setB(x.id)} />
+                  </span>
+                  <span className="font-mono text-xs">{fmtFull(x.created_at)}</span>
+                  <span className="truncate" title={why(x)}>{why(x)}</span>
+                  <span className="truncate font-mono text-xs text-fg2">{x.routeros_version ?? "–"}</span>
+                  <span className="text-fg2">{fmtBytes(x.size)}</span>
+                  <span className="text-xs">{x.previous_id ? <><span className="text-green-text">+{x.added}</span> / <span className="text-red-text">−{x.removed}</span></> : <span className="text-fg3">erster Stand</span>}</span>
+                  <span className="flex justify-end"><IconButton icon="download" label={`Stand ${fmtFull(x.created_at)} als .rsc herunterladen`} onClick={() => void download(`/backups/${x.id}/download`, `${device.name}-${x.created_at.slice(0, 16).replace(/[:T]/g, "-")}.rsc`)} /></span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Card>
-      <Card className="xl:col-span-2" title={b ? `Backup vom ${fmtDate(b.created_at)}` : "Backup"} actions={b && <>
-        <Select value={view} onChange={(e) => setView(e.target.value as "diff" | "content")}><option value="diff">Diff</option><option value="content">Vollständig</option></Select>
-        {view === "diff" && <Select value={against} onChange={(e) => setAgainst(e.target.value)}>
-          <option value="">gegen vorheriges</option>
-          {list.data?.filter((x) => x.id !== cur).map((x) => <option key={x.id} value={x.id}>gegen {fmtDate(x.created_at)}</option>)}
-        </Select>}
-        <Button variant="secondary" onClick={() => void download(`/backups/${b.id}/download`, `${device.name}-${b.created_at.slice(0, 10)}.rsc`)}>Download</Button>
-      </>}>
-        {b?.note && <p className="mb-2 text-sm text-slate-600">{b.note}</p>}
-        {view === "diff" ? (diff.data ? <><p className="mb-2 text-xs text-slate-500"><span className="text-emerald-700">+{diff.data.added}</span> / <span className="text-red-700">−{diff.data.removed}</span> Zeilen</p><DiffView lines={diff.data.lines} /></> : null)
-          : <pre className="max-h-[32rem] overflow-auto rounded-lg bg-slate-900 p-3 font-mono text-xs text-slate-100">{full.data?.content}</pre>}
-      </Card>
-    </div>
+
+      {items.length > 0 && (
+        <section className="overflow-hidden rounded-lg border border-line bg-panel">
+          <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
+            <Segment label="Ansicht" value={view} onChange={setView} options={[{ value: "diff", label: "Vergleich A ↔ B" }, { value: "content", label: "Vollständiger Stand B" }]} />
+          </div>
+          {view === "content" ? (
+            full.data ? <pre className="m-0 max-h-[36rem] overflow-auto bg-code p-4 font-mono text-xs leading-[1.6]">{full.data.content}</pre> : <Loading rows={4} />
+          ) : !a || a === b ? <EmptyState compact title="Zwei unterschiedliche Stände als A und B wählen" /> : !diff.data ? <Loading rows={4} /> : (
+            <>
+              <div className="grid grid-cols-2 border-b border-line">
+                {[{ s: left, tag: diff.data.from === a ? "A" : "B", count: <span className="text-xs font-medium text-red-text">− {diff.data.removed} Zeilen</span> },
+                  { s: right, tag: diff.data.to === b ? "B" : "A", count: <span className="text-xs font-medium text-green-text">+ {diff.data.added} Zeilen</span> }].map((h, i) => (
+                  <div key={i} className={cls("flex min-w-0 items-center gap-2 px-4 py-2.5", i === 0 && "border-r border-line")}>
+                    <span className={cls("flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] text-[11px] font-semibold", h.tag === "A" ? "bg-fg text-panel" : "bg-blue text-white")}>{h.tag}</span>
+                    <span className="shrink-0 font-semibold">{h.s ? fmtFull(h.s.created_at) : "–"}</span>
+                    <span className="truncate text-fg3">{h.s ? why(h.s) : ""}</span>
+                    <div className="flex-1" />{h.count}
+                  </div>
+                ))}
+              </div>
+              {rows.length === 0 ? <EmptyState compact icon="checkCircle" title="Keine Unterschiede" /> : (
+                <div className="max-h-[36rem] overflow-auto bg-code py-1 font-mono text-xs leading-[1.6]">
+                  {rows.map((r, i) => (
+                    <div key={i} className="grid grid-cols-[40px_18px_minmax(0,1fr)_40px_18px_minmax(0,1fr)]">
+                      {[r.l, r.r].map((s, k) => {
+                        const bg = s.mark === "-" ? "bg-red-bg" : s.mark === "+" ? "bg-green-bg" : r.kind === "chg" ? "bg-sunken" : "";
+                        const sec = s.text.startsWith("/") && !s.mark;
+                        return [
+                          <span key={k + "n"} className={cls("pr-2 text-right text-fg3", bg, k === 1 && "border-l border-line")}>{s.n}</span>,
+                          <span key={k + "m"} className={cls("text-center font-semibold", s.mark === "-" ? "text-red-text" : "text-green-text", bg)}>{s.mark === "-" ? "−" : s.mark}</span>,
+                          <span key={k + "t"} className={cls("whitespace-pre-wrap break-all pr-3", bg, r.kind === "gap" ? "text-fg3" : sec ? "text-blue-text" : s.mark ? "text-fg" : "text-fg2")}>{s.text}</span>,
+                        ];
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      )}
+    </>
   );
 }

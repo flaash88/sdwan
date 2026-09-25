@@ -1,27 +1,33 @@
+import type { IconName } from "./components/Icon";
 import type { Role } from "./lib/types";
 
 export interface NavItem {
   to: string;
   label: string;
-  icon: string;
+  icon: IconName;
   role?: Role;
   superuser?: boolean;
-  needsTenant?: boolean;
+  /** Zähler-Badge: "alarms" (rot) oder "firmware" */
+  badge?: "alarms" | "firmware";
 }
 
 export const NAV: NavItem[] = [
-  { to: "/", label: "Dashboard", icon: "◧" },
-  { to: "/devices", label: "Geräte", icon: "⌁" },
-  { to: "/alerts", label: "Alarme", icon: "⚠" },
-  { to: "/ztp", label: "Zero-Touch", icon: "✈", role: "technician" },
-  { to: "/sites", label: "Standorte", icon: "⌂" },
-  { to: "/mesh", label: "VPN-Mesh", icon: "⬡" },
-  { to: "/policies", label: "Firewall-Policies", icon: "⛨" },
-  { to: "/content-filter", label: "Content-Filter", icon: "⊘" },
-  { to: "/remote", label: "Fernzugriff", icon: "⇄" },
-  { to: "/firmware", label: "Firmware", icon: "⟳" },
-  { to: "/reports", label: "SLA-Berichte", icon: "▤" },
-  { to: "/users", label: "Benutzer", icon: "☺", role: "admin" },
-  { to: "/tenants", label: "Mandanten", icon: "▣", superuser: true },
-  { to: "/audit", label: "Audit-Log", icon: "☰", role: "admin" },
+  { to: "/", label: "Dashboard", icon: "grid" },
+  { to: "/devices", label: "Geräte", icon: "router" },
+  { to: "/sites", label: "Standorte", icon: "pin" },
+  { to: "/mesh", label: "VPN-Mesh", icon: "network" },
+  { to: "/policies", label: "Firewall-Policies", icon: "shield" },
+  { to: "/ztp", label: "Zero-Touch", icon: "package", role: "technician" },
+  { to: "/content-filter", label: "Content-Filter", icon: "filter" },
+  { to: "/firmware", label: "Firmware", icon: "cpu", badge: "firmware" },
+  { to: "/alerts", label: "Alarme", icon: "bell", badge: "alarms" },
+  { to: "/reports", label: "Berichte", icon: "chart" },
+  { to: "/remote", label: "Fernzugriff", icon: "terminal" },
+  { to: "/audit", label: "Audit-Log", icon: "list", role: "admin" },
+];
+
+/** Bereich "Verwaltung" */
+export const NAV_ADMIN: NavItem[] = [
+  { to: "/users", label: "Benutzer", icon: "users", role: "admin" },
+  { to: "/tenants", label: "Mandanten", icon: "building", superuser: true },
 ];

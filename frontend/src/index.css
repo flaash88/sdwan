@@ -1,14 +1,142 @@
 @import "tailwindcss";
+@import "@fontsource/geist-sans/400.css";
+@import "@fontsource/geist-sans/500.css";
+@import "@fontsource/geist-sans/600.css";
+@import "@fontsource/geist-sans/700.css";
+@import "@fontsource/geist-mono/400.css";
+@import "@fontsource/geist-mono/500.css";
 
-@theme {
-  --color-brand-50: #f0fdfa;
-  --color-brand-100: #ccfbf1;
-  --color-brand-500: #14b8a6;
-  --color-brand-600: #0d9488;
-  --color-brand-700: #0f766e;
-  --color-brand-900: #134e4a;
+/* Dunkelmodus über data-theme am <html> (gesetzt vom Inline-Script in index.html bzw. lib/theme.ts) */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ---------------------------------------------------------------------------
+ * Design-Tokens (1:1 aus docs/design/FleetApp.dc.html, [data-fm] / [data-fm-theme="dark"])
+ * ------------------------------------------------------------------------- */
+:root {
+  --bg: #F4F6F9; --panel: #FFFFFF; --panel2: #F8F9FB; --sunken: #EFF2F5; --hover: #F3F5F8;
+  --border: #E2E6EC; --border-strong: #CDD3DC;
+  --text: #101828; --text2: #475467; --text3: #667085;
+  --blue: #2563EB; --blue-bg: #EDF3FE; --blue-text: #1D4ED8;
+  --green: #16A34A; --green-bg: #E8F6ED; --green-text: #15803D;
+  --orange: #EA7A0C; --orange-bg: #FFF2E2; --orange-text: #B45309;
+  --red: #DC2626; --red-bg: #FDECEC; --red-text: #B91C1C;
+  --gray: #98A2B3; --gray-bg: #EFF1F4; --gray-text: #4B5565;
+  --c2: #0D9488; --code: #F3F5F8;
+  --shadow: 0 12px 32px rgba(16,24,40,.14); --overlay: rgba(16,24,40,.38);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #0F151D; --panel: #161D27; --panel2: #19212C; --sunken: #121922; --hover: #1D2632;
+  --border: #253040; --border-strong: #334050;
+  --text: #E6EBF1; --text2: #A6B0BE; --text3: #8290A2;
+  --blue: #3272F0; --blue-bg: rgba(59,123,246,.16); --blue-text: #8DB2FB;
+  --green: #2FBF62; --green-bg: rgba(47,191,98,.14); --green-text: #6CD893;
+  --orange: #F29233; --orange-bg: rgba(242,146,51,.15); --orange-text: #F7B36B;
+  --red: #EF5B58; --red-bg: rgba(239,91,88,.15); --red-text: #F69592;
+  --gray: #6C7788; --gray-bg: rgba(140,152,170,.14); --gray-text: #AAB4C1;
+  --c2: #2DD4BF; --code: #10161E;
+  --shadow: 0 12px 32px rgba(0,0,0,.45); --overlay: rgba(5,8,12,.62);
+  color-scheme: dark;
 }
 
+/* Tokens als Tailwind-Farben: bg-panel, text-fg2, border-line, bg-blue-bg, text-red-text … */
+@theme inline {
+  --font-sans: "Geist Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel2: var(--panel2);
+  --color-sunken: var(--sunken);
+  --color-hover: var(--hover);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-fg: var(--text);
+  --color-fg2: var(--text2);
+  --color-fg3: var(--text3);
+  --color-code: var(--code);
+  --color-c2: var(--c2);
+  --color-blue: var(--blue);
+  --color-blue-bg: var(--blue-bg);
+  --color-blue-text: var(--blue-text);
+  --color-green: var(--green);
+  --color-green-bg: var(--green-bg);
+  --color-green-text: var(--green-text);
+  --color-orange: var(--orange);
+  --color-orange-bg: var(--orange-bg);
+  --color-orange-text: var(--orange-text);
+  --color-red: var(--red);
+  --color-red-bg: var(--red-bg);
+  --color-red-text: var(--red-text);
+  --color-gray: var(--gray);
+  --color-gray-bg: var(--gray-bg);
+  --color-gray-text: var(--gray-text);
+
+  /* Übergang: ältere Klassen (slate/emerald/amber/sky/brand) zeigen auf die Tokens,
+     damit auch noch nicht umgebaute Stellen beide Themes korrekt darstellen. */
+  --color-slate-50: var(--panel2);
+  --color-slate-100: var(--sunken);
+  --color-slate-200: var(--border);
+  --color-slate-300: var(--border-strong);
+  --color-slate-400: var(--text3);
+  --color-slate-500: var(--text3);
+  --color-slate-600: var(--text2);
+  --color-slate-700: var(--text2);
+  --color-slate-800: var(--text);
+  --color-slate-900: var(--text);
+  --color-emerald-50: var(--green-bg);
+  --color-emerald-100: var(--green-bg);
+  --color-emerald-200: var(--green);
+  --color-emerald-400: var(--green);
+  --color-emerald-500: var(--green);
+  --color-emerald-600: var(--green-text);
+  --color-emerald-700: var(--green-text);
+  --color-emerald-800: var(--green-text);
+  --color-emerald-900: var(--green-text);
+  --color-red-50: var(--red-bg);
+  --color-red-100: var(--red-bg);
+  --color-red-200: var(--red);
+  --color-red-500: var(--red);
+  --color-red-600: var(--red-text);
+  --color-red-700: var(--red-text);
+  --color-red-800: var(--red-text);
+  --color-red-900: var(--red-text);
+  --color-amber-50: var(--orange-bg);
+  --color-amber-100: var(--orange-bg);
+  --color-amber-200: var(--orange);
+  --color-amber-500: var(--orange);
+  --color-amber-600: var(--orange-text);
+  --color-amber-700: var(--orange-text);
+  --color-amber-800: var(--orange-text);
+  --color-sky-100: var(--blue-bg);
+  --color-sky-700: var(--blue-text);
+  --color-sky-800: var(--blue-text);
+  --color-brand-50: var(--blue-bg);
+  --color-brand-100: var(--blue-bg);
+  --color-brand-500: var(--blue);
+  --color-brand-600: var(--blue);
+  --color-brand-700: var(--blue-text);
+  --color-brand-800: var(--blue-text);
+  --color-teal-600: var(--blue);
+}
+
+@layer base {
+html, body { background: var(--bg); color: var(--text); }
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--blue-text); }
+code, kbd, pre, samp { font-family: var(--font-mono); }
+::selection { background: var(--blue-bg); }
+/* Fokus immer sichtbar (Tastaturbedienung) */
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 4px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offset: 0; }
+input, select, textarea, button { font: inherit; color: inherit; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--blue); }
+select option { background: var(--panel); color: var(--text); }
 }

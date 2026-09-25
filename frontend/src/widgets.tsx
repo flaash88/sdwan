@@ -29,7 +29,7 @@ function FleetLive() {
       <Stat label="Download gesamt (live)" value={v.length ? fmtBps(rx) : "–"} />
       <Stat label="Upload gesamt (live)" value={v.length ? fmtBps(tx) : "–"} />
       <Stat label="Ø CPU (live)" value={cpu != null ? `${cpu.toFixed(0)}%` : "–"} />
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="rounded-xl border border-slate-200 bg-panel p-4 shadow-sm">
         <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Durchsatz-Verlauf</div>
         <Sparkline values={hist} height={40} />
       </div>

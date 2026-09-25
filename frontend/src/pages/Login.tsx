@@ -12,7 +12,7 @@ export default function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 to-brand-900 p-4">
       <form
-        className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-8 shadow-2xl"
+        className="w-full max-w-sm space-y-4 rounded-2xl bg-panel p-8 shadow-2xl"
         onSubmit={(e) => {
           e.preventDefault();
           void run(async () => {

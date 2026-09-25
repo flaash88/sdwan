@@ -25,7 +25,7 @@ type Row = { time: number; [k: string]: number | string };
 
 function Tile({ label, value, history, c, online = true }: { label: string; value: string; history: number[]; c: string; online?: boolean }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-slate-200 bg-panel p-4 shadow-sm">
       <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-slate-500">
         {label}
         {online ? <span className="flex items-center gap-1 normal-case text-emerald-600"><StatusDot status="online" /> live</span> : <span className="normal-case text-red-600">offline</span>}

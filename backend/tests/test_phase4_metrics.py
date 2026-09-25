@@ -44,3 +44,17 @@ async def test_live_mode(client, msp, hub):
     assert dev["id"] in await metrics.live_device_ids()
     await poll_all(only=await metrics.live_device_ids())
     assert any(p["tags"]["device_id"] == dev["id"] for p in metrics.get_sink().points)
+
+
+async def test_interfaces_with_alias(client, msp, hub):
+    t = await make_tenant(client, msp)
+    h = await make_tenant_admin(client, msp, t["id"])
+    dev = await make_paired_device(client, h)
+    rows = (await client.get(f"/api/v1/devices/{dev['id']}/interfaces", headers=h)).json()
+    names = [r["name"] for r in rows]
+    assert "ether1" in names and not any(n.startswith("sdwan-") for n in names)
+    e1 = next(r for r in rows if r["name"] == "ether1")
+    assert e1["comment"] == "Internet Glasfaser" and e1["default_name"] == "ether1"
+    await poll_all()
+    facts = (await client.get(f"/api/v1/devices/{dev['id']}", headers=h)).json()["facts"]
+    assert facts["interfaces"]["ether1"]["comment"] == "Internet Glasfaser"

@@ -129,3 +129,29 @@ async def router_call_resource(router_) -> dict:
     res = router_.call("/system/resource/print", {})[0]
     rb = router_.call("/system/routerboard/print", {})[0]
     return {"version": res["version"], "board": res["board-name"], "serial": rb["serial-number"]}
+
+
+@router.get("/{device_id}/interfaces")
+async def device_interfaces(device_id: uuid.UUID, ctx: Ctx = ReadCtx) -> list[dict]:
+    """Interfaces des Geräts inkl. Aliasnamen (Kommentar / umbenannter Port).
+
+    Live vom Router, bei Nichterreichbarkeit aus dem letzten Poll.
+    """
+    from app.routeros import RouterOSError, connect_device
+
+    device = await get_or_404(ctx.db, Device, device_id, "Device")
+    rows: list[dict] = []
+    try:
+        async with connect_device(device) as api:
+            for r in await api.print("/interface"):
+                rows.append({
+                    "name": str(r.get("name")), "type": r.get("type"), "comment": str(r.get("comment") or "") or None,
+                    "default_name": str(r.get("default-name") or "") or None,
+                    "running": str(r.get("running", "")).lower() in ("true", "yes"),
+                    "disabled": str(r.get("disabled", "")).lower() in ("true", "yes"),
+                })
+    except RouterOSError:
+        for n, i in ((device.facts or {}).get("interfaces") or {}).items():
+            rows.append({"name": n, "type": i.get("type"), "comment": i.get("comment"), "default_name": i.get("default_name"),
+                         "running": bool(i.get("running")), "disabled": False})
+    return sorted((r for r in rows if not r["name"].startswith("sdwan-")), key=lambda r: r["name"])

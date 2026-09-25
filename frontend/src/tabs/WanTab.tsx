@@ -7,6 +7,7 @@ import { useLive } from "../lib/live";
 import { useMeta } from "../lib/meta";
 import type { Device } from "../lib/types";
 import { useFetch } from "../lib/useFetch";
+import { ifaceLabel, useInterfaces } from "../lib/interfaces";
 
 interface WanLink {
   id?: string;
@@ -40,12 +41,14 @@ interface WanConfig {
 }
 
 const TARGETS = ["1.1.1.1", "9.9.9.9", "8.8.4.4", "208.67.222.222"];
-const blank = (i: number): WanLink => ({ name: `WAN${i + 1}`, interface: `ether${i + 1}`, gateway: "dhcp", priority: i + 1, weight: 1, check_type: "ping", check_target: TARGETS[i] ?? "", check_interval_s: 10, check_timeout_ms: 1000, loss_threshold_pct: 50, latency_threshold_ms: null, enabled: true });
+const blank = (i: number): WanLink => ({ name: `WAN${i + 1}`, interface: "", gateway: "dhcp", priority: i + 1, weight: 1, check_type: "ping", check_target: TARGETS[i] ?? "", check_interval_s: 10, check_timeout_ms: 1000, loss_threshold_pct: 50, latency_threshold_ms: null, enabled: true });
 
 export default function WanTab({ device }: { device: Device }) {
   const { can } = useAuth();
   const meta = useMeta();
   const wan = useFetch<WanConfig>(`/devices/${device.id}/wan`);
+  const ifaces = useInterfaces(device.id);
+  const ifLabel = (n: string) => ifaceLabel(n, ifaces.data?.find((x) => x.name === n));
   const [draft, setDraft] = useState<WanConfig | null>(null);
   const [testResult, setTestResult] = useState<Record<number, string>>({});
   const { busy, error, run } = useAction();
@@ -63,7 +66,7 @@ export default function WanTab({ device }: { device: Device }) {
           {wan.data.links.map((l) => (
             <tr key={l.id}>
               <td className="px-3 py-2 font-medium">{l.slot}. {l.name}</td>
-              <td className="px-3 py-2 font-mono text-xs">{l.interface}</td>
+              <td className="px-3 py-2 text-xs"><span className="font-mono">{l.interface}</span>{ifLabel(l.interface) !== l.interface && <div className="text-slate-500">{ifLabel(l.interface).slice(l.interface.length).replace(/^ – /, "")}</div>}</td>
               <td className="px-3 py-2 font-mono text-xs">{l.gateway}{l.resolved_gateway ? ` → ${l.resolved_gateway}` : ""}</td>
               <td className="px-3 py-2"><StatusBadge status={l.status ?? "unknown"} /></td>
               <td className="px-3 py-2">{l.active ? <Badge color="green">trägt Traffic</Badge> : wan.data!.mode !== "failover" && l.status === "up" ? <Badge color="blue">LB</Badge> : "–"}</td>
@@ -105,7 +108,12 @@ export default function WanTab({ device }: { device: Device }) {
                 </div>
                 <div className="grid gap-3 md:grid-cols-4">
                   <Input label="Name" value={l.name} onChange={(e) => setLink(i, { name: e.target.value })} />
-                  <Input label="Interface" value={l.interface} onChange={(e) => setLink(i, { interface: e.target.value })} />
+                  <Select label="Interface" value={l.interface} onChange={(e) => setLink(i, { interface: e.target.value })}>
+                    {!ifaces.data?.some((x) => x.name === l.interface) && <option value={l.interface}>{l.interface || "– wählen –"}</option>}
+                    {ifaces.data?.map((x) => (
+                      <option key={x.name} value={x.name}>{ifaceLabel(x.name, x)}{x.running ? "" : " (kein Link)"}{x.type && x.type !== "ether" ? ` [${x.type}]` : ""}</option>
+                    ))}
+                  </Select>
                   <Input label="Gateway (IP, Interface oder dhcp)" value={l.gateway} onChange={(e) => setLink(i, { gateway: e.target.value })} />
                   <Input label="Check-Ziel (IP, pro WAN eindeutig)" value={l.check_target} onChange={(e) => setLink(i, { check_target: e.target.value })} />
                   <Select label="Check-Typ" value={l.check_type} onChange={(e) => setLink(i, { check_type: e.target.value as "ping" | "http" })}>

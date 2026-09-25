@@ -149,6 +149,8 @@ async def collect(device: Device, api: DeviceAPI, res: dict[str, Any]) -> dict[s
             "rx_bps": rx_bps, "tx_bps": tx_bps, "rx_bytes": rx, "tx_bytes": tx,
             "running": str(row.get("running", "")).lower() in ("true", "yes"),
             "type": row.get("type"),
+            "comment": str(row.get("comment") or "") or None,
+            "default_name": str(row.get("default-name") or "") or None,
         }
     return {"_counters": counters, "interfaces": ifaces}
 
@@ -202,7 +204,7 @@ def live_payload(device: Device) -> dict[str, Any]:
         "uptime": device.uptime,
         "rx_bps": sum(i.get("rx_bps") or 0 for n, i in ifaces.items() if i.get("type") in ("ether", "pppoe-out", "lte", "vlan", None) and not n.startswith("sdwan-")),
         "tx_bps": sum(i.get("tx_bps") or 0 for n, i in ifaces.items() if i.get("type") in ("ether", "pppoe-out", "lte", "vlan", None) and not n.startswith("sdwan-")),
-        "interfaces": {n: {k: i.get(k) for k in ("rx_bps", "tx_bps", "running")} for n, i in ifaces.items()},
+        "interfaces": {n: {k: i.get(k) for k in ("rx_bps", "tx_bps", "running", "comment", "default_name")} for n, i in ifaces.items()},
         "wan": f.get("wan") or {},
     }
 

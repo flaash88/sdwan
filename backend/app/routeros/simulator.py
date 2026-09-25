@@ -59,7 +59,10 @@ class SimRouter:
         self.counters: dict[str, list[int]] = {}
         for i, name in enumerate(["ether1", "ether2", "ether3", "ether4", "bridge", "sdwan-mgmt"]):
             iface_type = {"bridge": "bridge", "sdwan-mgmt": "wg"}.get(name, "ether")
-            self._insert("/interface", {"name": name, "type": iface_type, "running": "true", "disabled": "false"})
+            extra = {"default-name": name} if iface_type == "ether" else {}
+            if name == "ether1":
+                extra["comment"] = "Internet Glasfaser"
+            self._insert("/interface", {"name": name, "type": iface_type, "running": "true", "disabled": "false", **extra})
             self.counters[name] = [self.rng.randint(10**6, 10**9), self.rng.randint(10**6, 10**9)]
         self._insert(
             "/interface/wireguard",

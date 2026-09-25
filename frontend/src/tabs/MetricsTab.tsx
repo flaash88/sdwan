@@ -7,6 +7,7 @@ import { fmtBps, fmtBytes } from "../lib/format";
 import { useLive } from "../lib/live";
 import type { Device } from "../lib/types";
 import { useFetch } from "../lib/useFetch";
+import { ifaceLabel, METRIC_LABELS } from "../lib/interfaces";
 
 interface Live {
   id: string;
@@ -17,7 +18,7 @@ interface Live {
   uptime: string | null;
   rx_bps: number;
   tx_bps: number;
-  interfaces: Record<string, { rx_bps: number | null; tx_bps: number | null; running: boolean }>;
+  interfaces: Record<string, { rx_bps: number | null; tx_bps: number | null; running: boolean; comment?: string | null; default_name?: string | null }>;
   wan: Record<string, { status: string; rtt_ms: number | null; loss_pct: number | null; active?: boolean }>;
 }
 type Row = { time: number; [k: string]: number | string };
@@ -35,11 +36,11 @@ function Tile({ label, value, history, c }: { label: string; value: string; hist
   );
 }
 
-function groupSeries(rows: Row[], field: string, by?: string, scale = 1): Series[] {
+function groupSeries(rows: Row[], field: string, by?: string, scale = 1, label: (k: string) => string = (k) => k): Series[] {
   const groups = new Map<string, { t: number; v: number }[]>();
   for (const r of rows) {
     if (typeof r[field] !== "number") continue;
-    const k = by ? String(r[by]) : field;
+    const k = by ? label(String(r[by])) : METRIC_LABELS[field] ?? field;
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k)!.push({ t: r.time, v: (r[field] as number) * scale });
   }
@@ -73,14 +74,16 @@ export default function MetricsTab({ device }: { device: Device }) {
   }, ["device.metrics"]);
 
   const h = hist.current;
+  const facts = (device.facts?.interfaces ?? {}) as Record<string, { comment?: string | null; default_name?: string | null }>;
+  const ifName = (n: string) => ifaceLabel(n, live?.interfaces?.[n] ?? facts[n]);
   const ifaceRows = useMemo(() => Object.entries(live?.interfaces ?? {}).sort(([a], [b]) => a.localeCompare(b)), [live]);
   const grafana = me?.user.is_superuser;
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <Tile label="CPU" value={live?.cpu_load != null ? `${live.cpu_load}%` : "–"} history={h.map((x) => x.cpu_load ?? 0)} c={color(0)} />
-        <Tile label="RAM" value={live?.mem_total ? `${Math.round(((live.mem_used ?? 0) / live.mem_total) * 100)}%` : "–"} history={h.map((x) => (x.mem_total ? (x.mem_used ?? 0) / x.mem_total : 0))} c={color(1)} />
+        <Tile label="CPU-Auslastung" value={live?.cpu_load != null ? `${live.cpu_load}%` : "–"} history={h.map((x) => x.cpu_load ?? 0)} c={color(0)} />
+        <Tile label="Arbeitsspeicher" value={live?.mem_total ? `${Math.round(((live.mem_used ?? 0) / live.mem_total) * 100)}%` : "–"} history={h.map((x) => (x.mem_total ? (x.mem_used ?? 0) / x.mem_total : 0))} c={color(1)} />
         <Tile label="Download" value={fmtBps(live?.rx_bps)} history={h.map((x) => x.rx_bps)} c={color(4)} />
         <Tile label="Upload" value={fmtBps(live?.tx_bps)} history={h.map((x) => x.tx_bps)} c={color(2)} />
         <Tile label="Latenz Cloud" value={live?.mgmt_rtt_ms != null ? `${live.mgmt_rtt_ms} ms` : "–"} history={h.map((x) => x.mgmt_rtt_ms ?? 0)} c={color(5)} />
@@ -91,7 +94,7 @@ export default function MetricsTab({ device }: { device: Device }) {
           {ifaceRows.map(([n, i]) => (
             <tr key={n}>
               <td className="px-3 py-1.5"><StatusDot status={i.running ? "up" : "down"} /></td>
-              <td className="px-3 py-1.5 font-mono text-xs">{n}</td>
+              <td className="px-3 py-1.5"><span className="font-mono text-xs">{n}</span>{(i.comment || (i.default_name && i.default_name !== n)) && <span className="ml-2 text-xs text-slate-500">{ifaceLabel(n, i).slice(n.length).replace(/^ – /, "")}</span>}</td>
               <td className="px-3 py-1.5">{fmtBps(i.rx_bps)}</td>
               <td className="px-3 py-1.5">{fmtBps(i.tx_bps)}</td>
             </tr>
@@ -112,9 +115,9 @@ export default function MetricsTab({ device }: { device: Device }) {
       >
         <ErrorBox error={sys.error} />
         <div className="grid gap-6 lg:grid-cols-2">
-          <div><h4 className="mb-1 text-sm font-medium text-slate-600">CPU (%)</h4><LineChart series={groupSeries(sys.data?.points ?? [], "cpu_load")} yMin={0} /></div>
+          <div><h4 className="mb-1 text-sm font-medium text-slate-600">CPU-Auslastung (%)</h4><LineChart series={groupSeries(sys.data?.points ?? [], "cpu_load")} yMin={0} /></div>
           <div><h4 className="mb-1 text-sm font-medium text-slate-600">Speicher belegt</h4><LineChart series={groupSeries(sys.data?.points ?? [], "mem_used")} format={fmtBytes} /></div>
-          <div><h4 className="mb-1 text-sm font-medium text-slate-600">Download je Interface</h4><LineChart series={groupSeries((ifc.data?.points ?? []).filter((p) => !String(p.interface).startsWith("sdwan-")), "rx_bps", "interface")} format={fmtBps} /></div>
+          <div><h4 className="mb-1 text-sm font-medium text-slate-600">Download je Interface</h4><LineChart series={groupSeries((ifc.data?.points ?? []).filter((p) => !String(p.interface).startsWith("sdwan-")), "rx_bps", "interface", 1, ifName)} format={fmtBps} /></div>
           <div><h4 className="mb-1 text-sm font-medium text-slate-600">WAN-Latenz (ms)</h4><LineChart series={groupSeries(wan.data?.points ?? [], "rtt_ms", "wan")} /></div>
         </div>
       </Card>

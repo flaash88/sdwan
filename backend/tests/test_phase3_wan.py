@@ -119,3 +119,25 @@ async def test_wan_link_test(client, msp, hub):
     await client.put(f"/api/v1/devices/{dev['id']}/wan", json={"links": LINKS[:1]}, headers=h)
     r = await client.post(f"/api/v1/devices/{dev['id']}/wan/1/test", headers=h)
     assert r.status_code == 200 and r.json()["avg_ms"] > 0
+
+
+async def test_failover_flushes_connections_but_keeps_tunnels(client, msp, hub):
+    """Bugfix: auch im Failover-Modus werden die Verbindungen des ausgefallenen WANs entfernt."""
+    h, dev = await _dev(client, msp)
+    await client.put(f"/api/v1/devices/{dev['id']}/wan", json={"mode": "failover", "flush_connections": True, "links": LINKS}, headers=h)
+    rt = get_router(dev["tunnel_ip"])
+    down = {x["comment"]: x for x in _managed(rt, "/tool/netwatch")}["sdwan:wan:check:1"]["down-script"]
+    assert down.index("/ip route disable") < down.index("/ip firewall connection remove")
+    assert '/ip address find where interface="ether1"' in down
+    assert 'reply-dst-address~("^" . $ip . ":")' in down
+    # Management-Tunnel (51820) und Mesh (13232) bleiben bestehen
+    assert '!(protocol="udp" and dst-address~":51820")' in down and '!(protocol="udp" and dst-address~":13232")' in down
+    assert "connection-mark" not in down
+    # ohne flush_connections kein Entfernen
+    await client.put(f"/api/v1/devices/{dev['id']}/wan", json={"mode": "failover", "flush_connections": False, "links": LINKS}, headers=h)
+    down = {x["comment"]: x for x in _managed(rt, "/tool/netwatch")}["sdwan:wan:check:1"]["down-script"]
+    assert "connection remove" not in down
+    # PCC nutzt weiterhin die Connection-Mark
+    await client.put(f"/api/v1/devices/{dev['id']}/wan", json={"mode": "loadbalance_pcc", "links": LINKS}, headers=h)
+    down = {x["comment"]: x for x in _managed(rt, "/tool/netwatch")}["sdwan:wan:check:1"]["down-script"]
+    assert 'connection-mark="sdwan-wan1"' in down

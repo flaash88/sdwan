@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import events
+from app.config import get_settings
 from app.db import utcnow
 from app.models import Device, WanLink
 from app.routeros import RouterOSError, connect_device
@@ -47,11 +48,31 @@ def _default_comment(slot: int) -> str:
     return f"sdwan:wan:default:{slot}"
 
 
+def flush_snippet(link: WanLink, mode: str) -> str:
+    """RouterOS-Script-Baustein: Verbindungen entfernen, die über diesen WAN laufen.
+
+    * PCC: über die Connection-Mark ``sdwan-wan<slot>``.
+    * Failover/ECMP: alle Verbindungen, die auf eine Adresse des WAN-Interfaces genattet wurden
+      (``reply-dst-address`` = WAN-IP:Port bei Masquerade). Die IPs werden zur Laufzeit gelesen,
+      damit das auch bei DHCP funktioniert. Das Interface kann dabei physisch up bleiben.
+    * WireGuard-UDP von Management-Tunnel und Mesh wird ausgenommen (Tunnel nicht abreißen).
+    """
+    if mode == "loadbalance_pcc":
+        return f'/ip firewall connection remove [find where connection-mark="sdwan-wan{link.slot}"]'
+    s = get_settings()
+    keep = " and ".join(f'!(protocol="udp" and dst-address~":{p}")' for p in (s.wg_hub_port, s.mesh_listen_port))
+    return (
+        f':foreach a in=[/ip address find where interface="{link.interface}"] do={{ '
+        f':local ip [/ip address get $a address]; :set ip [:pick $ip 0 [:find $ip "/"]]; '
+        f'/ip firewall connection remove [find where reply-dst-address~("^" . $ip . ":") and {keep}] }}'
+    )
+
+
 def _scripts(link: WanLink, mode: str, recovery_s: int, flush: bool) -> tuple[str, str]:
     find = f'[find where comment~"^{_default_comment(link.slot)}"]'
     down = f"/ip route disable {find}"
-    if flush and mode == "loadbalance_pcc":
-        down += f'; /ip firewall connection remove [find where connection-mark="sdwan-wan{link.slot}"]'
+    if flush:
+        down += "; " + flush_snippet(link, mode)
     down += f'; :log warning "SD-WAN: WAN{link.slot} ({link.name}) DOWN"'
     up = (
         f":delay {recovery_s}s; "

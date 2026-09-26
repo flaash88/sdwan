@@ -497,3 +497,98 @@ Parameter wie Zone oder Objekt werden beim Einfügen per Auswahl gesetzt.
   - Voucher-Felder `limit-uptime` (`<n>m`), `limit-bytes-total`, Status-Felder `uptime`/`bytes-in`/`bytes-out`.
   - `/ip/hotspot/ip-binding type=blocked` sperrt Trial-Gäste zuverlässig.
 
+
+## Abschlussbericht Phasen 14–20
+
+Alle sieben Phasen sind umgesetzt. Jede Phase hat einen eigenen Commit und wurde gepusht. Am Ende liefen
+197 Tests grün, `npm run build` war fehlerfrei, und die neuen Seiten wurden per Screenshot im Simulator geprüft.
+Keine Phase musste angehalten werden:
+- Bestehende Policies bleiben `mode=expert`.
+- Alle Migrationen (0020–0026) legen nur Tabellen und Spalten an.
+- Jede Änderung an Routern geschieht nur auf ausdrücklichen Auftrag (opt-in bzw. „Ausrollen“).
+
+### Commits
+| Commit | Inhalt |
+|--------|--------|
+| 69c4d09 | Plan für die Phasen 14–20 mit Entscheidungen |
+| f79fa29 | Phase 14: Firewall-Editor (einfacher Modus) |
+| a99c8a0 | Phase 15: Threat-Feeds |
+| 9cc8047 | Phase 16: Compliance und Config-Suche |
+| 59ab9ae | Phase 17: Script-Bibliothek |
+| ee7c2f8 | Phase 18: Wartungsfenster, Speedtest, Syslog |
+| 22465d8 | Phase 19: WLAN-Verwaltung |
+| c8d2675 | Phase 20: Gäste-Portal (Hotspot) |
+
+### Entscheidungen
+Siehe Abschnitt „Entscheidungen“ (1–26) und die Entscheidungen in den Abschnitten „Stand Phase X“. Das Wichtigste:
+- **Einfache Firewall:** wird in das bestehende Format kompiliert, Plattform-Zugänge sind nicht abschaltbar.
+- **Default-Drop:** Geräte mit manuellen Regeln dahinter werden ohne Bestätigung übersprungen.
+- **Opt-in:** Alle neuen Router-Eingriffe sind opt-in oder laufen nur auf Knopfdruck. Geheimnisse bleiben
+  verschlüsselt, maskiert und stehen nicht im Audit.
+- **Nicht umgesetzt:** SSO/Identity-Provider (laut Auftrag).
+
+### Weggelassen (gesamt)
+- Phase 14:
+  - IPv6-Firewall im einfachen Modus.
+  - Automatisches Deploy nach Objektänderung.
+- Phase 15: automatische IPv6-Firewallregeln für Feeds. Die IPv6-Liste wird nur bereitgestellt.
+- Phase 18:
+  - Eingebauter btest-Server auf dem Hub.
+  - Unterdrückung einzelner Alarmtypen je Wartungsfenster.
+  - UI für die Syslog-Aufbewahrung (API vorhanden).
+- Phase 19:
+  - Automatischer CAP-Modus.
+  - Kanal-Scan und Nachbarnetze.
+  - Wochentage im WLAN-Zeitplan.
+  - Konfiguration des `wireless`-Treibers.
+- Phase 20:
+  - PMS-Anbindung.
+  - Einrichtung von IP/DHCP im Gästenetz.
+  - Binärdateien bei eigenen Login-Seiten.
+  - HTTPS-Login-Seite am Router.
+
+### Im Labor zu verifizieren (vollständige Liste)
+Die Prüfschritte stehen in `docs/LABORTEST.md`, Abschnitte 10–16.
+
+1. **Firewall-Editor:**
+   - `protocol=vrrp`
+   - Address-List-Bereiche `a-b`
+   - `reset-counters` mit `.id`
+   - Verhalten von defconf-Regeln hinter dem Default-Drop
+   - Interface-Listen-Felder
+2. **Threat-Feeds:**
+   - Spamhaus-URLs und JSON-Format
+   - `/ipv6/firewall/address-list`
+   - RAM-Bedarf je Eintrag
+   - Dauer der Verteilung großer Listen
+3. **Compliance:**
+   - `/system/ntp/client` (Feld `enabled`)
+   - Maskierung beim Export mit `sensitive`
+4. **Scripts:**
+   - SSH-Ausführung mehrzeiliger Scripts
+   - Fehlererkennung anhand der RouterOS-Ausgabe
+5. **Speedtest:**
+   - Feldnamen und Richtungen von `/tool bandwidth-test`
+   - Route über das gewählte WAN
+6. **Syslog:**
+   - Felder der Logging-Aktion (`remote`, `remote-port`, `src-address`)
+   - Fehlendes Kommentarfeld
+   - Format der empfangenen Zeilen
+   - UDP 514 auf der Hub-Tunnel-IP
+7. **WLAN:**
+   - Pfade und Felder des wifi-Pakets (security/datapath/channel/configuration, `/interface/wifi/radio`
+     `bands`)
+   - Ländernamen und `width`-Werte
+   - Provisioning-Felder und `supported-bands`
+   - `monitor once` ohne Scan
+   - RADIUS (`service=wireless`, ggf. `eap-methods`)
+   - Virtuelle APs bei deaktiviertem Radio
+8. **Hotspot:**
+   - Upload-Ziel und `html-directory`
+   - Trial-Login `T-$(mac-esc)`
+   - `http-pap` mit leerem Passwort
+   - Login per GET-Parametern (Voucher-QR)
+   - Variablen der Login-Seiten
+   - `walled-garden/ip dst-host` für die Plattform über HTTPS inkl. CORS
+   - Voucher-Felder (`limit-uptime`, `limit-bytes-total`, `uptime`, `bytes-in/out`)
+   - `ip-binding type=blocked`

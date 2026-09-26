@@ -49,7 +49,10 @@ async def device_contexts(db: AsyncSession, policy: FirewallPolicy, devices: lis
                                     .order_by(PolicyAssignment.position))).scalars().all()
         own = next((a for a in assigns if a.policy_id == policy.id), None)
         later = sum(1 for a in assigns if own is not None and a.policy_id != policy.id and a.position > own.position)
-        out.append(DeviceCtx(name=d.name, zone_ids=zones, has_wan=has_wan, later_policies=later))
+        from app.models import HotspotInstance
+
+        has_hs = (await db.execute(select(HotspotInstance.id).where(HotspotInstance.device_id == d.id).limit(1))).first() is not None
+        out.append(DeviceCtx(name=d.name, zone_ids=zones, has_wan=has_wan, later_policies=later, has_hotspot=has_hs))
     return out
 
 

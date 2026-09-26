@@ -18,6 +18,7 @@ class DeviceCtx:
     zone_ids: set[str] = field(default_factory=set)  # Zonen mit mindestens einem Interface auf dem Gerät
     has_wan: bool = False  # Interface-List sdwan-wan existiert (WAN konfiguriert)
     later_policies: int = 0  # Policies, die auf diesem Gerät NACH dieser Policy kommen
+    has_hotspot: bool = False  # Gäste-Portal (Phase 20) auf dem Gerät
 
 
 def _i(level: str, code: str, msg: str, rule: str | None = None) -> dict[str, Any]:
@@ -106,6 +107,9 @@ def lint_spec(spec: dict[str, Any], cat: Catalog, devices: list[DeviceCtx] | Non
     zones_used = {z for r in spec["rules"] for z in (r["src_zone"], r["dst_zone"]) if z and z != ROUTER}
     zones_used |= {z for n in spec["nat"] for z in (n.get("zone"), n.get("in_zone")) if z}
     mgmt_zones = {zid for zid, z in cat.zones.items() if z.get("management")}
+    # Gäste isoliert? = Regel verwirft Verkehr aus einer Zone mit Kürzel "guest" in eine andere Zone
+    guest_isolated = any(r["action"] in ("drop", "reject") and r["src_zone"] and (cat.zones.get(r["src_zone"]) or {}).get("slug") == "guest"
+                         and r["dst_zone"] and r["dst_zone"] != ROUTER for r in rules)
     for d in devices or []:
         for zid in sorted(zones_used):
             z = cat.zones.get(zid)
@@ -122,4 +126,7 @@ def lint_spec(spec: dict[str, Any], cat: Catalog, devices: list[DeviceCtx] | Non
         if spec["options"]["default_drop"] and d.later_policies:
             out.append(_i("warn", "drop_not_last", f"{d.name}: Nach dieser Policy folgen {d.later_policies} weitere – deren Regeln stehen hinter "
                                                     "dem Default-Drop und greifen nicht"))
+        if d.has_hotspot and not guest_isolated:
+            out.append(_i("info", "hotspot_isolation", f"{d.name}: Gerät betreibt ein Gäste-Portal – Baustein „Gäste vom LAN isolieren“ "
+                                                        "für die Gäste-Zone empfohlen"))
     return out

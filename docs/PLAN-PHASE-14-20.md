@@ -329,6 +329,17 @@ Parameter wie Zone oder Objekt werden beim Einfügen per Auswahl gesetzt.
 21. **Umfangsgrenzen:** Was sich ohne Labor nicht sicher umsetzen lässt, bleibt als „im Labor zu
     verifizieren“ markiert statt geraten. Beispiele: CAPsMAN-Provisioning-Details, Hotspot-Upload-Pfad,
     reset-counters.
+22. **WLAN-Profile mandantenweit** (nicht global), weil sie PSK/RADIUS-Secrets enthalten. Die Plattform legt nur
+    **virtuelle APs** an; physische Radios und vorhandene WLANs bleiben unverändert. CAPsMAN-Provisioning-Regeln
+    kommen **hinter** vorhandene Regeln. Grund: bestehende Router-Konfigurationen nicht verändern.
+23. **Kein automatischer CAP-Modus und kein Kanal-Scan:** Der CAP-Modus ersetzt die lokale WLAN-Konfiguration des
+    Geräts, ein Scan trennt Clients – beides bleibt ein bewusster manueller Schritt.
+24. **Hotspot mit `address-pool=none`:** Die Plattform richtet kein DHCP/keine Adressen im Gästenetz ein, sondern
+    setzt auf dem vorhandenen Interface/VLAN auf (Voraussetzung: IP + DHCP). Grund: keine Eingriffe ins Netzdesign.
+25. **Portal-Texte werden escaped und `$` entschärft,** damit Texte keine RouterOS-Variablen der Login-Seite
+    auslösen können. Sprachumschaltung per `<html lang>` + CSS (ohne Inline-Styles je Element).
+26. **Live-Gäste werden nicht gespeichert** (MAC/IP nur in der Live-Ansicht); gespeichert werden nur die
+    Formularfelder mit Aufbewahrungsfrist je Mandant.
 
 ## Wiederverwendung
 - `DeviceAPI.sync_managed`, `connect_device`: `routeros/client.py`
@@ -458,4 +469,31 @@ Parameter wie Zone oder Objekt werden beim Einfügen per Auswahl gesetzt.
   - `monitor once` ohne Scan.
   - RADIUS-Anbindung (`/radius service=wireless`, ggf. `eap-methods`).
   - Verhalten virtueller APs bei deaktiviertem Radio.
+
+### Stand Phase 20 – Hotspot / Gäste-Portal
+- **Erledigt:**
+  - Hotspot auf Interface/VLAN eines Geräts (AP-herstellerunabhängig, dokumentiert), Ausrollen mit Hinweis
+    „Änderungen nicht ausgerollt“, vollständiges Entfernen.
+  - Portal-Designer: Logo, Farben, Texte DE/EN, Nutzungsbedingungen mit Pflicht-Checkbox, Formularfelder, Live-
+    Vorschau, Upload eigener Login-Seiten; Vorlagen Hotel, Gastronomie, Veranstaltung, Büro-Gäste als Seed.
+  - Anmeldung per Voucher, Klick oder Formular; öffentlicher Registrierungs-Endpunkt mit Rate-Limit, Größenlimit
+    und Feld-Whitelist (Entscheidung 19).
+  - Voucher-Profile, Stapel, A4-Druck mit QR, CSV, Status vom Router, Sperren.
+  - Walled Garden, Bandbreite je Gast/Voucher, Sitzungs- und Leerlauf-Timeout.
+  - Live-Ansicht aktiver Gäste mit Trennen/Sperren/Entsperren.
+  - DSGVO: Aufbewahrung je Mandant (Standard 30 Tage), täglicher Lösch-Job, nur Formularfelder, Hinweis zur
+    Betreiberverantwortung.
+  - Lint-Hinweis „Gäste vom LAN isolieren“ für Geräte mit Hotspot.
+- **Weggelassen:**
+  - PMS-Anbindung (laut Auftrag).
+  - Einrichtung von IP/DHCP im Gästenetz (Entscheidung 24).
+  - Bilder/Binärdateien bei eigenen Login-Seiten (nur Text; Logo als Data-URL im Designer).
+  - HTTPS-Login-Seite am Router (braucht ein Zertifikat je Gerät).
+- **Im Labor zu verifizieren:**
+  - Upload-Ziel und `html-directory` (SFTP, Verzeichnis im Wurzelverzeichnis vs. `flash/`).
+  - Trial-Login mit `T-$(mac-esc)`, `http-pap` mit leerem Passwort, Login per GET-Parametern (Voucher-QR).
+  - Variablen der Login-Seiten (`$(link-login-only)`, `$(link-orig)`, `$(mac-esc)`, `$(if …)`).
+  - `/ip/hotspot/walled-garden/ip` mit `dst-host` für die Plattform (HTTPS), CORS-Anfrage aus dem Portal.
+  - Voucher-Felder `limit-uptime` (`<n>m`), `limit-bytes-total`, Status-Felder `uptime`/`bytes-in`/`bytes-out`.
+  - `/ip/hotspot/ip-binding type=blocked` sperrt Trial-Gäste zuverlässig.
 

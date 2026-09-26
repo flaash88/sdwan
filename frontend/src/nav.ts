@@ -22,6 +22,7 @@ export const NAV: NavItem[] = [
   { to: "/config-search", label: "Config-Suche", icon: "search" },
   { to: "/scripts", label: "Scripts", icon: "terminal" },
   { to: "/wlan", label: "WLAN", icon: "signal" },
+  { to: "/hotspot", label: "Gäste-Portal", icon: "users" },
   { to: "/ztp", label: "Zero-Touch", icon: "package", role: "technician" },
   { to: "/content-filter", label: "Content-Filter", icon: "filter" },
   { to: "/firmware", label: "Firmware", icon: "cpu", badge: "firmware" },

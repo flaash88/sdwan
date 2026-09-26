@@ -1,0 +1,67 @@
+{
+  "_comment": "Portal-Vorlagen für das Gäste-Portal (Phase 20). Global und schreibgeschützt – zum Anpassen kopieren. Texte sind Vorschläge; Nutzungsbedingungen und Datenschutz verantwortet der Betreiber.",
+  "portals": [
+    {
+      "seed_key": "portal-hotel", "name": "Hotel", "login_type": "voucher", "terms_required": true,
+      "description": "Anmeldung mit Voucher-Code (z. B. an der Rezeption ausgegeben).",
+      "design": {"primary": "#1f4e79", "background": "#f4f1ea", "text": "#1d1d1f", "logo": null},
+      "texts": {
+        "de": {"title": "Willkommen", "welcome": "Bitte geben Sie Ihren WLAN-Code ein.", "button": "Verbinden", "code_label": "Code",
+               "terms_label": "Ich akzeptiere die Nutzungsbedingungen.", "terms": "Die Nutzung ist nur für rechtmäßige Zwecke gestattet. Der Betreiber kann den Zugang jederzeit beenden.",
+               "success": "Sie sind verbunden. Angenehmen Aufenthalt!"},
+        "en": {"title": "Welcome", "welcome": "Please enter your Wi-Fi code.", "button": "Connect", "code_label": "Code",
+               "terms_label": "I accept the terms of use.", "terms": "Use is permitted for lawful purposes only. The operator may end access at any time.",
+               "success": "You are connected. Enjoy your stay!"}
+      },
+      "form_fields": []
+    },
+    {
+      "seed_key": "portal-gastro", "name": "Gastronomie", "login_type": "click", "terms_required": true,
+      "description": "Ein Klick mit Bestätigung der Nutzungsbedingungen, zeitlich begrenzt.",
+      "design": {"primary": "#8a3b12", "background": "#fffaf3", "text": "#2b2118", "logo": null},
+      "texts": {
+        "de": {"title": "Gratis-WLAN", "welcome": "Schön, dass Sie da sind!", "button": "Jetzt online gehen", "code_label": "Code",
+               "terms_label": "Ich akzeptiere die Nutzungsbedingungen.", "terms": "Die Nutzung ist nur für rechtmäßige Zwecke gestattet. Zeit und Bandbreite sind begrenzt.",
+               "success": "Sie sind online."},
+        "en": {"title": "Free Wi-Fi", "welcome": "Nice to have you here!", "button": "Go online", "code_label": "Code",
+               "terms_label": "I accept the terms of use.", "terms": "Use is permitted for lawful purposes only. Time and bandwidth are limited.",
+               "success": "You are online."}
+      },
+      "form_fields": []
+    },
+    {
+      "seed_key": "portal-event", "name": "Veranstaltung", "login_type": "form", "terms_required": true,
+      "description": "Kurzes Formular (nur Name), danach Zugang für die Dauer der Veranstaltung.",
+      "design": {"primary": "#5b2a86", "background": "#f7f5fb", "text": "#1c1530", "logo": null},
+      "texts": {
+        "de": {"title": "Veranstaltungs-WLAN", "welcome": "Bitte kurz anmelden.", "button": "Anmelden", "code_label": "Code",
+               "terms_label": "Ich akzeptiere die Nutzungsbedingungen und den Datenschutzhinweis.", "terms": "Die Angaben werden nur für den WLAN-Zugang gespeichert und nach Ablauf der Aufbewahrungsfrist gelöscht.",
+               "success": "Viel Spaß bei der Veranstaltung!"},
+        "en": {"title": "Event Wi-Fi", "welcome": "Please sign in briefly.", "button": "Sign in", "code_label": "Code",
+               "terms_label": "I accept the terms of use and the privacy notice.", "terms": "Your details are stored only for Wi-Fi access and deleted after the retention period.",
+               "success": "Enjoy the event!"}
+      },
+      "form_fields": [
+        {"key": "name", "label_de": "Name", "label_en": "Name", "type": "text", "required": true, "max_len": 100}
+      ]
+    },
+    {
+      "seed_key": "portal-office-guests", "name": "Büro-Gäste", "login_type": "form", "terms_required": true,
+      "description": "Besucher melden sich mit Name, Firma und Ansprechpartner an.",
+      "design": {"primary": "#0b6e4f", "background": "#f3f6f5", "text": "#14201b", "logo": null},
+      "texts": {
+        "de": {"title": "Gast-Zugang", "welcome": "Willkommen! Bitte tragen Sie sich ein.", "button": "Zugang anfordern", "code_label": "Code",
+               "terms_label": "Ich akzeptiere die Nutzungsbedingungen und den Datenschutzhinweis.", "terms": "Die Angaben dienen nur der Zugangsverwaltung und werden nach Ablauf der Aufbewahrungsfrist gelöscht.",
+               "success": "Sie sind verbunden."},
+        "en": {"title": "Guest access", "welcome": "Welcome! Please sign in.", "button": "Request access", "code_label": "Code",
+               "terms_label": "I accept the terms of use and the privacy notice.", "terms": "Your details are used only to manage access and are deleted after the retention period.",
+               "success": "You are connected."}
+      },
+      "form_fields": [
+        {"key": "name", "label_de": "Name", "label_en": "Name", "type": "text", "required": true, "max_len": 100},
+        {"key": "company", "label_de": "Firma", "label_en": "Company", "type": "text", "required": false, "max_len": 100},
+        {"key": "host", "label_de": "Ansprechpartner", "label_en": "Contact person", "type": "text", "required": false, "max_len": 100}
+      ]
+    }
+  ]
+}

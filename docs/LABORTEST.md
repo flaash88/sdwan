@@ -400,6 +400,33 @@ Voraussetzung: ein Gerät mit `wifi`-Paket (z. B. hAP ax²/ax³), optional ein G
       scannen → Verbindung ohne Eintippen.
 - [ ] Zuweisung entfernen und ausrollen → alle `sdwan-wifi`-Objekte weg, Werks-WLAN läuft weiter.
 
+## 16. Gäste-Portal / Hotspot (Phase 20)
+
+Voraussetzung: Gäste-VLAN-Interface mit IP-Adresse und DHCP-Server am Testgerät, ein Handy/Laptop im Gästenetz.
+
+- [ ] Selbsttest: Pfade `hotspot*` grün (Standardprofile vorhanden).
+- [ ] Hotspot mit Vorlage „Gastronomie“ auf dem Gäste-VLAN anlegen und ausrollen. Prüfen: `/ip hotspot print`,
+      `/ip hotspot profile print where name~"sdwan-hs"`, `/file print where name~"sdwan-hs"`.
+      **Annahme prüfen:** Upload-Ziel und `html-directory` passen (Seite erscheint). Tatsächlicher Pfad: ______
+- [ ] Gast öffnet eine HTTP-Seite → Portal erscheint (DE/EN umschaltbar, Logo/Farben). Ohne Checkbox kein Login.
+      Mit Checkbox → online. **Annahme prüfen:** Trial-Login mit `username=T-$(mac-esc)`. Ergebnis: ______
+- [ ] Sitzungsdauer und Bandbreite greifen (`/ip hotspot active print`, Speedtest am Handy).
+- [ ] Walled-Garden-Host ist ohne Anmeldung erreichbar.
+- [ ] Vorlage „Hotel“: Voucher-Profil (z. B. 60 min, 100 MB) und 10 Voucher erzeugen → `/ip hotspot user print`
+      zeigt die Codes mit `limit-uptime`/`limit-bytes-total`. A4-Druck prüfen, QR-Code scannen → Anmeldung ohne
+      Eintippen. **Annahme prüfen:** Login per `…/login?username=CODE&password=` und `http-pap` mit leerem Passwort.
+      Ergebnis: ______
+- [ ] Nach Nutzung: Status „aktiv“, Online-Zeit und Volumen in der Liste (≤ 5 min). Nach Ablauf „verbraucht“.
+- [ ] Vorlage „Büro-Gäste“ (Formular): Formular absenden → Eintrag unter „Gäste → Registrierungen“, danach online.
+      **Annahme prüfen:** Plattform per `/ip hotspot walled-garden ip` (`dst-host`) erreichbar, auch über HTTPS.
+      Ergebnis: ______
+- [ ] Mehr als 10 Registrierungen in 10 min vom selben Gerät → Antwort 429.
+- [ ] Live-Ansicht: Gast trennen (muss sich neu anmelden), Gast sperren (Klick: MAC in `/ip hotspot ip-binding`
+      mit `type=blocked`; Voucher: `disabled=yes`), wieder entsperren.
+- [ ] Hotspot löschen → alle `sdwan-hs`-Objekte entfernt, Standardprofile unverändert.
+- [ ] Access-Point eines anderen Herstellers am Gäste-VLAN: Portal funktioniert identisch.
+- [ ] Firewall-Editor: Policy für das Gerät ohne Gäste-Isolation → Hinweis „Gäste vom LAN isolieren“.
+
 ---
 
 ## Ergebnis
@@ -421,3 +448,4 @@ Voraussetzung: ein Gerät mit `wifi`-Paket (z. B. hAP ax²/ax³), optional ein G
 | 13 Scripts | ☐ ok ☐ Abweichung | |
 | 14 Wartung/Speedtest/Syslog | ☐ ok ☐ Abweichung | |
 | 15 WLAN | ☐ ok ☐ Abweichung | |
+| 16 Gäste-Portal | ☐ ok ☐ Abweichung | |

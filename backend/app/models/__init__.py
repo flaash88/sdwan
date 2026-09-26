@@ -27,3 +27,4 @@ from app.models.compliance import ComplianceAssignment, ComplianceResult, Compli
 from app.models.scripts import Script, ScriptRun, ScriptRunItem, ScriptVersion  # noqa: F401,E402
 from app.models.operations import DeviceSyslog, MaintenanceWindow, SpeedtestResult, SyslogMessage  # noqa: F401,E402
 from app.models.wlan import WlanAssignment, WlanDeviceState, WlanProfile  # noqa: F401,E402
+from app.models.hotspot import GuestRegistration, HotspotInstance, HotspotPortal, Voucher, VoucherBatch, VoucherProfile  # noqa: F401,E402

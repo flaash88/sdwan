@@ -46,6 +46,16 @@ _TABLE_PATHS = {
     "/ip/firewall/connection",
     "/interface/vrrp",
     "/radius",
+    # Hotspot (Phase 20)
+    "/ip/hotspot",
+    "/ip/hotspot/profile",
+    "/ip/hotspot/user",
+    "/ip/hotspot/user/profile",
+    "/ip/hotspot/walled-garden",
+    "/ip/hotspot/walled-garden/ip",
+    "/ip/hotspot/active",
+    "/ip/hotspot/ip-binding",
+    "/file",
     # WLAN (Phase 19) – nur erreichbar, wenn der simulierte Router das passende Paket hat (wlan_driver)
     "/interface/wifi",
     "/interface/wifi/radio",
@@ -492,6 +502,9 @@ def _seed_extras(r: SimRouter) -> None:
             r.tables["/system/logging/action"].append({".id": f"*L{name}", "name": name, "target": target, "default": "true"})
         for i, t in enumerate(("info", "error", "warning", "critical")):
             r.tables["/system/logging"].append({".id": f"*R{i}", "topics": t, "action": "memory", "default": "true"})
+    if not r.tables["/ip/hotspot/profile"]:  # wie RouterOS: Standardprofile
+        r.tables["/ip/hotspot/profile"].append({".id": "*HP0", "name": "default", "html-directory": "hotspot", "login-by": "cookie,http-chap", "default": "true"})
+        r.tables["/ip/hotspot/user/profile"].append({".id": "*HU0", "name": "default", "shared-users": "1", "default": "true"})
     if not any(x.get("builtin") == "true" for x in r.tables["/interface/list"]):
         for name in ("all", "none", "dynamic", "static"):  # wie RouterOS: eingebaute Listen
             r.tables["/interface/list"].insert(0, {".id": f"*B{name}", "name": name, "builtin": "true"})

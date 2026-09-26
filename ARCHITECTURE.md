@@ -796,6 +796,55 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   `wifi*`), Ländernamen, Werte für `width`/`supported-bands`, `monitor once` ohne Scan. Pfade mit `package` im
   Selbsttest gelten als „Paket nicht vorhanden“ statt als Fehler.
 
+## Phase 20 – Hotspot / Gäste-Portal
+
+* **Unabhängig vom AP-Hersteller:** Der Hotspot läuft auf dem MikroTik (`/ip hotspot`) auf einem Interface oder VLAN.
+  Access-Points jeder Marke dahinter liefern nur den Funk; Anmeldung, Freigabe und Limits macht der Router.
+  Voraussetzung: das Interface hat eine IP-Adresse und DHCP im Gästenetz (`address-pool=none`).
+* **Portale** (`hotspot_portals`, global oder mandantenweit): Logo (PNG/JPEG/WebP als Data-URL), Farben, Texte DE/EN,
+  Nutzungsbedingungen mit Pflicht-Checkbox, Anmeldeart und Formularfelder. Vorlagen **Hotel** (Voucher),
+  **Gastronomie** (Klick), **Veranstaltung** (Formular: Name), **Büro-Gäste** (Formular: Name, Firma, Ansprechpartner)
+  sind Seed-Daten (`app/seeds/hotspot.json`), schreibgeschützt, zum Anpassen kopieren. Kein PMS-Anschluss.
+  - Login-Seiten (`login.html`, `status.html`, `alogin.html`, `logout.html`) erzeugt `services/hotspot.render_pages`
+    aus dem Portal; Portal-Texte werden HTML-escaped und `$` entschärft (keine RouterOS-Variablen einschleusbar).
+    Sprache per `<html lang>` und CSS, umschaltbar DE/EN. Eigene Login-Seiten können hochgeladen werden (Text, je
+    Datei max. 100 KB, mind. `login.html`) und ersetzen die erzeugten.
+  - Vorschau im Designer: dieselben Seiten mit Beispielwerten (`/hotspot/preview`), in einer Sandbox ohne Netzzugriff.
+* **Hotspots** (`hotspot_instances`) je Gerät + Interface; Router-Objekte `sdwan-hs-<kürzel>`:
+  `/ip/hotspot/profile` (`hotspot-address` = IP des Interfaces oder fest, `html-directory`, `login-by`),
+  `/ip/hotspot`, `/ip/hotspot/user/profile` (`…-trial`, `…-v-<voucherprofil>`: `rate-limit`, `shared-users`,
+  `idle-timeout`), `/ip/hotspot/walled-garden` (Hosts), Upload der Login-Seiten per SFTP nach `sdwan-hs-<kürzel>/`.
+  Ausrollen auf Knopfdruck; Hinweis „Änderungen nicht ausgerollt“, wenn Hotspot oder Portal seither geändert wurden.
+  Entfernen löscht alle `sdwan-hs-<kürzel>`-Objekte; Standardprofile und fremde Einträge bleiben.
+* **Anmeldearten:**
+  - **Voucher:** Benutzer = Code, leeres Passwort (`http-pap`); Voucher als `/ip/hotspot/user` mit `limit-uptime`
+    und optional `limit-bytes-total`.
+  - **Klick:** Trial-Login (`login-by=…,trial`, `trial-uptime-limit` = Sitzungsdauer, Benutzer `T-<MAC>`).
+  - **Formular:** Die Seite sendet die Felder per `fetch` an `POST /api/v1/portal/<id>/register` (öffentlich), danach
+    Trial-Login. Die Plattform-Adresse wird dafür automatisch in `/ip/hotspot/walled-garden/ip` (`dst-host`)
+    aufgenommen.
+* **Öffentlicher Endpunkt `/portal/<id>/register`** (Entscheidung 19): Rate-Limit je Quell-IP und Portal
+  (10 je 10 min, Redis, sonst im Prozess), Body max. 4 KB, nur die im Portal definierten Felder mit Typ-/Längenprüfung
+  (unbekannte werden verworfen), Pflicht-Zustimmung zu den Nutzungsbedingungen, CORS nur für diesen Endpunkt.
+  **Walled Garden und HTTPS:** Bei HTTPS kann der Walled Garden nur nach Host freigeben, nicht nach Pfad – Gäste
+  erreichen damit auch die Plattform-Oberfläche (weiterhin anmeldegeschützt). Deshalb gibt es ohne Anmeldung nur
+  diesen einen Endpunkt.
+* **Voucher:** Profile (Online-Zeit, Datenlimit, Bandbreite, Geräte je Voucher), Stapel (1–500, Codes aus 8 Zeichen ohne
+  verwechselbare Zeichen), A4-Druckansicht (`/print/vouchers/<stapel>`, 10 Karten je Seite, QR-Code mit
+  `http://<dns-name|adresse>/login?username=<code>&password=`), CSV, Status (neu/aktiv/verbraucht/gesperrt) alle 5 min
+  aus `/ip/hotspot/user` (`uptime`, `bytes-in/out`), Sperren = `disabled=yes`.
+* **Live-Gäste** aus `/ip/hotspot/active` (nicht gespeichert): Trennen (Eintrag entfernen), Sperren (Voucher deaktivieren
+  bzw. MAC per `/ip/hotspot/ip-binding type=blocked`), Entsperren.
+* **DSGVO:** Gespeichert werden nur die Formularfelder (`guest_registrations`), keine Browser-/Gerätedaten, keine
+  MAC/IP. Aufbewahrung je Mandant (`tenant.settings.guest_retention_days`, Standard 30 Tage), täglicher Lösch-Job.
+  Registrierungen sehen nur Admins (protokolliert). Hinweis im Designer: Nutzungsbedingungen und Datenschutz
+  verantwortet der Betreiber.
+* **Firewall-Editor:** Betreibt ein Zielgerät einen Hotspot und verwirft keine Regel Verkehr aus der Zone „Gäste“
+  (Kürzel `guest`) in eine andere Zone, schlägt Lint den Baustein „Gäste vom LAN isolieren“ vor (Hinweis).
+* **Annahmen (Labor):** Pfade/Feldnamen (`PATH_SPECS` `hotspot*`), Trial-Benutzer `T-<MAC>`, `http-pap` mit leerem
+  Passwort, Login per GET-Parametern (QR), Upload-Ziel des `html-directory`, `walled-garden/ip dst-host`,
+  Variablen der Login-Seiten.
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

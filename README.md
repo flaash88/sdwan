@@ -44,6 +44,7 @@ Installation auf einem Server: [INSTALL.md](INSTALL.md) · Aufbau und Design-Ent
 | 13 | Labortest-Werkzeuge: Hardware-Selbsttest (Pfade, Felder, Rechte, Dienste, Uhrzeit; JSON-Export), Neustart mit Offline-Alarm-Unterdrückung (manuell 5 min, Firmware-Update 10 min), VRRP-Gegenstelle mit Ping, Backup-Auslöser/Ersteller/Prüfsumme und Backup nach Policy-Push, IP-Adressen je Interface, Temperatur/Spannung falls vorhanden. Checkliste: [`docs/LABORTEST.md`](docs/LABORTEST.md) | ✅ |
 | 14 | Firewall-Editor (einfach): Zonen, Netzwerk-Objekte, Dienste, Bausteine als Seed-Daten, Grundregeln mit Plattform-Zugängen, Drag & Drop, Lint, Vorschau mit Diff, Vorprüfung auf manuelle Regeln, Trefferzähler; Expertenmodus bleibt | ✅ |
 | 15 | Threat-Feeds: Blocklisten (Spamhaus DROP als Seed, eigene URLs), Prüfung auf öffentliche Netze und Obergrenze, differenzielle Verteilung als Address-List mit RAM-Check, Objekt im Firewall-Editor, Alarm „Threat-Feed veraltet“ | ✅ |
+| 16 | Compliance und Config-Suche: Regelsets (MSP-Baseline als Seed), Text-/Regex-/Live-Prüfungen, Auswertung nach jedem Backup, Flottenbericht mit CSV/PDF und Trend, Alarm „Compliance verletzt“ (optional); Volltext-/Regex-Suche über die letzten Backups mit maskierten Geheimnissen | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

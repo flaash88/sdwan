@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import Alerts from "./pages/Alerts";
+import Compliance from "./pages/Compliance";
+import ConfigSearch from "./pages/ConfigSearch";
 import ContentFilter from "./pages/ContentFilter";
 import Feeds from "./pages/Feeds";
 import Firmware from "./pages/Firmware";
@@ -18,6 +20,8 @@ export const extraRoutes: { path: string; element: ReactNode }[] = [
   { path: "/policies/:id", element: <PolicyDetail /> },
   { path: "/ztp", element: <ZeroTouch /> },
   { path: "/feeds", element: <Feeds /> },
+  { path: "/compliance", element: <Compliance /> },
+  { path: "/config-search", element: <ConfigSearch /> },
   { path: "/content-filter", element: <ContentFilter /> },
   { path: "/remote", element: <RemoteSessions /> },
   { path: "/firmware", element: <Firmware /> },

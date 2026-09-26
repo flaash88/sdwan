@@ -18,6 +18,8 @@ export const NAV: NavItem[] = [
   { to: "/mesh", label: "VPN-Mesh", icon: "network" },
   { to: "/policies", label: "Firewall-Policies", icon: "shield" },
   { to: "/feeds", label: "Threat-Feeds", icon: "octagon" },
+  { to: "/compliance", label: "Compliance", icon: "checkCircle" },
+  { to: "/config-search", label: "Config-Suche", icon: "search" },
   { to: "/ztp", label: "Zero-Touch", icon: "package", role: "technician" },
   { to: "/content-filter", label: "Content-Filter", icon: "filter" },
   { to: "/firmware", label: "Firmware", icon: "cpu", badge: "firmware" },

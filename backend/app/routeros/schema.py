@@ -85,6 +85,8 @@ PATH_SPECS: tuple[PathSpec, ...] = (
     PathSpec("package_update", "Paket-Update", "/system/package/update/print", fields=("installed-version",),
              optional=("channel", "latest-version", "status"), used_by="Firmware", must_have_rows=True,
              hints={"latest-version": "Erst nach einer Update-Prüfung befüllt (Firmware → Nach Updates suchen)"}),
+    PathSpec("ntp_client", "NTP-Client", "/system/ntp/client/print", fields=("enabled",), optional=("mode", "servers", "status"),
+             used_by="Compliance (NTP aktiv)", must_have_rows=True),
     PathSpec("health", "Sensoren", "/system/health/print", optional=("name", "value", "type"), used_by="Übersicht (Temperatur/Spannung)",
              hints={"name": "Modell liefert keine Sensorwerte – Kacheln werden ausgeblendet"}),
     PathSpec("ip_service", "IP-Dienste", "/ip/service/print", fields=("name", "port"), optional=("disabled", "address"),

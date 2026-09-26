@@ -157,6 +157,7 @@ class SimRouter:
             "/system/reboot": self._reboot,
             "/system/clock/print": self._clock,
             "/system/health/print": self._health,
+            "/system/ntp/client/print": lambda p: [{"enabled": getattr(self, "ntp_enabled", "yes"), "mode": "unicast", "servers": "pool.ntp.org"}],
             "/ip/dns/print": lambda p: [dict(self.dns)],
             "/ip/dns/set": self._dns_set,
             "/ip/dns/cache/flush": lambda p: [],

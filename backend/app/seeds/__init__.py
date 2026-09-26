@@ -67,7 +67,14 @@ async def apply_feeds(db: AsyncSession) -> None:
         await _upsert(db, FwBlock, {"nat": [], **b})
 
 
-APPLIERS = [apply_firewall, apply_feeds]
+async def apply_compliance(db: AsyncSession) -> None:
+    from app.models import ComplianceRuleSet
+
+    for rs in load("compliance")["rule_sets"]:
+        await _upsert(db, ComplianceRuleSet, rs)
+
+
+APPLIERS = [apply_firewall, apply_feeds, apply_compliance]
 
 
 async def apply_all() -> None:

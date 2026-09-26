@@ -665,6 +665,32 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
 * **Annahmen (Labor):** Spamhaus-URLs und das JSON-Format; `/ipv6/firewall/address-list` mit gleichen Feldern;
   RAM-Schätzwert je Eintrag.
 
+## Phase 16 – Compliance und Config-Suche
+
+* **Regelsets** (`compliance_rule_sets`, global oder mandantenweit; Seed „MSP-Baseline“ in
+  `app/seeds/compliance.json`, schreibgeschützt, kopierbar). Pflege durch Admins, Zuweisung
+  (`compliance_assignments`, Ziele Geräte/Standorte/Tags) durch Techniker. Die Ziele werden bei jeder
+  Auswertung neu aufgelöst.
+* **Regeltypen** (`services/compliance.py`):
+  - Text gegen das letzte Backup: `contains`, `not_contains`, `regex` (match/no_match).
+  - Strukturiert, **live** gelesen: `service_disabled`, `no_user`, `ntp_enabled`,
+    `service_restricted_to_tunnel`, `channel_in`, `min_version`.
+  - Entscheidung: Strukturierte Prüfungen lesen live statt den Export zu parsen, weil `/export` Standardwerte
+    weglässt. Ist der Router nicht erreichbar, lautet das Ergebnis `unknown`, nicht „verletzt“.
+* **Auswertung:** nach jedem neuen Backup (Hook am Ende von `take_backup`, nur bei vorhandenen Zuweisungen,
+  best effort) und manuell (`POST /compliance/evaluate`). Ergebnisse (`compliance_results`) bleiben
+  180 Tage für den Trend.
+* **Bericht:** Matrix Geräte × Regeln (`/compliance/report`, `.csv`, `.pdf` über reportlab),
+  Trend je Tag (`/compliance/trend`). Der Alarmtyp `compliance_failed` gehört nicht zu den Standardregeln
+  (standardmäßig aus) und wird bei Bedarf angelegt.
+* **Config-Suche** (`GET /config-search`):
+  - Durchsucht das jeweils letzte Backup je Gerät des Mandanten; MSP mit `all_tenants` mandantenübergreifend.
+  - Geheimnisse (`password`, `private-key`, `preshared-key`, `passphrase`, `secret`, …) werden **vor** der Suche
+    maskiert und sind nie Treffer.
+  - Regex: max. 200 Zeichen, verschachtelte Quantoren abgelehnt, Zeitlimit 3 s (Schutz vor ReDoS).
+  - Jede Suche steht im Audit-Log.
+* **Annahmen (Labor):** `/system/ntp/client` mit Feld `enabled` (Selbsttest `ntp_client`).
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

@@ -33,6 +33,7 @@ TYPES = {
     "wan_backup_active": "Backup-WAN aktiv",
     "wan_volume": "WAN-Datenvolumen (80 % / 100 % des Monatslimits)",
     "feed_stale": "Threat-Feed veraltet",
+    "compliance_failed": "Compliance-Prüfung fehlgeschlagen",
 }
 DEFAULT_RULES = [
     {"name": "Gerät offline", "type": "device_offline", "severity": "critical", "duration_s": 300},
@@ -40,6 +41,7 @@ DEFAULT_RULES = [
     {"name": "WAN-Latenz > 150 ms", "type": "latency", "severity": "warning", "duration_s": 300, "params": {"threshold": 150, "metric": "wan"}},
     {"name": "VPN-Tunnel down", "type": "mesh_down", "severity": "warning", "duration_s": 300},
     {"name": "VRRP: Standort auf Backup (Master)", "type": "vrrp_master", "severity": "warning", "duration_s": 30},
+    # compliance_failed (Phase 16) bewusst nicht in den Standardregeln: standardmäßig aus, bei Bedarf anlegen
 ]
 
 
@@ -176,6 +178,17 @@ async def conditions(db: AsyncSession, rule: AlertRule, devices: list[Device]) -
             if ref and (now - ref).total_seconds() > 3 * f.interval_min * 60:
                 out.append(Condition(by_id[a.device_id], f"feed:{f.id}", f"Threat-Feed {f.name} seit {ref:%d.%m. %H:%M} nicht aktualisiert"
                                      + (f" ({f.last_error})" if f.last_error else ""), since=ref))
+    elif rule.type == "compliance_failed":
+        from app.models import ComplianceRuleSet
+        from app.services.compliance import latest_results
+
+        by_id = {d.id: d for d in devices}
+        names = {r.id: r.name for r in (await db.execute(select(ComplianceRuleSet).execution_options(skip_tenant_filter=True))).scalars()}
+        for (dev_id, rs_id), r in (await latest_results(db, list(by_id))).items():
+            if r.failed:
+                bad = ", ".join(x["name"] for x in r.results if x["status"] == "fail")
+                out.append(Condition(by_id[dev_id], f"compliance:{rs_id}", f"{by_id[dev_id].name}: {names.get(rs_id, 'Regelset')} – {r.failed} "
+                                                                           f"Regel(n) verletzt: {bad}", float(r.failed)))
     elif rule.type == "cpu_high":
         thr = float(p.get("threshold", 90))
         for d in devs:

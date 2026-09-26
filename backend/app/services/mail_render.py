@@ -63,6 +63,10 @@ NEXT_STEPS: dict[str, list[str]] = {
         "Standort läuft über das Backup-WAN. Primären Anschluss prüfen.",
         "Datenvolumen des Backup-WAN im Auge behalten.",
     ],
+    "compliance_failed": [
+        "Compliance-Bericht öffnen und die verletzten Regeln am Gerät prüfen.",
+        "Nach der Korrektur ein Backup erstellen – die Prüfung läuft danach automatisch erneut.",
+    ],
     "feed_stale": [
         "Threat-Feeds-Seite öffnen und den Fehler des Feeds prüfen (URL erreichbar? Format geändert?).",
         "Die letzte gültige Liste bleibt auf den Geräten aktiv, bis eine Aktualisierung gelingt.",

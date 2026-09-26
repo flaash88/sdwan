@@ -391,3 +391,17 @@ Parameter wie Zone oder Objekt werden beim Einfügen per Auswahl gesetzt.
   - `/ipv6/firewall/address-list`;
   - RAM-Bedarf je Eintrag;
   - Dauer der Verteilung großer Listen über die API.
+
+### Stand Phase 16 – Compliance und Config-Suche
+- **Erledigt:**
+  - Regelsets global/mandantenweit mit Seed „MSP-Baseline“ (genau die sechs geforderten Prüfungen), eigene
+    Regelsets, Zuweisung an Geräte/Standorte/Tags.
+  - Auswertung nach jedem Backup und manuell, Flottenbericht mit CSV/PDF und Trend, Alarmtyp
+    `compliance_failed`.
+  - Config-Suche mit Maskierung, Regex-Schutz und MSP-weiter Suche.
+- **Entscheidungen:**
+  - Strukturierte Prüfungen lesen live statt den Export zu parsen (Export lässt Standardwerte weg; nicht
+    erreichbar = unbekannt).
+  - `compliance_failed` ist nicht in den Standard-Alarmregeln: „standardmäßig aus“, und der bestehende
+    Default-Umfang bleibt unverändert.
+- **Im Labor zu verifizieren:** `/system/ntp/client` (Feld `enabled`), Maskierung bei Export mit `sensitive`.

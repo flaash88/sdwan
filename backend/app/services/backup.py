@@ -101,6 +101,10 @@ async def take_backup(
     if prev is not None and prev.sha256 != digest:
         await events.publish(device.tenant_id, "backup.changed", {"device_id": str(device.id), "device": device.name,
                                                                   "added": diff["added"], "removed": diff["removed"]})
+    # Phase 16: Compliance nach jedem neuen Backup (best effort, nur bei vorhandenen Zuweisungen)
+    from app.services.compliance import after_backup
+
+    await after_backup(db, device)
     return b, True
 
 

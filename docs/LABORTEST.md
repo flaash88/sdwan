@@ -312,6 +312,21 @@ Vorbereitung: WAN eingerichtet (Schritt 4). Auf dem L009 existieren die defconf-
 - [ ] Zuweisung entfernen. **Erwartet:** Die Liste ist auf dem Router weg; manuelle Address-Lists sind
       unverändert.
 
+## 12. Compliance und Config-Suche (Phase 16)
+
+- [ ] Compliance → Regelsets → „MSP-Baseline“ → „Zuweisen“ an den L009 → Flottenbericht → „Jetzt prüfen“.
+      **Erwartet:** Zeile L009 mit Ergebnissen je Regel. Mit der Grundkonfiguration aus Schritt 1 sind www
+      deaktiviert, NTP aktiv und API/SSH nur aus dem Tunnel „ok“.
+- [ ] **Annahme prüfen:** `/system ntp client print` liefert `enabled=yes`. Die Regel „NTP-Client aktiv“
+      zeigt „ok“ (nicht „?“). Ergebnis: ______
+- [ ] `/ip service set www disabled=no` setzen, „Backup jetzt“. **Erwartet:** Nach dem Backup steht die Regel
+      „Dienst www deaktiviert“ automatisch auf „verletzt“. Danach zurückstellen.
+- [ ] CSV und PDF herunterladen und öffnen. **Erwartet:** gleiche Matrix.
+- [ ] Config-Suche nach dem Namen des API-Benutzers bzw. einer IP aus der WAN-Konfiguration.
+      **Erwartet:** Treffer mit Kontextzeilen und Link ins Gerät.
+- [ ] Config-Suche nach einem bekannten WireGuard-Private-Key bzw. einem Passwort (nur wenn `sensitive`
+      exportiert wird). **Erwartet:** kein Treffer; in anderen Treffern steht `private-key=***`.
+
 ---
 
 ## Ergebnis
@@ -329,3 +344,4 @@ Vorbereitung: WAN eingerichtet (Schritt 4). Auf dem L009 existieren die defconf-
 | 9 Neustart | ☐ ok ☐ Abweichung | |
 | 10 Firewall-Editor | ☐ ok ☐ Abweichung | |
 | 11 Threat-Feeds | ☐ ok ☐ Abweichung | |
+| 12 Compliance/Suche | ☐ ok ☐ Abweichung | |

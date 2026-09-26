@@ -432,3 +432,30 @@ Parameter wie Zone oder Objekt werden beim Einfügen per Auswahl gesetzt.
   gewählte WAN; Felder der Logging-Aktion (`remote`, `remote-port`, `src-address`) und fehlendes
   Kommentarfeld; Format der empfangenen Syslog-Zeilen; Erreichbarkeit UDP 514 auf der Hub-Tunnel-IP.
 
+### Stand Phase 19 – WLAN-Verwaltung
+- **Erledigt:**
+  - Treiber-Erkennung wifi/wireless im Poll (alle 10 min), WLAN-Tab nur bei vorhandenem WLAN.
+  - Profile mit PSK/Enterprise-RADIUS, Band, Kanalbreite, Ländercode (Mandant, Standard AT, je Profil
+    überschreibbar), VLAN, Bridge, Client-Isolation, versteckt, täglicher Zeitplan.
+  - Zuweisung an Geräte/Standorte/Tags lokal (virtuelle APs) oder an CAPsMAN-Controller (Provisioning je Band).
+  - Ausrollen auf Knopfdruck mit Status je Gerät, Hinweis „Änderungen nicht ausgerollt“, Entfernen nach
+    Aufheben der Zuweisung.
+  - Status mit Clients, Kanal und CAPs; Gäste-PSK-Rotation (manuell/automatisch) mit QR-Aushang zum Drucken.
+  - Selbsttest: WLAN-Pfade als paketabhängig gekennzeichnet (fehlendes Paket ist kein Fehler).
+- **Entscheidungen:**
+  - Profile mandantenweit (nicht global), weil sie Schlüssel enthalten.
+  - Nur virtuelle APs; physische Radios und bestehende WLANs werden nie verändert.
+  - Provisioning-Regeln hinter vorhandenen Regeln (bestehende CAPs unverändert).
+- **Weggelassen:**
+  - Automatisches Umstellen von Geräten in den CAP-Modus (würde deren lokale WLAN-Konfiguration ersetzen).
+  - Nachbarnetze/Kanal-Scan (würde Clients trennen).
+  - Wochentage im Zeitplan (nur täglich).
+  - Konfiguration für den `wireless`-Treiber (nur Anzeige).
+- **Im Labor zu verifizieren:**
+  - Pfade und Feldnamen des wifi-Pakets (security/datapath/channel/configuration, `/interface/wifi/radio`
+    `bands`), Ländernamen, `width`-Werte.
+  - Provisioning-Felder und `supported-bands`.
+  - `monitor once` ohne Scan.
+  - RADIUS-Anbindung (`/radius service=wireless`, ggf. `eap-methods`).
+  - Verhalten virtueller APs bei deaktiviertem Radio.
+

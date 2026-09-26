@@ -45,6 +45,21 @@ _TABLE_PATHS = {
     "/user/group",
     "/ip/firewall/connection",
     "/interface/vrrp",
+    "/radius",
+    # WLAN (Phase 19) – nur erreichbar, wenn der simulierte Router das passende Paket hat (wlan_driver)
+    "/interface/wifi",
+    "/interface/wifi/radio",
+    "/interface/wifi/security",
+    "/interface/wifi/datapath",
+    "/interface/wifi/channel",
+    "/interface/wifi/configuration",
+    "/interface/wifi/provisioning",
+    "/interface/wifi/registration-table",
+    "/interface/wifi/capsman",
+    "/interface/wifi/cap",
+    "/interface/wifi/capsman/remote-cap",
+    "/interface/wireless",
+    "/interface/wireless/registration-table",
 }
 
 
@@ -58,6 +73,7 @@ class SimRouter:
         self.channel = "stable"
         self.identity = f"sim-{host.replace('.', '-')}"
         self.board = self.rng.choice(["RB5009UG+S+", "hAP ax3", "CCR2004-16G-2S+", "CHR"])
+        self.wlan_driver: str | None = _default_wlan(self.board)
         self.tables: dict[str, list[dict[str, Any]]] = {p: [] for p in _TABLE_PATHS}
         self._next_id = 1
         self.dns: dict[str, Any] = {"servers": "", "use-doh-server": "", "verify-doh-cert": "no", "allow-remote-requests": "yes"}
@@ -85,6 +101,7 @@ class SimRouter:
         self._insert("/ip/route", {"dst-address": "0.0.0.0/0", "gateway": "100.64.0.1", "distance": "1"})
         self.clock_skew_s = 0.0  # Tests: Abweichung der Router-Uhr in Sekunden
         _seed_extras(self)
+        _seed_wlan(self)
         # weitere Ports wie beim L009UiGS (ether5–ether8, z. B. 5G-Modem an ether8)
         for name in ("ether5", "ether6", "ether7", "ether8"):
             self._insert("/interface", {"name": name, "type": "ether", "running": "true", "disabled": "false", "default-name": name})
@@ -144,7 +161,10 @@ class SimRouter:
             self.fail_next.discard(cmd)
             raise RouterOSError(f"{cmd}: simulated failure")
         path, _, action = cmd.rpartition("/")
-        if path in self.tables:
+        if (cmd.startswith("/interface/wifi/") and self.wlan_driver != "wifi") or \
+                (cmd.startswith("/interface/wireless/") and self.wlan_driver != "wireless"):
+            raise RouterOSError("no such command prefix")
+        if path in self.tables and cmd != "/interface/wifi/monitor":
             return self._table_op(path, action, params)
         handler = {
             "/system/resource/print": self._resource,
@@ -167,6 +187,7 @@ class SimRouter:
             "/interface/monitor-traffic": self._monitor_traffic,
             "/tool/fetch": lambda p: [{"status": "finished"}],
             "/system/script/run": lambda p: [],
+            "/interface/wifi/monitor": lambda p: [{"channel": "5180/ax/Ceee" if str(p.get("numbers")) == "wifi2" else "2437/ax", "state": "running"}],
             "/certificate/settings/set": lambda p: [],
             "/certificate/import": lambda p: [{"certificates-imported": 140}],
         }.get(cmd)
@@ -421,7 +442,29 @@ class SimRouter:
         return []
 
 
-_PERSIST = ("version", "channel", "identity", "board", "tables", "_next_id", "dns", "counters", "boot", "down_hosts", "vrrp_master")
+_PERSIST = ("version", "channel", "identity", "board", "tables", "_next_id", "dns", "counters", "boot", "down_hosts", "vrrp_master", "wlan_driver")
+
+
+def _default_wlan(board: str) -> str | None:
+    """Simulierte WLAN-Ausstattung: hAP ax → Paket wifi; andere Modelle ohne WLAN."""
+    return "wifi" if "ax" in board and board.startswith("hAP") else None
+
+
+def _seed_wlan(r: SimRouter) -> None:
+    """Radios wie ab Werk (Standard-SSID), dazu zwei Clients; wireless-Router mit einem wlan1."""
+    if r.wlan_driver == "wifi" and not r.tables["/interface/wifi"]:
+        for name, bands, ssid in (("wifi1", "2ghz-g,2ghz-n,2ghz-ax", "MikroTik-2G"), ("wifi2", "5ghz-a,5ghz-n,5ghz-ac,5ghz-ax", "MikroTik-5G")):
+            r._insert("/interface/wifi", {"name": name, "configuration.ssid": ssid, "disabled": "false", "running": "true"})
+            r._insert("/interface/wifi/radio", {"interface": name, "bands": bands})
+        r._insert("/interface/wifi/capsman", {"enabled": "no"})
+        r._insert("/interface/wifi/cap", {"enabled": "no"})
+        for i, iface in enumerate(("wifi1", "wifi2")):
+            r._insert("/interface/wifi/registration-table", {"interface": iface, "mac-address": f"02:00:00:00:00:0{i + 1}",
+                                                             "signal": f"-{55 + i * 7}", "tx-rate": "286.7Mbps", "rx-rate": "173.3Mbps", "uptime": "1h2m"})
+    if r.wlan_driver == "wireless" and not r.tables["/interface/wireless"]:
+        r._insert("/interface/wireless", {"name": "wlan1", "ssid": "MikroTik", "band": "2ghz-b/g/n", "frequency": "2437", "disabled": "false"})
+        r._insert("/interface/wireless/registration-table", {"interface": "wlan1", "mac-address": "02:00:00:00:01:01", "signal-strength": "-61dBm",
+                                                             "tx-rate": "65Mbps", "uptime": "12m"})
 
 
 def _seed_extras(r: SimRouter) -> None:
@@ -472,13 +515,17 @@ def _load(host: str, raw: str) -> SimRouter:
     import json
 
     r = SimRouter(host)
-    for k, v in json.loads(raw).items():
+    data = json.loads(raw)
+    for k, v in data.items():
         setattr(r, k, v)
+    if "wlan_driver" not in data:  # älterer Zustand: WLAN-Ausstattung aus dem gespeicherten Modell ableiten
+        r.wlan_driver = _default_wlan(r.board)
     r.down_hosts = set(r.down_hosts)
     r.vrrp_master = set(getattr(r, "vrrp_master", []) or [])
     for p in _TABLE_PATHS:
         r.tables.setdefault(p, [])
     _seed_extras(r)
+    _seed_wlan(r)
     return r
 
 

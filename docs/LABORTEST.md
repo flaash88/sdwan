@@ -370,6 +370,36 @@ Vorbereitung: WAN eingerichtet (Schritt 4). Auf dem L009 existieren die defconf-
 - [ ] VRRP-Verlauf → Symbol „Log um diesen Zeitpunkt“ → Log zeigt ±15 min um den Übergang.
 - [ ] Syslog abschalten → Aktion und Regeln sind entfernt, eigene Logging-Regeln bleiben.
 
+## 15. WLAN (Phase 19)
+
+Voraussetzung: ein Gerät mit `wifi`-Paket (z. B. hAP ax²/ax³), optional ein Gerät mit altem `wireless`-Treiber.
+
+- [ ] Selbsttest am wifi-Gerät: Pfade `wifi*` grün. **Tatsächliche Felder** von `/interface/wifi/radio print`
+      (erwartet `interface`, `bands`): ______
+- [ ] Nach ≤ 10 min erscheint der Tab „WLAN“ mit Radios und Clients. Beim Gerät ohne WLAN (z. B. RB5009) gibt es
+      keinen Tab.
+- [ ] Profil „Test“ (WPA2/WPA3-PSK, VLAN, 80 MHz) anlegen, lokal zuweisen, ausrollen. Prüfen:
+      `/interface wifi security|datapath|channel|configuration print where name~"sdwan-wifi"` und
+      `/interface wifi print where comment~"sdwan:wifi"` → virtuelle APs je Radio. **Erwartet:** Handy verbindet
+      sich, landet im VLAN. **Annahme prüfen:** Feldnamen `authentication-types`, `passphrase`, `vlan-id`,
+      `client-isolation`, `width` (`20/40/80mhz`), `country=Austria`, `hide-ssid`. Abweichungen: ______
+- [ ] Physische Radios und das Werks-WLAN sind danach unverändert (SSID, Konfiguration).
+- [ ] Ländercode im Mandanten auf `DE` ändern, Profil ausrollen → `country=Germany`.
+- [ ] Zeitplan 1–2 min in der Zukunft → Scheduler `sdwan-wifi-test-on|off` schalten die virtuellen APs.
+- [ ] Enterprise-Profil mit RADIUS: `/radius print` zeigt den Eintrag mit `service=wireless`; Anmeldung mit
+      802.1X funktioniert. Benötigte zusätzliche Felder (z. B. `eap-methods`): ______
+- [ ] Monitor: Tab zeigt den Kanal je Radio. **Annahme prüfen:** `/interface/wifi/monitor … once` trennt keine
+      Clients. Ergebnis: ______
+- [ ] Gerät mit `wireless`-Treiber zuweisen und ausrollen → Status „wireless-Treiber“, im Router-Log **keine**
+      Änderung (`/log print where topics~"system"`).
+- [ ] CAPsMAN: Controller mit `/interface wifi capsman set enabled=yes`, einen CAP manuell anmelden. Profil an
+      den Controller zuweisen, ausrollen → Provisioning-Regeln `sdwan:wifi:prov:*` stehen **hinter** vorhandenen
+      Regeln; nach `/interface wifi provisioning` auf dem CAP sendet dieser die SSID. **Annahme prüfen:**
+      `supported-bands`-Werte. Ergebnis: ______
+- [ ] Gäste-Profil: „PSK rotieren“ → neues PSK auf dem Router; Aushang drucken, QR-Code mit iOS und Android
+      scannen → Verbindung ohne Eintippen.
+- [ ] Zuweisung entfernen und ausrollen → alle `sdwan-wifi`-Objekte weg, Werks-WLAN läuft weiter.
+
 ---
 
 ## Ergebnis
@@ -390,3 +420,4 @@ Vorbereitung: WAN eingerichtet (Schritt 4). Auf dem L009 existieren die defconf-
 | 12 Compliance/Suche | ☐ ok ☐ Abweichung | |
 | 13 Scripts | ☐ ok ☐ Abweichung | |
 | 14 Wartung/Speedtest/Syslog | ☐ ok ☐ Abweichung | |
+| 15 WLAN | ☐ ok ☐ Abweichung | |

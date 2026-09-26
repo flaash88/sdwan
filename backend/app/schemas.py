@@ -69,6 +69,7 @@ class TenantCreate(BaseModel):
     contact_email: EmailStr | None = None
     mesh_topology: str = "hub_spoke"
     timezone: str = "Europe/Vienna"
+    country_code: str = Field(default="AT", pattern=r"^[A-Z]{2}$")
 
     @field_validator("timezone")
     @classmethod
@@ -102,6 +103,7 @@ class TenantUpdate(BaseModel):
     is_active: bool | None = None
     mesh_topology: str | None = None
     timezone: str | None = None
+    country_code: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
 
     @field_validator("timezone")
     @classmethod
@@ -123,6 +125,7 @@ class TenantOut(ORM):
     mesh_topology: str
     mesh_subnet: str | None
     timezone: str
+    country_code: str = "AT"
     created_at: dt.datetime
 
 

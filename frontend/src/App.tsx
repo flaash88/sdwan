@@ -9,7 +9,7 @@ import Login from "./pages/Login";
 import Sites from "./pages/Sites";
 import Tenants from "./pages/Tenants";
 import Users from "./pages/Users";
-import { extraRoutes } from "./routes";
+import { extraRoutes, printRoutes } from "./routes";
 
 export default function App() {
   const { me, loading } = useAuth();
@@ -20,6 +20,15 @@ export default function App() {
         <Route path="*" element={<Login />} />
       </Routes>
     );
+  return (
+    <Routes>
+      {printRoutes.map((r) => <Route key={r.path} path={r.path} element={r.element} />)}
+      <Route path="*" element={<Shell />} />
+    </Routes>
+  );
+}
+
+function Shell() {
   return (
     <Layout>
       <Routes>

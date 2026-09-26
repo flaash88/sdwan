@@ -44,7 +44,7 @@ export default function DeviceDetail() {
   if (!d) return dev.error ? <ErrorBox error={dev.error} /> : <Loading rows={5} />;
   const st = fleet.data?.devices[d.id];
   const paired = d.pairing_status === "paired";
-  const tabs = [{ key: "overview", label: "Übersicht" }, ...deviceTabs.filter((t) => !t.pairedOnly || paired)];
+  const tabs = [{ key: "overview", label: "Übersicht" }, ...deviceTabs.filter((t) => (!t.pairedOnly || paired) && (!t.visible || t.visible(d)))];
   const tab = tabs.some((t) => t.key === params.get("tab")) ? params.get("tab")! : "overview";
   const setTab = (k: string) => setParams(k === "overview" ? {} : { tab: k }, { replace: true });
   const counts: Record<string, number | null> = { wan: st?.wan_links || null, vrrp: st?.vrrp.length || null };

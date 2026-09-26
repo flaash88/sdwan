@@ -34,7 +34,7 @@ async def test_selftest_green_in_simulator(client, msp, hub):
     # jeder Pfad aus der zentralen Liste wurde geprüft (keine eigene Feldliste im Test)
     assert {s.key for s in PATH_SPECS} <= set(checks)
     for s in PATH_SPECS:
-        assert checks[s.key]["reachable"] is True and checks[s.key]["ms"] >= 0
+        assert (checks[s.key]["reachable"] is True or s.package) and checks[s.key]["ms"] >= 0
     assert {"version", "architecture", "rights", "service_api", "service_ssh", "clock_skew", "export"} <= set(checks)
     # rein lesend: Router-Tabellen unverändert
     assert rt.tables == before

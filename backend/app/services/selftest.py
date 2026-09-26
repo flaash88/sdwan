@@ -93,6 +93,10 @@ async def _probe(api: DeviceAPI, spec: PathSpec) -> tuple[dict[str, Any], list[d
         else:
             rows = await api.call(spec.command, **params)
     except RouterOSError as exc:
+        if spec.package:  # optionales Paket fehlt: nur die zugehörige Funktion entfällt
+            entry.update({"status": "ok", "reachable": False, "ms": round((time.perf_counter() - t0) * 1000, 1), "error": str(exc), "rows": 0,
+                          "missing": [], "missing_optional": [], "notes": [f"Paket „{spec.package}“ nicht vorhanden – {spec.used_by} entfällt"]})
+            return entry, []
         entry.update({"status": "error", "reachable": False, "ms": round((time.perf_counter() - t0) * 1000, 1), "error": str(exc),
                       "rows": 0, "missing": [], "missing_optional": [], "notes": []})
         return entry, []

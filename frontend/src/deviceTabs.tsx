@@ -7,17 +7,21 @@ import PoliciesTab from "./tabs/PoliciesTab";
 import RemoteTab from "./tabs/RemoteTab";
 import VrrpTab from "./tabs/VrrpTab";
 import WanTab from "./tabs/WanTab";
+import WlanTab from "./tabs/WlanTab";
 
 export interface DeviceTab {
   key: string;
   label: string;
   pairedOnly?: boolean;
+  /** nur anzeigen, wenn das Gerät die Funktion hat (z. B. WLAN) */
+  visible?: (d: Device) => boolean;
   component: ComponentType<{ device: Device }>;
 }
 
 /** Tabs späterer Phasen (WAN, Metriken, Backups, Remote-Zugriff, …). */
 export const deviceTabs: DeviceTab[] = [
   { key: "wan", label: "WAN", pairedOnly: true, component: WanTab },
+  { key: "wlan", label: "WLAN", pairedOnly: true, component: WlanTab, visible: (d) => !!d.facts?.wlan },
   { key: "vrrp", label: "VRRP", pairedOnly: true, component: VrrpTab },
   { key: "metrics", label: "Metriken", pairedOnly: true, component: MetricsTab },
   { key: "backups", label: "Backups", pairedOnly: true, component: BackupsTab },

@@ -35,6 +35,8 @@ class Tenant(IdMixin, Base):
     settings: Mapped[dict] = mapped_column(JSONType, default=dict)
     # IANA-Zeitzone für Zeitangaben in Mails/Berichten
     timezone: Mapped[str] = mapped_column(String(64), default="Europe/Vienna", server_default="Europe/Vienna")
+    # ISO-3166-Ländercode für WLAN (Funkvorschriften), je WLAN-Profil überschreibbar
+    country_code: Mapped[str] = mapped_column(String(2), default="AT", server_default="AT")
 
     sites: Mapped[list[Site]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
 

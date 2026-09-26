@@ -27,6 +27,8 @@ class PathSpec:
     params: dict[str, str] = field(default_factory=dict)
     warn_if_missing: dict[str, str] = field(default_factory=dict)  # optionales Feld -> Warnhinweis
     hints: dict[str, str] = field(default_factory=dict)  # optionales Feld -> Hinweis (grün)
+    # Pfad gehört zu einem optionalen Paket (z. B. "wifi"): fehlt er, ist das kein Fehler, sondern "nicht vorhanden"
+    package: str = ""
 
 
 PATH_SPECS: tuple[PathSpec, ...] = (
@@ -91,6 +93,35 @@ PATH_SPECS: tuple[PathSpec, ...] = (
              optional=("remote", "remote-port", "src-address"), used_by="Syslog (Aktion sdwan-syslog)", must_have_rows=True),
     PathSpec("logging", "Logging-Regeln", "/system/logging/print", fields=("topics", "action"), optional=("prefix", "disabled"),
              used_by="Syslog", must_have_rows=True),
+    # --- WLAN (Phase 19). ANNAHME (Labor): Pfade/Felder des wifi-Pakets; fehlt das Paket, entfällt nur die WLAN-Verwaltung
+    PathSpec("wifi", "WLAN-Interfaces (wifi)", "/interface/wifi/print", fields=("name",),
+             optional=("master-interface", "configuration.ssid", "disabled", "comment"), used_by="WLAN (Erkennung, virtuelle APs)", package="wifi"),
+    PathSpec("wifi_radio", "WLAN-Radios (wifi)", "/interface/wifi/radio/print", optional=("interface", "bands"),
+             used_by="WLAN (Band je Radio)", package="wifi",
+             hints={"bands": "Ohne Bandangabe erhält jedes Radio alle Profile"}),
+    PathSpec("wifi_configuration", "WLAN-Konfigurationen", "/interface/wifi/configuration/print", fields=("name",),
+             optional=("ssid", "country", "security", "datapath", "channel", "hide-ssid"), used_by="WLAN-Profile", package="wifi"),
+    PathSpec("wifi_security", "WLAN-Sicherheit", "/interface/wifi/security/print", fields=("name",),
+             optional=("authentication-types", "passphrase"), used_by="WLAN-Profile", package="wifi"),
+    PathSpec("wifi_datapath", "WLAN-Datapath", "/interface/wifi/datapath/print", fields=("name",),
+             optional=("bridge", "vlan-id", "client-isolation"), used_by="WLAN-Profile (VLAN, Client-Isolation)", package="wifi"),
+    PathSpec("wifi_channel", "WLAN-Kanäle", "/interface/wifi/channel/print", fields=("name",), optional=("width", "band"),
+             used_by="WLAN-Profile (Kanalbreite)", package="wifi"),
+    PathSpec("wifi_registration", "WLAN-Clients (wifi)", "/interface/wifi/registration-table/print",
+             optional=("interface", "mac-address", "signal", "tx-rate", "rx-rate", "uptime"), used_by="WLAN-Status", package="wifi"),
+    PathSpec("wifi_capsman", "CAPsMAN (Controller)", "/interface/wifi/capsman/print", optional=("enabled",), used_by="WLAN (CAPsMAN-Rolle)",
+             package="wifi"),
+    PathSpec("wifi_cap", "CAP (Client)", "/interface/wifi/cap/print", optional=("enabled",), used_by="WLAN (CAP-Rolle)", package="wifi"),
+    PathSpec("wifi_provisioning", "CAPsMAN-Provisioning", "/interface/wifi/provisioning/print",
+             optional=("action", "master-configuration", "slave-configurations", "supported-bands", "comment"),
+             used_by="WLAN über CAPsMAN", package="wifi"),
+    PathSpec("wireless", "WLAN-Interfaces (wireless)", "/interface/wireless/print", fields=("name",),
+             optional=("ssid", "band", "frequency", "disabled", "master-interface"), used_by="WLAN (nur Anzeige, alter Treiber)", package="wireless"),
+    PathSpec("wireless_registration", "WLAN-Clients (wireless)", "/interface/wireless/registration-table/print",
+             optional=("interface", "mac-address", "signal-strength", "tx-rate", "uptime"), used_by="WLAN-Status (alter Treiber)", package="wireless"),
+    PathSpec("scheduler", "Scheduler", "/system/scheduler/print", optional=("name", "start-time", "interval", "on-event", "comment"),
+             used_by="Rechte-Totmannschaltung, WLAN-Zeitplan"),
+    PathSpec("radius", "RADIUS-Server", "/radius/print", optional=("service", "address", "comment"), used_by="WLAN Enterprise (802.1X)"),
     PathSpec("health", "Sensoren", "/system/health/print", optional=("name", "value", "type"), used_by="Übersicht (Temperatur/Spannung)",
              hints={"name": "Modell liefert keine Sensorwerte – Kacheln werden ausgeblendet"}),
     PathSpec("ip_service", "IP-Dienste", "/ip/service/print", fields=("name", "port"), optional=("disabled", "address"),

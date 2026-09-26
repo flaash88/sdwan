@@ -751,6 +751,51 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   - Tab „Log“: Filter nach Text, Topic, Schweregrad und Zeit. `?tab=log&around=<Zeit>` zeigt ±15 Minuten; Absprung
     „Log um diesen Zeitpunkt“ aus dem VRRP-Verlauf und aus den Metriken (Backup-Markierung).
 
+## Phase 19 – WLAN-Verwaltung
+
+* **Erkennung** (`services/wlan.detect`, Poll-Hook alle 10 min → `facts.wlan`): zuerst `/interface/wifi/print`
+  (Paket `wifi`, RouterOS 7), sonst `/interface/wireless/print` (altes Paket `wireless`). Beide fehlen → kein WLAN,
+  `facts.wlan` leer, **kein WLAN-Tab**. Dazu Radios mit Bändern (`/interface/wifi/radio`), CAPsMAN-/CAP-Rolle und
+  Anzahl Clients. Nur lesende Befehle.
+* **Konfiguriert wird nur `wifi`.** Vor jedem Abgleich wird der Treiber neu erkannt; bei `wireless` oder ohne Paket
+  wird **kein** Schreibbefehl gesendet (Status „wireless-Treiber: nur Anzeige“ bzw. „kein WLAN“; Test).
+* **Profile** (`wlan_profiles`, mandantenweit, da sie Schlüssel enthalten): SSID, WPA2/WPA2+3/WPA3-PSK oder
+  WPA2/WPA3-Enterprise mit RADIUS (Server, Port, Secret verschlüsselt), Band, Kanalbreite, Ländercode, VLAN, Bridge,
+  Client-Isolation, versteckt, täglicher Zeitplan, Gäste-WLAN mit optionaler PSK-Rotation.
+  - **Ländercode:** `tenants.country_code` (Standard `AT`, Seite Mandanten), je Profil überschreibbar. Auf dem Router
+    als Ländername (`country=Austria`, Normtabelle `COUNTRIES`).
+  - Das Kürzel ist Teil der Router-Objektnamen und nach dem Anlegen fest.
+* **Zuweisung** (`wlan_assignments`): Geräte/Standorte/Tags (gemeinsame `resolve_targets`), Modus `local` oder
+  `capsman`.
+* **Ausrollen** nur auf Knopfdruck (wie Policies): Änderungen erhöhen die Version; die Liste zeigt „Änderungen nicht
+  ausgerollt“ mit den betroffenen Geräten. Ein Abgleich stellt je Gerät **alle** zugewiesenen Profile her und
+  entfernt nicht mehr zugewiesene (Status je Gerät/Profil in `wlan_device_states`; die Zeile bleibt bis zum
+  erfolgreichen Entfernen stehen).
+  - Router-Objekte `sdwan-wifi-<kürzel>` in `/interface/wifi/security`, `/datapath`, `/channel` (nur bei fester
+    Kanalbreite) und `/configuration`.
+  - **Lokal:** je passendem Radio ein **virtueller AP** (`/interface/wifi add master-interface=<Radio>`, Kommentar
+    `sdwan:wifi:<kürzel>:<radio>`). Physische Radios und vorhandene WLANs werden nie verändert. Ist ein Radio
+    deaktiviert, zeigt der Status einen Hinweis.
+  - **CAPsMAN:** Konfiguration auf dem Controller plus `/interface/wifi/provisioning` je Band (Kommentar
+    `sdwan:wifi:prov:<band>`, erstes Profil `master-configuration`, weitere `slave-configurations`), **hinter**
+    vorhandenen Regeln angefügt – bestehende CAPs werden weiter wie bisher provisioniert. CAPs selbst werden nicht
+    automatisch umgestellt (Gerät verliert dabei seine lokale WLAN-Konfiguration); das bleibt ein manueller Schritt.
+  - **Zeitplan:** `/system/scheduler` `sdwan-wifi-<kürzel>-on|off` (täglich, `interval=1d`), aktiviert/deaktiviert
+    die virtuellen APs des Profils. Wochentage werden nicht unterstützt.
+  - **RADIUS:** `/radius` mit `service=wireless`, Kommentar `sdwan:wifi:<kürzel>`.
+* **Status** (Tab „WLAN“, live): Radios, Kanal (`/interface/wifi/monitor … once`), Clients aus der
+  Registration-Table (MAC, Signal, Raten, Verbindungsdauer), CAPs am Controller. **Keine Nachbarnetze**: ein
+  Scan würde verbundene Clients trennen.
+* **Gäste-PSK:** „PSK rotieren“ erzeugt ein gut lesbares PSK und rollt es aus; optional automatisch alle N Tage
+  (Worker täglich 04:45). Der Aushang (`/print/wlan/<id>`, A4 ohne Navigation) zeigt SSID, PSK und einen QR-Code
+  (`WIFI:T:WPA;S:…;P:…;;`, im Backend mit `segno` als SVG erzeugt). Zugangsdaten abrufen: ab Techniker,
+  protokolliert (`wlan.credentials.view`); Audit-Einträge enthalten nie PSK oder Secret.
+* **Rechte:** Profile anlegen/ändern/löschen Admin; zuweisen, ausrollen, rotieren, Zugangsdaten Techniker+;
+  lesen alle.
+* **Annahmen (Labor):** Pfade und Feldnamen des `wifi`-Pakets (siehe `services/wlan.py` und `PATH_SPECS`
+  `wifi*`), Ländernamen, Werte für `width`/`supported-bands`, `monitor once` ohne Scan. Pfade mit `package` im
+  Selbsttest gelten als „Paket nicht vorhanden“ statt als Fehler.
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

@@ -18,7 +18,7 @@ export default function Tenants() {
     <>
       <PageHeader title="Mandanten" subtitle="Kunden des MSP – strikt voneinander isoliert" actions={<Button onClick={() => setOpen(true)} icon="plus">Mandant</Button>} />
       <Card>
-        <Table head={["Name", "Slug", "Kontakt", "Mesh", "Zeitzone", "Status", "Angelegt", ""]} empty={tenants.data?.length === 0}>
+        <Table head={["Name", "Slug", "Kontakt", "Mesh", "Zeitzone", "WLAN-Land", "Status", "Angelegt", ""]} empty={tenants.data?.length === 0}>
           {tenants.data?.map((t) => (
             <tr key={t.id} className="hover:bg-slate-50">
               <td className="px-3 py-2 font-medium">{t.name}</td>
@@ -29,6 +29,11 @@ export default function Tenants() {
                 <select aria-label={`Zeitzone ${t.name}`} className="h-7 cursor-pointer rounded-md border border-line-strong bg-panel px-1.5 text-xs" value={t.timezone} onChange={(e) => void run(async () => { await api.patch(`/tenants/${t.id}`, { timezone: e.target.value }); await tenants.reload(); })}>
                   {(ZONES.includes(t.timezone) ? ZONES : [t.timezone, ...ZONES]).map((z) => <option key={z} value={z}>{z}</option>)}
                 </select>
+              </td>
+              <td className="px-3 py-2">
+                <input aria-label={`WLAN-Ländercode ${t.name}`} title="ISO-Ländercode für WLAN (Funkvorschriften), je WLAN-Profil überschreibbar" maxLength={2}
+                  className="h-7 w-12 rounded-md border border-line-strong bg-panel px-1.5 text-center font-mono text-xs uppercase" defaultValue={t.country_code ?? "AT"}
+                  onBlur={(e) => { const v = e.target.value.toUpperCase(); if (/^[A-Z]{2}$/.test(v) && v !== t.country_code) void run(async () => { await api.patch(`/tenants/${t.id}`, { country_code: v }); await tenants.reload(); }); }} />
               </td>
               <td className="px-3 py-2">{t.is_active ? <Badge color="green">aktiv</Badge> : <Badge color="red">deaktiviert</Badge>}</td>
               <td className="px-3 py-2 text-slate-500">{fmtDate(t.created_at)}</td>

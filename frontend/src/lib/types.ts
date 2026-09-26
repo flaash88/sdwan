@@ -20,6 +20,7 @@ export interface Tenant {
   mesh_topology: "hub_spoke" | "full_mesh" | "none";
   mesh_subnet: string | null;
   timezone: string;
+  country_code?: string;
   created_at: string;
 }
 

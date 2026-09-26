@@ -22,6 +22,9 @@ class FirewallPolicy(IdMixin, GlobalOrTenantScoped, Base):
     # {"address_lists": [...], "filter": [...], "nat": [...]}
     content: Mapped[dict] = mapped_column(JSONType, default=dict)
     updated_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
+    # Phase 14: "expert" = Rohformat (bisheriges Verhalten), "simple" = Firewall-Editor; content wird aus spec kompiliert
+    mode: Mapped[str] = mapped_column(String(10), default="expert", server_default="expert")
+    spec: Mapped[dict | None] = mapped_column(JSONType)
 
 
 class PolicyVersion(IdMixin, Base):
@@ -33,6 +36,7 @@ class PolicyVersion(IdMixin, Base):
     policy_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("firewall_policies.id", ondelete="CASCADE"), index=True)
     version: Mapped[int] = mapped_column(Integer)
     content: Mapped[dict] = mapped_column(JSONType, default=dict)
+    spec: Mapped[dict | None] = mapped_column(JSONType)  # Phase 14: Editor-Stand dieser Version (nur mode=simple)
     note: Mapped[str | None] = mapped_column(String(500))
     created_by: Mapped[str | None] = mapped_column(String(255))
 

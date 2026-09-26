@@ -564,6 +564,79 @@ Die Checkliste für den Test steht in `docs/LABORTEST.md`.
   `[{name, value, unit}]` überführt (nur Zahlenwerte in C/V/A/W). Die Kacheln Temperatur (CPU bevorzugt)
   und Spannung erscheinen nur, wenn Werte vorhanden sind. Es gibt keine Alarmregel darauf.
 
+## Phase 14 – Firewall-Editor (vereinfacht)
+
+Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
+
+* **Kompilieren statt neuer Push-Logik:** Eine Policy ist `mode=expert` (bisheriges Rohformat, Standard für
+  alle bestehenden Policies und die API) oder `mode=simple`. Bei `simple` hält `spec` den Editor-Stand.
+  `services/fw_compile.py` erzeugt daraus `content` im bestehenden Format `{address_lists, filter, nat}`,
+  danach läuft `validate_content`. Push, Versionierung (`PolicyVersion.spec`), Rollback und
+  `policy.render()` sind unverändert.
+* **Objekte, Dienste, Zonen, Bausteine** (`fw_objects`, `fw_services`, `fw_zones`, `fw_blocks`) sind global
+  (MSP) oder mandantenweit. Vordefinierte Einträge kommen aus `app/seeds/firewall.json` (`builtin`,
+  `seed_key`, idempotent beim Start). Sie sind schreibgeschützt; „Kopieren“ erzeugt einen eigenen Eintrag.
+  Bausteine pflegen nur Admins, globale Einträge nur der MSP. Globale Policies dürfen nur globale Einträge
+  referenzieren.
+* **Namen auf dem Router:**
+  - Objekte werden zu `sdwan-obj-<kürzel>`; mehrere Objekte in einer Regel zu `sdwan-r-<id>-src|dst`,
+    denn RouterOS erlaubt nur eine Address-List je Seite.
+  - Zonen werden zu `sdwan-zone-<kürzel>`. Die Zone mit `source=wan` nutzt die bestehende Liste `sdwan-wan`
+    der WAN-Konfiguration.
+  - Kommentare: `r:<regel-id>` für Editor-Regeln, `base:<name>` für Grundregeln.
+* **Zonen je Gerät:** `device_zone_members` (Interface → Zone), gesetzt über `PUT /devices/{id}/zones`
+  (Firewall-Tab) oder die ZTP-Vorlage (`zones: {kürzel: [interfaces]}`).
+  - `services/zones.py` verwaltet `/interface/list` und `/interface/list/member` mit `sdwan:zone:`.
+  - Vor dem Push einer einfachen Policy legt `run_deployment` die referenzierten Listen an, denn RouterOS
+    lehnt Regeln mit unbekannter Interface-List ab. Das ist rein additiv, nur für `simple`.
+* **Grundregeln** (grau, nicht editierbar), in dieser Reihenfolge:
+  1. **Plattform-Zugänge, immer:** Hub über `sdwan-mgmt`, Mesh-Port, VRRP, ICMP. Ein Default-Drop darf
+     Plattform, Mesh und VRRP nie aussperren, und die Reihenfolge verwalteter Regeln verschiedener Tags ist
+     nicht garantiert.
+  2. established/related/untracked accept, invalid drop (input und forward).
+  3. Verwaltungsports (`21,22,23,80,443,8728,8729,8291`) nur aus Zonen mit `management=true` bzw. über
+     den Tunnel.
+  4. Am Ende Default-Drop input/forward. Abschaltbar, mit Warnung.
+
+  Nur IPv4 (`/ip firewall`); IPv6 bleibt unverändert.
+* **Einfügeposition:** Verwaltete Regeln kommen per `place_first` vor die erste nicht verwaltete Regel, stehen
+  also **oben** im Regelwerk. Der Editor zeigt das an.
+* **Vorprüfung** (`services/fw_deploy_check.py`, Entscheidung 17):
+  - Bei Default-Drop liest die Plattform die nicht verwalteten, aktiven Filterregeln (input/forward) jedes
+    Zielgeräts und listet sie in Deploy-Dialog und `deploy-check`.
+  - Diese Geräte werden **übersprungen** (Deployment-Ergebnis `skipped`, Status `partial`). Ausgerollt wird
+    nur mit `confirm_devices`.
+  - ZTP weist solche Policies gar nicht zu, weil dort keine Bestätigung möglich ist.
+* **Lint** (`services/fw_lint.py`):
+  - verdeckte und doppelte Regeln;
+  - any→any accept;
+  - leere Objekte/Dienste;
+  - Zonen ohne Interface bzw. ohne WAN auf Zielgeräten;
+  - Portweiterleitung ohne Forward-Regel;
+  - kein Router-Zugriff bei Default-Drop;
+  - Default-Drop nicht als letzte Policy;
+  - Management-Zone ohne Interface (Fehler: „Lokaler Zugriff … nur noch über den Tunnel“).
+
+  Fehler erfordern `confirm_lint` beim Deploy.
+* **Vorschau:** `POST /policies/{id}/preview` liefert RouterOS-Befehle, Diff zur zuletzt ausgerollten Version
+  (`make_diff`) und Lint. Liste und Editor zeigen „Änderungen nicht ausgerollt“ samt Geräten
+  (`undeployed`).
+* **Trefferzähler:**
+  - Der Poll-Hook `fw_hits` liest alle 5 Minuten `packets`/`bytes` der `sdwan:fw:`-Regeln.
+  - Die Zuordnung zur Editor-Regel läuft über den Kommentar. `fw_rule_hits` speichert je Gerät
+    `last_hit_at`; ein sinkender Zähler gilt als Reset.
+  - `POST /devices/{id}/firewall/reset-counters` (Techniker) setzt nur verwaltete Regeln zurück.
+* **Objekte ändern:** Einfache Policies, die das Objekt (auch über Gruppen) nutzen, werden neu kompiliert und
+  bekommen eine neue Version. Es gibt **kein** automatisches Deploy.
+* **Umwandeln:**
+  - einfach → Experte: jederzeit, `content` bleibt gleich.
+  - Experte → einfach: nur mit Bestätigung. Die bisherigen Regeln werden unverändert als Rohregeln
+    übernommen; Grundregeln und Default-Drop sind zunächst aus, der kompilierte Inhalt muss identisch
+    bleiben.
+* **Annahmen (Labor):** Address-List-Bereiche `a-b`, `protocol=vrrp`, `reset-counters` mit `.id`,
+  Interface-Listen-Felder. Siehe LABORTEST und Selbsttest (`interface_list`, `interface_list_member`,
+  `packets` in `fw_filter`).
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

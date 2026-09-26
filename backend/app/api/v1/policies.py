@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -21,12 +21,15 @@ class PolicyIn(BaseModel):
     description: str | None = None
     content: dict[str, Any] = {}
     note: str | None = None
+    mode: Literal["expert", "simple"] = "expert"  # Default expert: bestehende API-Nutzer unverändert
+    spec: dict[str, Any] | None = None
 
 
 class PolicyPatch(BaseModel):
     name: str | None = None
     description: str | None = None
     content: dict[str, Any] | None = None
+    spec: dict[str, Any] | None = None  # nur mode=simple
     note: str | None = None
 
 
@@ -40,20 +43,45 @@ class Targets(BaseModel):
 class DeployIn(BaseModel):
     device_ids: list[uuid.UUID] | None = None  # None = alle zugewiesenen Geräte (im aktuellen Scope)
     atomic: bool = False
+    # Phase 14 (nur einfache Policies): Geräte mit manuellen Regeln hinter dem Default-Drop ausdrücklich bestätigen
+    confirm_devices: list[uuid.UUID] = []
+    confirm_lint: bool = False  # Lint-Fehler (z. B. Management-Zone fehlt) bestätigt
 
 
 class RollbackIn(BaseModel):
     version: int
     deploy: bool = True
     atomic: bool = False
+    confirm_devices: list[uuid.UUID] = []
+    confirm_lint: bool = False
 
 
-def _policy_out(p: FirewallPolicy, assigned: int | None = None) -> dict:
+def _policy_out(p: FirewallPolicy, assigned: int | None = None, undeployed: list[dict] | None = None) -> dict:
     return {
         "id": str(p.id), "name": p.name, "description": p.description, "version": p.version,
         "scope": "global" if p.tenant_id is None else "tenant", "tenant_id": str(p.tenant_id) if p.tenant_id else None,
         "content": p.content, "updated_at": p.updated_at, "created_at": p.created_at, "assigned_devices": assigned,
+        "mode": p.mode or "expert", "spec": p.spec,
+        # Geräte, auf denen nicht die aktuelle Version läuft („Änderungen nicht ausgerollt“)
+        "undeployed": undeployed if undeployed is not None else [],
     }
+
+
+async def _compile(ctx: Ctx, spec: dict[str, Any], tenant_id: uuid.UUID | None) -> dict[str, Any]:
+    from app.api.v1.firewall import catalog, check_scope, compile_and_validate
+
+    cat = await catalog(ctx, tenant_id)
+    check_scope(spec, cat, tenant_id)
+    return compile_and_validate(spec, cat)
+
+
+def _spec(spec: dict[str, Any] | None) -> dict[str, Any]:
+    from app.services.fw_compile import SpecError, normalize_spec
+
+    try:
+        return normalize_spec(spec or {})
+    except SpecError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 
 
 def _can_edit(ctx: Ctx, p: FirewallPolicy) -> None:
@@ -72,19 +100,29 @@ def _norm(content: dict[str, Any]) -> dict[str, Any]:
 async def list_policies(ctx: Ctx = ReadCtx) -> list[dict]:
     pols = (await ctx.db.execute(select(FirewallPolicy).order_by(FirewallPolicy.name))).scalars().all()
     counts: dict[uuid.UUID, int] = {}
-    for a in (await ctx.db.execute(select(PolicyAssignment))).scalars():
+    stale: dict[uuid.UUID, list[dict]] = {}
+    version = {p.id: p.version for p in pols}
+    for a, d in (await ctx.db.execute(select(PolicyAssignment, Device).join(Device, Device.id == PolicyAssignment.device_id))).all():
         counts[a.policy_id] = counts.get(a.policy_id, 0) + 1
-    return [_policy_out(p, counts.get(p.id, 0)) for p in pols]
+        if a.deployed_version != version.get(a.policy_id):
+            stale.setdefault(a.policy_id, []).append({"device_id": str(d.id), "name": d.name, "deployed_version": a.deployed_version})
+    return [_policy_out(p, counts.get(p.id, 0), stale.get(p.id, [])) for p in pols]
 
 
 @router.post("/policies", status_code=201)
 async def create_policy(data: PolicyIn, ctx: Ctx = TechCtx) -> dict:
-    content = _norm(data.content)
+    spec = None
+    if data.mode == "simple":
+        spec = _spec(data.spec)
+        content = await _compile(ctx, spec, ctx.tenant_id)
+    else:
+        content = _norm(data.content)
     # MSP ohne gewählten Tenant -> globale Policy
-    p = FirewallPolicy(tenant_id=ctx.tenant_id, name=data.name, description=data.description, content=content, version=1, updated_at=utcnow())
+    p = FirewallPolicy(tenant_id=ctx.tenant_id, name=data.name, description=data.description, content=content, version=1, updated_at=utcnow(),
+                       mode=data.mode, spec=spec)
     ctx.db.add(p)
     await ctx.db.flush()
-    ctx.db.add(PolicyVersion(policy_id=p.id, version=1, content=content, note=data.note or "initial", created_by=ctx.user.email))
+    ctx.db.add(PolicyVersion(policy_id=p.id, version=1, content=content, spec=spec, note=data.note or "initial", created_by=ctx.user.email))
     await ctx.audit("policy.create", target_type="policy", target_id=p.id, details={"name": p.name, "scope": "global" if p.tenant_id is None else "tenant"})
     await ctx.db.commit()
     return _policy_out(p, 0)
@@ -95,7 +133,8 @@ async def get_policy(policy_id: uuid.UUID, ctx: Ctx = ReadCtx) -> dict:
     p = await get_or_404(ctx.db, FirewallPolicy, policy_id, "Policy")
     assigns = (await ctx.db.execute(select(PolicyAssignment, Device).join(Device, Device.id == PolicyAssignment.device_id)
                                     .where(PolicyAssignment.policy_id == p.id).order_by(Device.name))).all()
-    out = _policy_out(p, len(assigns))
+    out = _policy_out(p, len(assigns), [{"device_id": str(d.id), "name": d.name, "deployed_version": a.deployed_version}
+                                         for a, d in assigns if a.deployed_version != p.version])
     out["assignments"] = [
         {"device_id": str(d.id), "device": d.name, "position": a.position, "status": a.status,
          "deployed_version": a.deployed_version, "deployed_at": a.deployed_at, "last_error": a.last_error}
@@ -112,6 +151,17 @@ async def update_policy(policy_id: uuid.UUID, data: PolicyPatch, ctx: Ctx = Tech
         p.name = data.name
     if data.description is not None:
         p.description = data.description
+    if data.content is not None and p.mode == "simple":
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Einfache Policy: Regeln über den Editor (spec) ändern oder in den Expertenmodus umwandeln")
+    if data.spec is not None and p.mode != "simple":
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "spec gibt es nur bei einfachen Policies")
+    if data.spec is not None:
+        spec = _spec(data.spec)
+        content = await _compile(ctx, spec, p.tenant_id)
+        if content != p.content or spec != p.spec:
+            p.version += 1
+            p.content, p.spec = content, spec
+            ctx.db.add(PolicyVersion(policy_id=p.id, version=p.version, content=content, spec=spec, note=data.note, created_by=ctx.user.email))
     if data.content is not None:
         content = _norm(data.content)
         if content != p.content:
@@ -139,7 +189,7 @@ async def delete_policy(policy_id: uuid.UUID, ctx: Ctx = TechCtx) -> None:
 async def versions(policy_id: uuid.UUID, ctx: Ctx = ReadCtx) -> list[dict]:
     p = await get_or_404(ctx.db, FirewallPolicy, policy_id, "Policy")
     rows = (await ctx.db.execute(select(PolicyVersion).where(PolicyVersion.policy_id == p.id).order_by(PolicyVersion.version.desc()))).scalars()
-    return [{"version": v.version, "content": v.content, "note": v.note, "created_by": v.created_by, "created_at": v.created_at} for v in rows]
+    return [{"version": v.version, "content": v.content, "spec": v.spec, "note": v.note, "created_by": v.created_by, "created_at": v.created_at} for v in rows]
 
 
 @router.post("/policies/{policy_id}/assign")
@@ -186,28 +236,63 @@ async def unassign(policy_id: uuid.UUID, device_id: uuid.UUID, bg: BackgroundTas
     return {"deployment_id": str(dep.id) if dep else None}
 
 
-async def _start(ctx: Ctx, bg: BackgroundTasks, p: FirewallPolicy, device_ids: list[uuid.UUID] | None, atomic: bool) -> PolicyDeployment:
+async def _start(ctx: Ctx, bg: BackgroundTasks, p: FirewallPolicy, device_ids: list[uuid.UUID] | None, atomic: bool,
+                 confirm_devices: list[uuid.UUID] | None = None, confirm_lint: bool = False) -> PolicyDeployment:
     assigns = (await ctx.db.execute(select(PolicyAssignment).where(PolicyAssignment.policy_id == p.id))).scalars().all()
     targets = [a.device_id for a in assigns if device_ids is None or a.device_id in device_ids]
     if not targets:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Keine zugewiesenen Geräte im Ziel")
+    skipped: list[dict] = []
+    if p.mode == "simple":
+        targets, skipped = await _simple_precheck(ctx, p, targets, set(confirm_devices or []), confirm_lint)
     tenants = {a.tenant_id for a in assigns if a.device_id in targets}
     dep = PolicyDeployment(tenant_id=tenants.pop() if len(tenants) == 1 else None, policy_id=p.id, policy_version=p.version,
                            atomic=atomic, started_by=ctx.user.email)
     ctx.db.add(dep)
     await ctx.db.flush()
+    if skipped:
+        dep.results = {s["device_id"]: {"name": s["name"], "ok": False, "skipped": True, "error": s["reason"]} for s in skipped}
     await ctx.audit("policy.deploy", target_type="policy", target_id=p.id,
-                    details={"deployment": str(dep.id), "version": p.version, "devices": [str(t) for t in targets], "atomic": atomic})
+                    details={"deployment": str(dep.id), "version": p.version, "devices": [str(t) for t in targets], "atomic": atomic,
+                             "skipped": skipped, "confirmed_devices": [str(d) for d in confirm_devices or []], "confirm_lint": confirm_lint})
     await ctx.db.commit()
+    dep.skipped = skipped  # type: ignore[attr-defined]
     bg.add_task(run_deployment, dep.id, targets)
     return dep
+
+
+async def _simple_precheck(ctx: Ctx, p: FirewallPolicy, targets: list[uuid.UUID], confirmed: set[uuid.UUID],
+                           confirm_lint: bool) -> tuple[list[uuid.UUID], list[dict]]:
+    """Einfache Policies: Lint-Fehler nur mit Bestätigung; Geräte mit manuellen Regeln hinter dem Default-Drop
+    werden ohne ausdrückliche Bestätigung übersprungen (Entscheidung 17)."""
+    from app.api.v1.firewall import catalog
+    from app.services.fw_deploy_check import check_devices, device_contexts
+    from app.services.fw_lint import lint_spec
+
+    devices = list((await ctx.db.execute(select(Device).where(Device.id.in_(targets)))).scalars())
+    issues = lint_spec(p.spec or {}, await catalog(ctx, p.tenant_id), await device_contexts(ctx.db, p, devices))
+    errors = [i for i in issues if i["level"] == "error"]
+    if errors and not confirm_lint:
+        raise HTTPException(status.HTTP_409_CONFLICT, {"message": "Prüfung mit Fehlern – Deploy nur nach Bestätigung", "lint": errors})
+    checks = await check_devices(p, devices)
+    keep, skipped = [], []
+    for d in devices:
+        c = checks.get(str(d.id), {})
+        if c.get("unmanaged") and d.id not in confirmed:
+            skipped.append({"device_id": str(d.id), "name": d.name, "unmanaged": c["unmanaged"],
+                            "reason": f"{len(c['unmanaged'])} manuelle Regeln würden hinter dem Default-Drop nie mehr greifen – nicht bestätigt"})
+        else:
+            keep.append(d.id)
+    if not keep:
+        raise HTTPException(status.HTTP_409_CONFLICT, {"message": "Alle Geräte übersprungen (manuelle Regeln hinter dem Default-Drop)", "skipped": skipped})
+    return keep, skipped
 
 
 @router.post("/policies/{policy_id}/deploy", status_code=202)
 async def deploy(policy_id: uuid.UUID, data: DeployIn, bg: BackgroundTasks, ctx: Ctx = TechCtx) -> dict:
     p = await get_or_404(ctx.db, FirewallPolicy, policy_id, "Policy")
-    dep = await _start(ctx, bg, p, data.device_ids, data.atomic)
-    return {"deployment_id": str(dep.id), "status": dep.status}
+    dep = await _start(ctx, bg, p, data.device_ids, data.atomic, data.confirm_devices, data.confirm_lint)
+    return {"deployment_id": str(dep.id), "status": dep.status, "skipped": getattr(dep, "skipped", [])}
 
 
 @router.post("/policies/{policy_id}/rollback", status_code=202)
@@ -219,13 +304,16 @@ async def rollback(policy_id: uuid.UUID, data: RollbackIn, bg: BackgroundTasks, 
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Version nicht gefunden")
     p.version += 1
     p.content = old.content
+    if p.mode == "simple" and old.spec is not None:
+        p.spec = old.spec
     p.updated_at = utcnow()
-    ctx.db.add(PolicyVersion(policy_id=p.id, version=p.version, content=old.content, note=f"Rollback auf v{data.version}", created_by=ctx.user.email))
+    ctx.db.add(PolicyVersion(policy_id=p.id, version=p.version, content=old.content, spec=old.spec if p.mode == "simple" else None,
+                             note=f"Rollback auf v{data.version}", created_by=ctx.user.email))
     await ctx.audit("policy.rollback", target_type="policy", target_id=p.id, details={"to_version": data.version, "new_version": p.version})
     await ctx.db.flush()
     if data.deploy:
-        dep = await _start(ctx, bg, p, None, data.atomic)
-        return {"version": p.version, "deployment_id": str(dep.id)}
+        dep = await _start(ctx, bg, p, None, data.atomic, data.confirm_devices, data.confirm_lint)
+        return {"version": p.version, "deployment_id": str(dep.id), "skipped": getattr(dep, "skipped", [])}
     await ctx.db.commit()
     return {"version": p.version, "deployment_id": None}
 
@@ -358,3 +446,97 @@ async def import_firewall(device_id: uuid.UUID, data: ImportIn, ctx: Ctx = TechC
                              "warnings": warnings[:20]})
     await ctx.db.commit()
     return result
+
+
+# ----------------------------------------------------------------------------- Phase 14: einfacher Modus
+class ConvertIn(BaseModel):
+    to: Literal["expert", "simple"]
+    confirm: bool = False  # Experte -> einfach: Warnung bestätigt
+
+
+class PreviewIn(BaseModel):
+    spec: dict[str, Any] | None = None  # Entwurf; ohne Angabe die gespeicherte Version
+
+
+@router.post("/policies/{policy_id}/convert")
+async def convert(policy_id: uuid.UUID, data: ConvertIn, ctx: Ctx = TechCtx) -> dict:
+    """einfach -> Experte jederzeit (content bleibt identisch). Experte -> einfach nur mit Bestätigung: die bisherigen
+    Regeln werden unverändert als Rohregeln übernommen, Grundregeln und Default-Drop sind zunächst aus."""
+    from app.services.fw_compile import expert_to_simple
+
+    p = await get_or_404(ctx.db, FirewallPolicy, policy_id, "Policy")
+    _can_edit(ctx, p)
+    if (p.mode or "expert") == data.to:
+        return _policy_out(p)
+    if data.to == "expert":
+        p.mode = "expert"
+        note = "In Expertenmodus umgewandelt"
+    else:
+        if not data.confirm:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Nicht alles ist im einfachen Modus abbildbar: die bestehenden Regeln werden als "
+                                                          "Rohregeln übernommen und bleiben unverändert wirksam. Bitte bestätigen.")
+        spec = expert_to_simple(p.content)
+        content = await _compile(ctx, spec, p.tenant_id)
+        if content != p.content:  # darf sich durch die Umwandlung nicht ändern
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Umwandlung würde die Regeln verändern – abgebrochen")
+        p.mode, p.spec = "simple", spec
+        note = "In einfachen Modus umgewandelt (Regeln als Rohregeln)"
+    p.version += 1
+    p.updated_at = utcnow()
+    ctx.db.add(PolicyVersion(policy_id=p.id, version=p.version, content=p.content, spec=p.spec if p.mode == "simple" else None,
+                             note=note, created_by=ctx.user.email))
+    await ctx.audit("policy.convert", target_type="policy", target_id=p.id, details={"to": data.to, "version": p.version})
+    await ctx.db.commit()
+    return _policy_out(p)
+
+
+@router.post("/policies/{policy_id}/preview")
+async def preview(policy_id: uuid.UUID, data: PreviewIn, ctx: Ctx = ReadCtx) -> dict:
+    """RouterOS-Befehle, Diff zur zuletzt ausgerollten Version und Lint – vor dem Speichern/Pushen."""
+    from app.api.v1.firewall import catalog
+    from app.services.backup import make_diff
+    from app.services.fw_compile import to_commands
+    from app.services.fw_deploy_check import device_contexts
+    from app.services.fw_lint import lint_spec
+    from app.services.policy import render
+
+    p = await get_or_404(ctx.db, FirewallPolicy, policy_id, "Policy")
+    if p.mode == "simple":
+        spec = _spec(data.spec if data.spec is not None else p.spec)
+        content = await _compile(ctx, spec, p.tenant_id)
+        devices = list((await ctx.db.execute(select(Device).join(PolicyAssignment, PolicyAssignment.device_id == Device.id)
+                                             .where(PolicyAssignment.policy_id == p.id))).scalars())
+        lint = lint_spec(spec, await catalog(ctx, p.tenant_id), await device_contexts(ctx.db, p, devices))
+    else:
+        content, lint = p.content, []
+    commands = to_commands(render([(p, content)]))
+    deployed = [a.deployed_version for a in (await ctx.db.execute(select(PolicyAssignment).where(PolicyAssignment.policy_id == p.id))).scalars()
+                if a.deployed_version]
+    base_version = max(deployed) if deployed else None
+    old_cmds: list[str] = []
+    if base_version:
+        old = (await ctx.db.execute(select(PolicyVersion).where(PolicyVersion.policy_id == p.id, PolicyVersion.version == base_version))).scalar_one_or_none()
+        if old is not None:
+            old_cmds = to_commands(render([(p, old.content)]))
+    diff = make_diff("\n".join(old_cmds) + "\n", "\n".join(commands) + "\n")
+    return {"content": content, "commands": commands, "diff": diff, "deployed_version": base_version, "lint": lint,
+            "placement": "Verwaltete Regeln werden oben eingefügt – vor der ersten manuellen Regel des Routers."}
+
+
+@router.post("/policies/{policy_id}/deploy-check")
+async def deploy_check(policy_id: uuid.UUID, data: DeployIn, ctx: Ctx = TechCtx) -> dict:
+    """Vorprüfung je Zielgerät: manuelle Regeln hinter dem Default-Drop, Lint-Fehler (z. B. Management-Zone)."""
+    from app.api.v1.firewall import catalog
+    from app.services.fw_deploy_check import check_devices, device_contexts, has_default_drop
+    from app.services.fw_lint import lint_spec
+
+    p = await get_or_404(ctx.db, FirewallPolicy, policy_id, "Policy")
+    assigns = (await ctx.db.execute(select(PolicyAssignment).where(PolicyAssignment.policy_id == p.id))).scalars().all()
+    ids = [a.device_id for a in assigns if data.device_ids is None or a.device_id in data.device_ids]
+    devices = list((await ctx.db.execute(select(Device).where(Device.id.in_(ids)))).scalars()) if ids else []
+    if p.mode != "simple":
+        return {"default_drop": False, "devices": [{"device_id": str(d.id), "name": d.name, "unmanaged": []} for d in devices], "lint": []}
+    lint = lint_spec(p.spec or {}, await catalog(ctx, p.tenant_id), await device_contexts(ctx.db, p, devices))
+    checks = await check_devices(p, devices)
+    return {"default_drop": has_default_drop(p), "lint": lint,
+            "devices": [{"device_id": k, **v} for k, v in checks.items()]}

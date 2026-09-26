@@ -167,11 +167,15 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
         dep.status = "running"
         await db.commit()
         devices = [d for d in (await db.execute(select(Device).where(Device.id.in_(device_ids)))).scalars()]
-        results: dict[str, Any] = {}
+        results: dict[str, Any] = dict(dep.results or {})  # übersprungene Geräte (Phase-14-Vorprüfung) bleiben erhalten
         snaps: dict[uuid.UUID, dict[str, Any]] = {}
         sem = asyncio.Semaphore(10)
         # DB-Zugriffe vorab (AsyncSession ist nicht für parallele Nutzung gedacht)
         assigned = {d.id: await device_policies(db, d.id) for d in devices}
+        # Phase 14: Geräte mit einfachen Policies brauchen die Zonen-Interface-Lists vor dem Push
+        from app.services.zones import device_zone_config, push_zones
+
+        zone_cfg = {d.id: await device_zone_config(db, d) for d in devices if any(p.mode == "simple" for _a, p in assigned[d.id])}
 
         async def one(dev: Device) -> None:
             res: dict[str, Any] = {"name": dev.name, "ok": False}
@@ -186,6 +190,8 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
                     async with connect_device(dev) as api:
                         snaps[dev.id] = await snapshot(api)
                         try:
+                            if dev.id in zone_cfg:
+                                res["zones"] = await push_zones(api, zone_cfg[dev.id])
                             res["stats"] = await push(api, cfg)
                             res["ok"] = True
                         except RouterOSError as exc:
@@ -220,7 +226,8 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
                     a.status, a.last_error = "rolled_back", "atomarer Rollback wegen Fehlern auf anderen Geräten"
             dep.status = "rolled_back"
         elif not failed:
-            dep.status = "success"
+            # Phase 14: übersprungene Geräte (nicht bestätigt) -> teilweise ausgerollt
+            dep.status = "partial" if any(v.get("skipped") for v in results.values()) else "success"
         elif ok:
             dep.status = "partial"
         else:

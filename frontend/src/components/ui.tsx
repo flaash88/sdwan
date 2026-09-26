@@ -137,6 +137,16 @@ export function Toggle({ checked, onChange, label, disabled }: { checked: boolea
   );
 }
 
+/** Schalter mit sichtbarer Beschriftung. */
+export function ToggleField({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
+  return (
+    <span className="flex items-center gap-2.5">
+      <Toggle checked={checked} onChange={onChange} label={label} disabled={disabled} />
+      <span className={cls("text-sm", disabled && "text-fg3")} aria-hidden>{label}</span>
+    </span>
+  );
+}
+
 /* ----------------------------------------------------------------------------- Badges */
 export type Tone = "green" | "red" | "orange" | "blue" | "gray" | "neutral";
 const toneCls: Record<Tone, string> = {

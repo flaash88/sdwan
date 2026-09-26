@@ -42,6 +42,7 @@ Installation auf einem Server: [INSTALL.md](INSTALL.md) · Aufbau und Design-Ent
 | 11 | VRRP & Backup-Transparenz: VRRP-Backup hinter zentralem Master (z. B. FortiGate) mit gekoppeltem WAN, Verbindungs-Flush im Failover, Alarme VRRP-Master / Backup-WAN aktiv / Datenvolumen (80 %/100 %), Monatslimit je WAN, SLA-Zeiten auf Backup, Webhooks (JSON/Teams) | ✅ |
 | 12 | Branding & Mail-Layout: Produktname konfigurierbar, HTML-Mails (Outlook-tauglich, Klartext-Fallback) mit Statusbalken, Kontext je Alarmtyp, nächsten Schritten, lokaler Zeitzone je Mandant, einheitliche Betreffzeilen, Mail-Vorschau | ✅ |
 | 13 | Labortest-Werkzeuge: Hardware-Selbsttest (Pfade, Felder, Rechte, Dienste, Uhrzeit; JSON-Export), Neustart mit Offline-Alarm-Unterdrückung (manuell 5 min, Firmware-Update 10 min), VRRP-Gegenstelle mit Ping, Backup-Auslöser/Ersteller/Prüfsumme und Backup nach Policy-Push, IP-Adressen je Interface, Temperatur/Spannung falls vorhanden. Checkliste: [`docs/LABORTEST.md`](docs/LABORTEST.md) | ✅ |
+| 14 | Firewall-Editor (einfach): Zonen, Netzwerk-Objekte, Dienste, Bausteine als Seed-Daten, Grundregeln mit Plattform-Zugängen, Drag & Drop, Lint, Vorschau mit Diff, Vorprüfung auf manuelle Regeln, Trefferzähler; Expertenmodus bleibt | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

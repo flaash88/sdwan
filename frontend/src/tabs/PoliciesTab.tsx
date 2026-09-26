@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import DeviceZones from "../components/fw/DeviceZones";
 import { Badge, Button, Card, Checkbox, ErrorBox, Input, Modal, StatusBadge, Table, cls, useAction } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -45,6 +46,8 @@ export default function PoliciesTab({ device }: { device: Device }) {
           ))}
         </Table>
       </Card>
+
+      <DeviceZones device={device} />
 
       <Card
         title={

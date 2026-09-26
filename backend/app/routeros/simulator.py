@@ -214,6 +214,10 @@ class SimRouter:
                     r.setdefault("last-handshake", f"{self.rng.randint(1, 90)}s")
                     r.setdefault("rx", self.rng.randint(10**5, 10**8))
                     r.setdefault("tx", self.rng.randint(10**5, 10**8))
+            if path in ("/ip/firewall/filter", "/ip/firewall/nat"):
+                for r in rows:  # Trefferzähler wie RouterOS (Tests setzen packets/bytes direkt in der Tabelle)
+                    r.setdefault("packets", "0")
+                    r.setdefault("bytes", "0")
             if params.get(".proplist"):
                 keep = set(str(params[".proplist"]).split(","))
                 rows = [{k: v for k, v in r.items() if k in keep} for r in rows]
@@ -234,6 +238,10 @@ class SimRouter:
             row.update({k: _s(v) for k, v in params.items()})
             return []
         if action == "renew":
+            return []
+        if action == "reset-counters":
+            row = self._find(path, params[".id"])
+            row["packets"], row["bytes"] = "0", "0"
             return []
         if action == "remove":
             row = self._find(path, params[".id"])
@@ -401,6 +409,9 @@ def _seed_extras(r: SimRouter) -> None:
     if not any(p.get("comment") == "sdwan:hub" for p in r.tables["/interface/wireguard/peers"]):
         r._insert("/interface/wireguard/peers", {"interface": s.wg_device_interface, "public-key": _fake_key("hub"),
                                                  "allowed-address": f"{s.wg_hub_ip}/32", "comment": "sdwan:hub"})
+    if not any(x.get("builtin") == "true" for x in r.tables["/interface/list"]):
+        for name in ("all", "none", "dynamic", "static"):  # wie RouterOS: eingebaute Listen
+            r.tables["/interface/list"].insert(0, {".id": f"*B{name}", "name": name, "builtin": "true"})
     if not r.tables["/ip/firewall/connection"]:
         r._insert("/ip/firewall/connection", {"protocol": "udp", "src-address": "100.64.0.2:13231", "dst-address": f"203.0.113.10:{s.wg_hub_port}",
                                               "reply-src-address": f"203.0.113.10:{s.wg_hub_port}", "reply-dst-address": "100.64.0.2:13231"})

@@ -353,3 +353,24 @@ Parameter wie Zone oder Objekt werden beim Einfügen per Auswahl gesetzt.
 
 ## Stand der Phasen
 (wird nach jeder Phase ergänzt)
+
+### Stand Phase 14 – Firewall-Editor
+- **Erledigt:**
+  - Objekte (Host/Netz/Bereich/Gruppe), Dienste und Dienstgruppen, Zonen, Bausteine; alle Seeds als JSON.
+  - Compiler ins bestehende Format, Grundregeln inkl. Plattform-Zugänge, NAT (Masquerade,
+    Portweiterleitung, Umleitung).
+  - Zonen je Gerät und per ZTP.
+  - Lint inkl. Management-Zone, Vorschau/Diff, Vorprüfung „manuelle Regeln hinter Default-Drop“ (Überspringen
+    ohne Bestätigung, auch bei ZTP).
+  - Trefferzähler inkl. Reset, Umwandlung einfach ↔ Experte, „Änderungen nicht ausgerollt“.
+  - UI: Editor mit Drag & Drop und Alt+Pfeil, Objektverwaltung, Zonen im Firewall-Tab.
+- **Weggelassen:**
+  - IPv6-Firewall: nur IPv4; IPv6 wird nicht angefasst.
+  - Automatisches Deploy nach Objektänderung (Entscheidung 5).
+  - Baustein „Threat-Feeds eingehend verwerfen“ folgt mit Phase 15.
+- **Im Labor zu verifizieren:**
+  - `protocol=vrrp`;
+  - Address-List-Bereiche `a-b`;
+  - `reset-counters` mit `.id`;
+  - Verhalten von defconf-Regeln hinter dem Default-Drop;
+  - Interface-Listen-Felder (Selbsttest).

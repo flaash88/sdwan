@@ -84,6 +84,19 @@ def validate_template(c: dict[str, Any]) -> dict[str, Any]:
             raise TemplateError(f"WAN-Vorlage ungültig: {exc}") from exc
         out["wan"] = parsed.model_dump(exclude={"push"})
     out["policy_ids"] = [str(p) for p in c.get("policy_ids") or []]
+    # Phase 14: Firewall-Zonen je Interface, {"<zonen-slug>": ["ether2", …]} – Zone wird beim Provisionieren aufgelöst
+    zones = c.get("zones") or {}
+    if not isinstance(zones, dict):
+        raise TemplateError("zones: {Zonen-Kürzel: [Interfaces]}")
+    seen: set[str] = set()
+    for slug, ifaces in zones.items():
+        if not re.fullmatch(r"[a-z0-9\-]{1,60}", str(slug)) or not isinstance(ifaces, list):
+            raise TemplateError(f"zones: ungültige Zone {slug!r}")
+        for i in ifaces:
+            if not _IFACE.match(str(i)) or str(i) in seen:
+                raise TemplateError(f"zones: Interface {i!r} ungültig oder mehrfach")
+            seen.add(str(i))
+    out["zones"] = {str(k): [str(i) for i in v] for k, v in zones.items()}
     vrrp = c.get("vrrp") or []
     if vrrp:
         from app.services.vrrp import VrrpError, validate_set
@@ -256,10 +269,48 @@ async def provision_device(db: AsyncSession, device: Device) -> list[str]:
                 _log(device, "provisioning", f"{len(vrrp_tpl)} VRRP-Instanz(en) angewendet")
             except RouterOSError as exc:
                 errors.append(f"VRRP: {exc}")
+    zones_tpl = t.get("zones") or {}
+    if zones_tpl:
+        from app.api.v1.firewall import apply_device_zones, set_device_zones
+        from app.models import FwZone
+
+        visible = [z for z in (await db.execute(select(FwZone))).scalars() if z.tenant_id in (None, device.tenant_id)]
+        # eigene Zone des Mandanten hat Vorrang vor einer globalen gleichen Kürzels
+        by_slug = {z.slug: z for z in sorted(visible, key=lambda z: z.tenant_id is not None)}
+        pairs, missing = [], []
+        for slug, ifaces in zones_tpl.items():
+            z = by_slug.get(slug)
+            if z is None or z.source == "wan":
+                missing.append(slug)
+                continue
+            pairs += [(i, z.id) for i in ifaces]
+        if missing:
+            errors.append(f"Zonen: unbekannt oder WAN-gebunden: {', '.join(missing)}")
+        else:
+            await set_device_zones(db, device, pairs)
+            res = await apply_device_zones(db, device)
+            if res["ok"]:
+                _log(device, "provisioning", f"Firewall-Zonen gesetzt ({len(pairs)} Interfaces)")
+            else:
+                errors.append(f"Zonen: {res['error']}")
     deployments: list[str] = []
     pol_ids = t.get("policy_ids") or []
     if pol_ids:
         pols = (await db.execute(select(FirewallPolicy).where(FirewallPolicy.id.in_([uuid.UUID(p) for p in pol_ids])))).scalars().all()
+        # Entscheidung 17: einfache Policies mit Default-Drop nie über manuelle Regeln legen – ohne Bestätigung
+        # (bei ZTP nicht möglich) wird die Policy nicht zugewiesen
+        from app.services.fw_deploy_check import check_devices, has_default_drop
+
+        kept = []
+        for p in pols:
+            if has_default_drop(p):
+                chk = (await check_devices(p, [device])).get(str(device.id), {})
+                if chk.get("unmanaged") or chk.get("reachable") is False:
+                    errors.append(f"Policy {p.name}: nicht zugewiesen – {len(chk.get('unmanaged') or [])} manuelle Filterregeln würden hinter "
+                                  "dem Default-Drop nie mehr greifen (manuell prüfen und im Policy-Editor bestätigen)")
+                    continue
+            kept.append(p)
+        pols = kept
         existing = {a.policy_id for a in (await db.execute(select(PolicyAssignment).where(PolicyAssignment.device_id == device.id))).scalars()}
         for pos, p in enumerate(pols):
             if p.tenant_id not in (None, device.tenant_id):

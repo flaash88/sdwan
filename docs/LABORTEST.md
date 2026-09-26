@@ -256,6 +256,42 @@ FortiGate, Priorität 100 (kleiner als die FortiGate, z. B. 200), VIP `192.168.1
       löst aus und die Mail kommt.
 - [ ] Strom wieder an. **Erwartet:** Gerät online, Alarm behoben.
 
+## 10. Firewall-Editor (Phase 14)
+
+Vorbereitung: WAN eingerichtet (Schritt 4). Auf dem L009 existieren die defconf-Firewallregeln (nicht verwaltet).
+
+- [ ] Gerät → Firewall → „Firewall-Zonen“: `bridge` → LAN, ein freier Port (z. B. ether3) → Management,
+      ggf. Gäste-VLAN → Gäste. „Speichern & anwenden“.
+      **Erwartet:** `/interface list print` zeigt `sdwan-zone-lan`, `sdwan-zone-management` (Kommentar
+      `sdwan:zone:…`), `/interface list member print` die Zuordnungen. defconf-Listen `LAN`/`WAN` sind
+      unverändert.
+- [ ] Firewall-Policies → „Policy“ → Modus „Einfach“. Bausteine „Standard-Härtung“ und „Gäste vom LAN
+      isolieren“ einfügen, speichern, dem L009 zuweisen.
+- [ ] Vorschau öffnen. **Erwartet:** RouterOS-Befehle und Diff („leer“ beim ersten Mal). Die Prüfung meldet
+      keine Fehler, nur ggf. Warnungen zu leeren Zonen.
+- [ ] „Ausrollen“. **Erwartet:** Der Dialog listet die defconf-Regeln als „würden nie mehr greifen“; ohne
+      Häkchen wird das Gerät übersprungen und `/ip firewall filter print` ist unverändert.
+- [ ] Erneut ausrollen, diesmal mit Häkchen für das Gerät. **Erwartet:**
+  - Die verwalteten Regeln stehen **oben**, die erste ist `base:platform-hub`.
+  - Die Plattform bleibt erreichbar (Status online).
+  - WinBox aus der Management-Zone geht, aus dem LAN nicht.
+  - Clients im LAN haben Internet sowie DHCP und DNS.
+  - Aus dem Gästenetz ist das LAN nicht erreichbar.
+- [ ] VPN-Mesh und VRRP (falls eingerichtet) funktionieren weiter. **Erwartet:** Mesh-Tunnel up,
+      VRRP-Rolle unverändert.
+- [ ] **Annahmen prüfen:**
+  - `protocol=vrrp` wird von RouterOS akzeptiert. Ergebnis: ______
+  - Address-List-Eintrag im Format `a.b.c.d-e.f.g.h` (Objekt „Bereich“) wird akzeptiert. Ergebnis: ______
+  - `/ip firewall filter reset-counters` über die API (Button „Zähler zurücksetzen“) setzt nur die
+    verwalteten Regeln zurück. Ergebnis: ______
+- [ ] Trefferzähler: nach ≥ 5 min Verkehr zeigt die Regeltabelle Pakete je Regel. Regeln ohne Treffer seit
+      7 Tagen sind markiert.
+- [ ] Management-Zone von ether3 entfernen und erneut ausrollen. **Erwartet:** Lint-Fehler „Lokaler Zugriff
+      (WinBox/SSH im LAN) nach dem Deploy nicht mehr möglich – nur noch über den Tunnel“. Ausrollen geht nur
+      mit Bestätigung. Danach Zuordnung wiederherstellen.
+- [ ] Selbsttest: Zeilen „Interface-Listen“ und „Interface-Listen-Mitglieder“ grün; bei „Firewall-Filter“
+      ist `packets` vorhanden.
+
 ---
 
 ## Ergebnis
@@ -271,3 +307,4 @@ FortiGate, Priorität 100 (kleiner als die FortiGate, z. B. 200), VIP `192.168.1
 | 7 Firmware | ☐ ok ☐ Abweichung | von … auf … |
 | 8 Fernzugriff | ☐ ok ☐ Abweichung | |
 | 9 Neustart | ☐ ok ☐ Abweichung | |
+| 10 Firewall-Editor | ☐ ok ☐ Abweichung | |

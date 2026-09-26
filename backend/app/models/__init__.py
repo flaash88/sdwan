@@ -21,3 +21,4 @@ from app.models.ops import ConfigBackup, FirmwareJob, FirmwareJobItem  # noqa: F
 from app.models.alerts import Alert, AlertRule, SlaReport, StatusEvent  # noqa: F401,E402
 from app.models.vrrp import VrrpInstance  # noqa: F401,E402
 from app.models.selftest import DeviceSelftest  # noqa: F401,E402
+from app.models.firewall import DeviceZoneMember, FwBlock, FwObject, FwRuleHit, FwService, FwZone  # noqa: F401,E402

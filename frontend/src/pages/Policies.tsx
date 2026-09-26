@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Badge, Button, Card, Checkbox, ErrorBox, Input, Modal, PageHeader, Select, StatusBadge, Table, Textarea, cls, useAction } from "../components/ui";
+import SimpleEditor from "../components/fw/SimpleEditor";
+import { Badge, Button, Card, Checkbox, ErrorBox, Input, Modal, PageHeader, Pill, Select, StatusBadge, Table, Textarea, cls, useAction } from "../components/ui";
+import { emptySpec, type Spec } from "../lib/fw";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { fmtDate } from "../lib/format";
@@ -13,6 +15,7 @@ interface Content { address_lists: { list: string; address: string; comment?: st
 interface Policy {
   id: string; name: string; description: string | null; version: number; scope: "global" | "tenant";
   content: Content; updated_at: string; assigned_devices: number;
+  mode: "simple" | "expert"; spec: Spec | null; undeployed: { device_id: string; name: string; deployed_version: number | null }[];
   assignments?: { device_id: string; device: string; status: string; deployed_version: number | null; deployed_at: string | null; last_error: string | null }[];
 }
 interface Deployment { id: string; policy_id: string | null; policy_version: number | null; atomic: boolean; status: string; started_by: string; results: Record<string, { name: string; ok: boolean; error?: string; rolled_back?: boolean }>; created_at: string; finished_at: string | null }
@@ -31,19 +34,24 @@ export default function Policies() {
   useLive(() => void deps.reload(), ["policy.deployment"]);
   const { busy, error, run } = useAction();
   const [name, setName] = useState("");
+  const [mode, setMode] = useState<"simple" | "expert">("simple");
   const [open, setOpen] = useState(false);
   return (
     <>
-      <PageHeader title="Firewall-Policies" subtitle="Zentral definierte Address-Lists, Filter- und NAT-Regeln – versioniert und mit Rollback" actions={can("technician") && <Button onClick={() => setOpen(true)} icon="plus">Policy</Button>} />
+      <PageHeader title="Firewall-Policies" subtitle="Zentral definierte Address-Lists, Filter- und NAT-Regeln – versioniert und mit Rollback" actions={<>
+        <Button variant="secondary" icon="list" onClick={() => nav("/policies/objects")}>Objekte, Dienste, Zonen</Button>
+        {can("technician") && <Button onClick={() => setOpen(true)} icon="plus">Policy</Button>}
+      </>} />
       <p className="-mt-3 mb-4 text-sm text-slate-500">Bestehende Regeln eines Routers anzeigen oder übernehmen: <b>Geräte → Gerät → Firewall → „Als Policy übernehmen“</b>.</p>
       <Card>
         <ErrorBox error={pols.error} />
-        <Table head={["Name", "Geltung", "Version", "Regeln", "Geräte", "Geändert"]} empty={pols.data?.length === 0}>
+        <Table head={["Name", "Geltung", "Modus", "Version", "Regeln", "Geräte", "Geändert"]} empty={pols.data?.length === 0}>
           {pols.data?.map((p) => (
             <tr key={p.id} className="hover:bg-slate-50">
               <td className="px-3 py-2 font-medium"><Link to={`/policies/${p.id}`} className="text-brand-700 hover:underline">{p.name}</Link><div className="text-xs text-slate-500">{p.description}</div></td>
               <td className="px-3 py-2">{p.scope === "global" ? <Badge color="blue">global (MSP)</Badge> : <Badge>Mandant</Badge>}</td>
-              <td className="px-3 py-2">v{p.version}</td>
+              <td className="px-3 py-2">{p.mode === "simple" ? <Pill tone="blue">einfach</Pill> : <Pill>Experte</Pill>}</td>
+              <td className="px-3 py-2">v{p.version}{p.undeployed.length > 0 && p.assigned_devices > 0 && <div><Pill tone="orange" icon="alert" title={p.undeployed.map((d) => d.name).join(", ")}>nicht ausgerollt ({p.undeployed.length})</Pill></div>}</td>
               <td className="px-3 py-2 text-xs text-slate-600">{p.content.filter?.length ?? 0} Filter · {p.content.nat?.length ?? 0} NAT · {p.content.address_lists?.length ?? 0} Adressen</td>
               <td className="px-3 py-2">{p.assigned_devices}</td>
               <td className="px-3 py-2 text-slate-500">{fmtDate(p.updated_at)}</td>
@@ -55,8 +63,12 @@ export default function Policies() {
       <Modal open={open} onClose={() => setOpen(false)} title="Neue Policy"
         footer={<><Button variant="secondary" onClick={() => setOpen(false)}>Abbrechen</Button><Button form="new-policy" disabled={busy}>Anlegen</Button></>}>
         <ErrorBox error={error} />
-        <form id="new-policy" className="space-y-3" onSubmit={(e) => { e.preventDefault(); void run(async () => { const p = await api.post<Policy>("/policies", { name, content: empty() }); nav(`/policies/${p.id}`); }); }}>
+        <form id="new-policy" className="space-y-3" onSubmit={(e) => { e.preventDefault(); void run(async () => { const p = await api.post<Policy>("/policies", mode === "simple" ? { name, mode, spec: emptySpec() } : { name, content: empty() }); nav(`/policies/${p.id}`); }); }}>
           <Input label="Name" value={name} required onChange={(e) => setName(e.target.value)} />
+          <Select label="Modus" value={mode} onChange={(e) => setMode(e.target.value as "simple" | "expert")}>
+            <option value="simple">Einfach – Zonen, Objekte, Dienste, Bausteine (empfohlen)</option>
+            <option value="expert">Experte – RouterOS-Regeln direkt</option>
+          </Select>
           <p className="text-xs text-fg3">Als MSP-Admin ohne gewählten Mandanten entsteht eine globale Policy, die alle Mandanten nutzen können.</p>
         </form>
       </Modal>
@@ -160,23 +172,31 @@ export function PolicyDetail() {
   const content = draft ?? p.content;
   const readOnly = !can("technician") || (p.scope === "global" && !me?.user.is_superuser);
   const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(p.content);
+  const convert = (to: "simple" | "expert") => run(async () => {
+    if (to === "simple" && !confirm("Nicht alles ist im einfachen Modus abbildbar: die bestehenden Regeln werden als Rohregeln übernommen und bleiben unverändert wirksam. Umwandeln?")) return;
+    await api.post(`/policies/${p.id}/convert`, { to, confirm: to === "simple" });
+    await pol.reload(); await versions.reload();
+  });
   const save = () => run(async () => { await api.patch(`/policies/${p.id}`, { content: draft, note: note || null }); setDraft(null); setNote(""); await pol.reload(); await versions.reload(); });
 
   return (
     <>
       <PageHeader
         title={p.name}
-        subtitle={<>{p.scope === "global" ? <Badge color="blue">global (MSP)</Badge> : <Badge>Mandant</Badge>} · Version {p.version}</>}
+        subtitle={<>{p.scope === "global" ? <Badge color="blue">global (MSP)</Badge> : <Badge>Mandant</Badge>} · {p.mode === "simple" ? "einfacher Modus" : "Expertenmodus"} · Version {p.version}</>}
         actions={can("technician") && <>
           <Button variant="secondary" onClick={() => setAssignOpen(true)}>Geräte zuweisen</Button>
-          <label className="flex items-center gap-1 text-sm"><input type="checkbox" checked={atomic} onChange={(e) => setAtomic(e.target.checked)} /> atomar</label>
-          <Button disabled={busy || dirty || !p.assignments?.length} title={dirty ? "Erst speichern" : ""} onClick={() => void run(async () => { await api.post(`/policies/${p.id}/deploy`, { atomic }); setMsg("Push gestartet"); await pol.reload(); })}>Auf alle Geräte pushen</Button>
+          {!readOnly && <Button variant="ghost" onClick={() => void convert(p.mode === "simple" ? "expert" : "simple")}>{p.mode === "simple" ? "In Expertenmodus umwandeln" : "In einfachen Modus umwandeln"}</Button>}
+          {p.mode !== "simple" && <>
+            <label className="flex items-center gap-1 text-sm"><input type="checkbox" checked={atomic} onChange={(e) => setAtomic(e.target.checked)} /> atomar</label>
+            <Button disabled={busy || dirty || !p.assignments?.length} title={dirty ? "Erst speichern" : ""} onClick={() => void run(async () => { await api.post(`/policies/${p.id}/deploy`, { atomic }); setMsg("Push gestartet"); await pol.reload(); })}>Auf alle Geräte pushen</Button>
+          </>}
         </>}
       />
       <ErrorBox error={error} />
       {msg && <div className="mb-4 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{msg}</div>}
-      <div className="grid gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2" title={
+      <div className={cls("grid gap-4", p.mode === "simple" ? "xl:grid-cols-2" : "xl:grid-cols-3")}>
+        {p.mode === "simple" ? <div className="xl:col-span-2"><SimpleEditor policy={p} readOnly={readOnly} onSaved={async () => { await pol.reload(); await versions.reload(); }} /></div> : <Card className="xl:col-span-2" title={
           <div className="flex gap-1">
             {([["filter", `Filter (${content.filter.length})`], ["nat", `NAT (${content.nat.length})`], ["address_lists", `Address-Lists (${content.address_lists.length})`], ["json", "JSON"]] as const).map(([k, l]) => (
               <button key={k} onClick={() => setTab(k)} className={cls("rounded px-2 py-1 text-sm", tab === k ? "bg-brand-100 text-brand-800" : "text-slate-500 hover:bg-slate-100")}>{l}</button>
@@ -206,8 +226,8 @@ export function PolicyDetail() {
               <Button disabled={!dirty || busy} onClick={() => void save()}>Als v{p.version + 1} speichern</Button>
             </div>
           )}
-        </Card>
-        <div className="space-y-4">
+        </Card>}
+        <div className={cls(p.mode === "simple" ? "contents" : "space-y-4")}>
           <Card title="Zugewiesene Geräte">
             <ul className="space-y-2 text-sm">
               {p.assignments?.map((a) => (

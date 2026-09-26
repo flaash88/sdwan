@@ -1,0 +1,69 @@
+{
+  "_hinweis": "Vordefinierte Firewall-Daten (global, schreibgeschützt). Beispiele in Beschreibungen sind nur Beispiele.",
+  "services": [
+    {"seed_key": "svc-http", "name": "HTTP", "slug": "http", "entries": [{"protocol": "tcp", "ports": "80"}]},
+    {"seed_key": "svc-https", "name": "HTTPS", "slug": "https", "entries": [{"protocol": "tcp", "ports": "443"}]},
+    {"seed_key": "svc-dns", "name": "DNS", "slug": "dns", "entries": [{"protocol": "udp", "ports": "53"}, {"protocol": "tcp", "ports": "53"}]},
+    {"seed_key": "svc-ntp", "name": "NTP", "slug": "ntp", "entries": [{"protocol": "udp", "ports": "123"}]},
+    {"seed_key": "svc-dhcp", "name": "DHCP", "slug": "dhcp", "entries": [{"protocol": "udp", "ports": "67-68"}]},
+    {"seed_key": "svc-ssh", "name": "SSH", "slug": "ssh", "entries": [{"protocol": "tcp", "ports": "22"}]},
+    {"seed_key": "svc-rdp", "name": "RDP", "slug": "rdp", "entries": [{"protocol": "tcp", "ports": "3389"}, {"protocol": "udp", "ports": "3389"}]},
+    {"seed_key": "svc-smb", "name": "SMB", "slug": "smb", "entries": [{"protocol": "tcp", "ports": "445"}]},
+    {"seed_key": "svc-icmp", "name": "ICMP (Ping)", "slug": "icmp", "entries": [{"protocol": "icmp", "ports": ""}]},
+    {"seed_key": "svc-winbox", "name": "WinBox", "slug": "winbox", "entries": [{"protocol": "tcp", "ports": "8291"}]},
+    {"seed_key": "svc-sip", "name": "SIP", "slug": "sip", "entries": [{"protocol": "udp", "ports": "5060"}, {"protocol": "tcp", "ports": "5060-5061"}]},
+    {"seed_key": "svc-smtp-submission", "name": "SMTP-Submission", "slug": "smtp-submission", "entries": [{"protocol": "tcp", "ports": "587"}]},
+    {"seed_key": "svc-imaps", "name": "IMAPS", "slug": "imaps", "entries": [{"protocol": "tcp", "ports": "993"}]},
+    {"seed_key": "svc-snmp", "name": "SNMP", "slug": "snmp", "entries": [{"protocol": "udp", "ports": "161"}]},
+    {"seed_key": "svc-web", "name": "Web (HTTP+HTTPS)", "slug": "web", "members_seed": ["svc-http", "svc-https"]}
+  ],
+  "zones": [
+    {"seed_key": "zone-lan", "name": "LAN", "slug": "lan", "description": "Internes Netz"},
+    {"seed_key": "zone-wan", "name": "WAN", "slug": "wan", "source": "wan", "description": "Alle WAN-Leitungen aus der WAN-Konfiguration (Interface-List sdwan-wan)"},
+    {"seed_key": "zone-management", "name": "Management", "slug": "management", "management": true, "description": "Netz, aus dem lokal per WinBox/SSH verwaltet wird"},
+    {"seed_key": "zone-vpn", "name": "VPN", "slug": "vpn", "description": "VPN-Mesh und andere Tunnel"},
+    {"seed_key": "zone-guest", "name": "Gäste", "slug": "guest", "description": "Gästenetz"}
+  ],
+  "blocks": [
+    {"seed_key": "block-hardening", "name": "Standard-Härtung",
+     "description": "Internes Netz darf ins Internet und DNS/DHCP/NTP/Ping am Router nutzen. Zusammen mit dem Default-Drop ist alles andere gesperrt.",
+     "params": [{"key": "lan", "type": "zone", "label": "Interne Zone", "default": "zone:lan"}],
+     "rules": [
+       {"src_zone": "$lan", "dst_zone": "router", "services": ["svc:dns", "svc:dhcp", "svc:ntp", "svc:icmp"], "action": "accept", "comment": "Router-Dienste für interne Zone"},
+       {"src_zone": "$lan", "dst_zone": "zone:wan", "action": "accept", "comment": "Internet für interne Zone"}
+     ],
+     "nat": [{"type": "masquerade", "zone": "zone:wan"}]},
+    {"seed_key": "block-guest-isolation", "name": "Gäste vom LAN isolieren",
+     "description": "Gäste erreichen nur Internet sowie DNS/DHCP am Router, aber keine internen Netze.",
+     "params": [{"key": "guest", "type": "zone", "label": "Gäste-Zone", "default": "zone:guest"},
+                {"key": "lan", "type": "zone", "label": "Geschützte Zone", "default": "zone:lan"}],
+     "rules": [
+       {"src_zone": "$guest", "dst_zone": "$lan", "action": "drop", "comment": "Gäste nicht ins interne Netz"},
+       {"src_zone": "$guest", "dst_zone": "router", "services": ["svc:dns", "svc:dhcp"], "action": "accept", "comment": "DNS/DHCP für Gäste"},
+       {"src_zone": "$guest", "dst_zone": "router", "action": "drop", "comment": "Gäste kein Zugriff auf den Router"},
+       {"src_zone": "$guest", "dst_zone": "zone:wan", "action": "accept", "comment": "Internet für Gäste"}
+     ]},
+    {"seed_key": "block-internet-only", "name": "Nur Internet für Zone X",
+     "description": "Die gewählte Zone darf ins Internet, aber in keine anderen Zonen.",
+     "params": [{"key": "zone", "type": "zone", "label": "Zone"}],
+     "rules": [
+       {"src_zone": "$zone", "dst_zone": "zone:wan", "action": "accept", "comment": "Internet"},
+       {"src_zone": "$zone", "action": "drop", "comment": "sonst nichts"}
+     ]},
+    {"seed_key": "block-zone-to-targets", "name": "Zone nur zu definierten Zielen",
+     "description": "Die Zone erreicht nur die gewählten Ziele (optional nur bestimmte Dienste). Beispiele: Kassen nur zum Kassenserver/Zahlungsanbieter, IoT nur zur Cloud des Herstellers, Drucker nur zum Druckserver, Kameras nur zum Rekorder.",
+     "params": [{"key": "zone", "type": "zone", "label": "Zone"},
+                {"key": "targets", "type": "object", "label": "Erlaubte Ziele"},
+                {"key": "services", "type": "service", "label": "Dienste (leer = alle)", "optional": true}],
+     "rules": [
+       {"src_zone": "$zone", "dst": ["$targets"], "services": ["$services"], "action": "accept", "comment": "erlaubte Ziele"},
+       {"src_zone": "$zone", "action": "drop", "comment": "sonst nichts"}
+     ]},
+    {"seed_key": "block-dns-enforce", "name": "DNS erzwingen",
+     "description": "DNS-Anfragen aus der Zone werden auf den Router umgeleitet (z. B. für Content-Filter).",
+     "params": [{"key": "zone", "type": "zone", "label": "Zone"}],
+     "rules": [],
+     "nat": [{"type": "redirect", "in_zone": "$zone", "protocol": "udp", "port": "53"},
+             {"type": "redirect", "in_zone": "$zone", "protocol": "tcp", "port": "53"}]}
+  ]
+}

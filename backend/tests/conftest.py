@@ -46,6 +46,9 @@ async def fresh_db():
 
     _metrics._live_memory.clear()
     await ensure_bootstrap_admin()
+    from app.seeds import apply_all as apply_seeds
+
+    await apply_seeds()
     yield
     await get_engine().dispose()
 

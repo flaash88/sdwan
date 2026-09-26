@@ -23,6 +23,9 @@ async def lifespan(app: FastAPI):
     if s.db_auto_create:
         await create_all()
     await ensure_bootstrap_admin()
+    from app.seeds import apply_all as apply_seeds
+
+    await apply_seeds()
     yield
 
 

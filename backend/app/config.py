@@ -73,6 +73,10 @@ class Settings(BaseSettings):
 
     # --- Worker / Jobs -------------------------------------------------------
     poll_interval_seconds: int = 60
+    # Threat-Feeds (Phase 15): RAM-Reserve je Gerät, geschätzter Speicher je Eintrag, maximale Downloadgröße
+    feed_min_free_mb: int = 32
+    feed_bytes_per_entry: int = 200
+    feed_max_download_mb: int = 10
     offline_after_seconds: int = 180
     pairing_token_ttl_hours: int = 72
 

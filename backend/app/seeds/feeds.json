@@ -1,0 +1,21 @@
+{
+  "_hinweis": "Vordefinierte Threat-Feeds (global). Werden nur geladen, wenn sie mindestens einem Gerät zugewiesen sind. URLs/Formate im Labor verifizieren.",
+  "feeds": [
+    {"seed_key": "feed-spamhaus-drop-v4", "name": "Spamhaus DROP (IPv4)", "slug": "spamhaus-drop4",
+     "url": "https://www.spamhaus.org/drop/drop_v4.json", "fmt": "jsonl", "json_field": "cidr", "interval_min": 720,
+     "description": "Netze, die vollständig von Kriminellen kontrolliert werden (enthält seit 2024 auch EDROP). Nutzungsbedingungen von Spamhaus beachten."},
+    {"seed_key": "feed-spamhaus-drop-v6", "name": "Spamhaus DROP (IPv6)", "slug": "spamhaus-drop6",
+     "url": "https://www.spamhaus.org/drop/drop_v6.json", "fmt": "jsonl", "json_field": "cidr", "interval_min": 720,
+     "description": "IPv6-Variante der Spamhaus-DROP-Liste. Wird in /ipv6/firewall/address-list verteilt."}
+  ],
+  "blocks": [
+    {"seed_key": "block-threat-feed-drop", "name": "Threat-Feeds eingehend verwerfen",
+     "description": "Verkehr von Adressen eines Threat-Feeds aus dem WAN verwerfen (zum Router und weitergeleitet) und Verbindungen dorthin blockieren. Je Feed einmal einfügen; der Feed muss den Geräten zugewiesen sein.",
+     "params": [{"key": "feed", "type": "object", "label": "Threat-Feed (Objekt)"}],
+     "rules": [
+       {"src_zone": "zone:wan", "dst_zone": "router", "src": ["$feed"], "action": "drop", "comment": "Threat-Feed zum Router"},
+       {"src_zone": "zone:wan", "src": ["$feed"], "action": "drop", "comment": "Threat-Feed eingehend"},
+       {"dst_zone": "zone:wan", "dst": ["$feed"], "action": "drop", "comment": "Threat-Feed ausgehend"}
+     ]}
+  ]
+}

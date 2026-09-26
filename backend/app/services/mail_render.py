@@ -63,6 +63,10 @@ NEXT_STEPS: dict[str, list[str]] = {
         "Standort läuft über das Backup-WAN. Primären Anschluss prüfen.",
         "Datenvolumen des Backup-WAN im Auge behalten.",
     ],
+    "feed_stale": [
+        "Threat-Feeds-Seite öffnen und den Fehler des Feeds prüfen (URL erreichbar? Format geändert?).",
+        "Die letzte gültige Liste bleibt auf den Geräten aktiv, bis eine Aktualisierung gelingt.",
+    ],
     "wan_volume": [
         "Verbrauch im WAN-Tab prüfen; ggf. Datenpaket beim Provider aufstocken.",
         "Prüfen, warum das Backup-WAN so lange Traffic trägt (Primärleitung gestört?).",

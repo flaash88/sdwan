@@ -637,6 +637,34 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   Interface-Listen-Felder. Siehe LABORTEST und Selbsttest (`interface_list`, `interface_list_member`,
   `packets` in `fw_filter`).
 
+## Phase 15 – Threat-Feeds
+
+* `threat_feeds` (global oder mandantenweit, Seeds in `app/seeds/feeds.json`: Spamhaus DROP IPv4/IPv6 im
+  JSON-Zeilen-Format) und `threat_feed_assignments` (je Gerät). Anlegen und Ändern dürfen nur Admins,
+  zuweisen und laden auch Techniker. Vordefinierte Feeds lassen sich nur in Intervall, Obergrenze und
+  Aktivierung ändern.
+* **Laden** (`services/feeds.py`, Worker alle 5 min): nur Feeds mit Zuweisungen, fällig nach `interval_min`.
+  - HTTP mit 30 s Timeout und Größenlimit (`FEED_MAX_DOWNLOAD_MB`).
+  - Formate: `lines` (IP/CIDR je Zeile, Kommentarzeichen wählbar) und `jsonl` (Feld wählbar).
+  - Nur **öffentlich routbare** Netze (`ip_network.is_global`, keine Multicast, keine Präfixe breiter als /8
+    bzw. /16). Grund: Ein Feed mit privaten Netzen könnte Standorte aussperren.
+  - Über der Obergrenze oder bei einem Fehler bleibt die **letzte gültige Liste** aktiv; nur `last_error`
+    wird gesetzt.
+* **Verteilung:** Address-List `sdwan-feed-<kürzel>` mit Kommentar `sdwan:feed:<kürzel>`; IPv6-Einträge in
+  `/ipv6/firewall/address-list`.
+  - Nur Differenzen: fehlende Einträge anlegen, überzählige entfernen.
+  - Manuelle Einträge (auch in gleichnamigen Listen ohne den Kommentar) bleiben unberührt.
+  - Vorher **RAM-Check**: `free-memory` ≥ Einträge × `FEED_BYTES_PER_ENTRY` + `FEED_MIN_FREE_MB`. Reicht
+    der Speicher nicht, wird das Gerät übersprungen (Status `skipped_memory`, sichtbar).
+  - Entzug einer Zuweisung löscht die Liste auf dem Router.
+* **Firewall-Editor:** Jeder Feed hat ein Objekt vom Typ `feed`, das auf `sdwan-feed-<kürzel>` verweist.
+  Solche Objekte sind nur einzeln je Regelseite und nicht in Gruppen nutzbar. Baustein „Threat-Feeds
+  eingehend verwerfen“.
+* **Alarmtyp `feed_stale`:** je Gerät mit zugewiesenem Feed, wenn die letzte erfolgreiche Aktualisierung
+  älter als 3 × Intervall ist.
+* **Annahmen (Labor):** Spamhaus-URLs und das JSON-Format; `/ipv6/firewall/address-list` mit gleichen Feldern;
+  RAM-Schätzwert je Eintrag.
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

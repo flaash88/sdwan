@@ -32,6 +32,7 @@ TYPES = {
     "vrrp_master": "VRRP: Router ist Master (Hauptsystem ausgefallen)",
     "wan_backup_active": "Backup-WAN aktiv",
     "wan_volume": "WAN-Datenvolumen (80 % / 100 % des Monatslimits)",
+    "feed_stale": "Threat-Feed veraltet",
 }
 DEFAULT_RULES = [
     {"name": "Gerät offline", "type": "device_offline", "severity": "critical", "duration_s": 300},
@@ -160,6 +161,21 @@ async def conditions(db: AsyncSession, rule: AlertRule, devices: list[Device]) -
                 if pct >= thr:
                     out.append(Condition(d, f"volume{thr:g}:{lk.id}", f"{d.name}: WAN {lk.name} hat {pct:.0f} % des Monatsvolumens verbraucht "
                                                                       f"({(lk.vol_bytes or 0) / 1e9:.1f} von {lk.monthly_limit_gb:g} GB, Schwelle {thr:g} %)", round(pct, 1)))
+    elif rule.type == "feed_stale":
+        # je Gerät mit zugewiesenem Feed: letzte erfolgreiche Aktualisierung älter als 3 × Intervall
+        from app.models import ThreatFeed, ThreatFeedAssignment
+
+        now = utcnow()
+        feeds = {f.id: f for f in (await db.execute(select(ThreatFeed).execution_options(skip_tenant_filter=True))).scalars()}
+        by_id = {d.id: d for d in devices}
+        for a in (await db.execute(select(ThreatFeedAssignment).where(ThreatFeedAssignment.device_id.in_(list(by_id))))).scalars():
+            f = feeds.get(a.feed_id)
+            if f is None or not f.enabled:
+                continue
+            ref = f.last_ok_at or a.created_at
+            if ref and (now - ref).total_seconds() > 3 * f.interval_min * 60:
+                out.append(Condition(by_id[a.device_id], f"feed:{f.id}", f"Threat-Feed {f.name} seit {ref:%d.%m. %H:%M} nicht aktualisiert"
+                                     + (f" ({f.last_error})" if f.last_error else ""), since=ref))
     elif rule.type == "cpu_high":
         thr = float(p.get("threshold", 90))
         for d in devs:

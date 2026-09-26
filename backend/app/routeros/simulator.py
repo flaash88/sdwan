@@ -28,6 +28,7 @@ _TABLE_PATHS = {
     "/ip/firewall/nat",
     "/ip/firewall/mangle",
     "/ip/firewall/address-list",
+    "/ipv6/firewall/address-list",
     "/routing/table",
     "/ip/dns/static",
     "/tool/netwatch",
@@ -394,7 +395,7 @@ def _seed_extras(r: SimRouter) -> None:
     from app.config import get_settings
 
     s = get_settings()
-    for path in ("/user/group", "/ip/firewall/connection"):
+    for path in _TABLE_PATHS:  # ältere gespeicherte Zustände um neue Tabellen ergänzen
         r.tables.setdefault(path, [])
     if not r.tables["/user/group"]:
         for name, pol in (("read", "local,telnet,ssh,reboot,read,test,winbox,password,web,sniff,sensitive,api,romon,rest-api,!ftp,!write,!policy"),

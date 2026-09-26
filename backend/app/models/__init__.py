@@ -22,3 +22,4 @@ from app.models.alerts import Alert, AlertRule, SlaReport, StatusEvent  # noqa: 
 from app.models.vrrp import VrrpInstance  # noqa: F401,E402
 from app.models.selftest import DeviceSelftest  # noqa: F401,E402
 from app.models.firewall import DeviceZoneMember, FwBlock, FwObject, FwRuleHit, FwService, FwZone  # noqa: F401,E402
+from app.models.feeds import ThreatFeed, ThreatFeedAssignment  # noqa: F401,E402

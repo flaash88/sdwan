@@ -53,7 +53,21 @@ async def apply_firewall(db: AsyncSession) -> None:
         await _upsert(db, FwBlock, {"nat": [], **b})
 
 
-APPLIERS = [apply_firewall]
+async def apply_feeds(db: AsyncSession) -> None:
+    from app.models import FwBlock, FwObject, ThreatFeed
+
+    data = load("feeds")
+    for f in data["feeds"]:
+        feed = await _upsert(db, ThreatFeed, f)
+        # passendes Firewall-Objekt (Typ feed) für den Editor
+        await _upsert(db, FwObject, {"seed_key": f"obj-{f['seed_key']}", "name": f"Threat-Feed: {f['name']}", "slug": f["slug"],
+                                     "kind": "feed", "values": [], "members": [], "description": f.get("description")})
+        del feed
+    for b in data["blocks"]:
+        await _upsert(db, FwBlock, {"nat": [], **b})
+
+
+APPLIERS = [apply_firewall, apply_feeds]
 
 
 async def apply_all() -> None:

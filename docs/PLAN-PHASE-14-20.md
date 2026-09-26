@@ -374,3 +374,20 @@ Parameter wie Zone oder Objekt werden beim Einfügen per Auswahl gesetzt.
   - `reset-counters` mit `.id`;
   - Verhalten von defconf-Regeln hinter dem Default-Drop;
   - Interface-Listen-Felder (Selbsttest).
+
+### Stand Phase 15 – Threat-Feeds
+- **Erledigt:**
+  - Feeds global/mandantenweit, Seeds Spamhaus DROP v4/v6, Formate `lines`/`jsonl`.
+  - Prüfung (öffentliche Netze, Präfixgrenzen, Obergrenze), letzte gültige Liste bei Fehlern.
+  - Differenz-Verteilung inkl. IPv6, RAM-Check mit Überspringen, Objekt und Baustein im Firewall-Editor.
+  - Alarm `feed_stale`, Seite „Threat-Feeds“, gemeinsame Zielauswahl (`services/targets.py`,
+    `TargetsModal`).
+- **Entscheidung:** EDROP ist nicht mehr separat, weil Spamhaus es 2024 in DROP zusammengeführt hat
+  (Beschreibung im Seed). Feeds werden nur geladen, wenn sie zugewiesen sind (kein unnötiger Download).
+- **Weggelassen:** automatische IPv6-Firewallregeln (Firewall-Editor ist nur IPv4; die IPv6-Liste wird nur
+  bereitgestellt).
+- **Im Labor zu verifizieren:**
+  - Spamhaus-URLs und JSON-Format;
+  - `/ipv6/firewall/address-list`;
+  - RAM-Bedarf je Eintrag;
+  - Dauer der Verteilung großer Listen über die API.

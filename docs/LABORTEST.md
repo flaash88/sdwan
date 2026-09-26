@@ -292,6 +292,26 @@ Vorbereitung: WAN eingerichtet (Schritt 4). Auf dem L009 existieren die defconf-
 - [ ] Selbsttest: Zeilen „Interface-Listen“ und „Interface-Listen-Mitglieder“ grün; bei „Firewall-Filter“
       ist `packets` vorhanden.
 
+## 11. Threat-Feeds (Phase 15)
+
+- [ ] Threat-Feeds → „Spamhaus DROP (IPv4)“ → „Zuweisen“ an den L009 → „Jetzt laden“.
+      **Erwartet:** Status „aktuell“, mehrere hundert Einträge, am Gerät „aktuell“.
+      `/ip firewall address-list print count-only where list=sdwan-feed-spamhaus-drop4` entspricht der Zahl.
+      Ergebnis/URL erreichbar: ______
+- [ ] **Annahme prüfen:** Die Spamhaus-Datei `drop_v4.json` hat eine JSON-Zeile je Netz mit Feld `cidr`
+      (sonst Feed-Format anpassen). Ergebnis: ______
+- [ ] Freien Speicher notieren (`/system resource print`) vor und nach dem Laden: ______ / ______ MB.
+      Schätzwert 200 Byte je Eintrag plausibel? ______
+- [ ] IPv6-Feed zuweisen und laden. **Erwartet:** Einträge in `/ipv6 firewall address-list`
+      (Annahme: gleiche Felder). Ergebnis: ______
+- [ ] „Jetzt laden“ ein zweites Mal. **Erwartet:** keine Änderungen am Router (keine neuen `.id`s, nur
+      Differenzen).
+- [ ] Im Firewall-Editor den Baustein „Threat-Feeds eingehend verwerfen“ mit dem Feed-Objekt einfügen und
+      ausrollen. **Erwartet:** Regeln mit `src-address-list=sdwan-feed-spamhaus-drop4` (Router und forward)
+      sowie `dst-address-list=` ausgehend.
+- [ ] Zuweisung entfernen. **Erwartet:** Die Liste ist auf dem Router weg; manuelle Address-Lists sind
+      unverändert.
+
 ---
 
 ## Ergebnis
@@ -308,3 +328,4 @@ Vorbereitung: WAN eingerichtet (Schritt 4). Auf dem L009 existieren die defconf-
 | 8 Fernzugriff | ☐ ok ☐ Abweichung | |
 | 9 Neustart | ☐ ok ☐ Abweichung | |
 | 10 Firewall-Editor | ☐ ok ☐ Abweichung | |
+| 11 Threat-Feeds | ☐ ok ☐ Abweichung | |

@@ -71,6 +71,9 @@ def lint_spec(spec: dict[str, Any], cat: Catalog, devices: list[DeviceCtx] | Non
         if o is None:
             out.append(_i("error", "missing_object", f"Objekt {oid} existiert nicht mehr"))
             continue
+        if o["kind"] == "feed":
+            out.append(_i("info", "feed_used", f"„{o['name']}“: Der Threat-Feed muss den Zielgeräten zugewiesen sein (Seite Threat-Feeds), "
+                                               "sonst ist die Liste auf dem Gerät leer"))
         try:
             if o["kind"] != "feed" and not addresses(cat, oid):
                 out.append(_i("warn", "empty_object", f"Objekt „{o['name']}“ enthält keine Adressen – Regeln damit treffen nie"))

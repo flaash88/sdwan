@@ -76,6 +76,8 @@ PATH_SPECS: tuple[PathSpec, ...] = (
              optional=("comment", "dynamic"), used_by="Firewall-Zonen"),
     PathSpec("fw_address_list", "Address-Lists", "/ip/firewall/address-list/print", fields=("list", "address"),
              optional=("comment", "dynamic", "timeout"), used_by="Policies"),
+    PathSpec("fw_address_list6", "IPv6-Address-Lists", "/ipv6/firewall/address-list/print", fields=("list", "address"),
+             optional=("comment", "dynamic", "timeout"), used_by="Threat-Feeds (IPv6-Einträge)"),
     PathSpec("fw_connection", "Verbindungstabelle", "/ip/firewall/connection/print",
              optional=("protocol", "dst-address", "reply-dst-address", "connection-mark"),
              used_by="Verbindungs-Flush bei WAN-Ausfall (Skripte)",

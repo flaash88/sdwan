@@ -32,6 +32,7 @@ export function conditionText(r: Rule): string {
     case "cpu_high": return `CPU-Last über ${p.threshold ?? 90} %${d}`;
     case "vrrp_master": return `VRRP-Rolle ist Master${d}`;
     case "wan_backup_active": return `Backup-WAN trägt die Default-Route${d}`;
+    case "feed_stale": return "Threat-Feed seit mehr als dem 3-fachen Intervall nicht aktualisiert";
     case "wan_volume": return `Monatsvolumen erreicht ${(p.thresholds ?? [80, 100]).join(" % / ")} % des Limits`;
     default: return r.type_label ?? r.type;
   }

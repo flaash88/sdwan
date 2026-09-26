@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Alerts from "./pages/Alerts";
 import ContentFilter from "./pages/ContentFilter";
+import Feeds from "./pages/Feeds";
 import Firmware from "./pages/Firmware";
 import FwObjects from "./pages/FwObjects";
 import Mesh from "./pages/Mesh";
@@ -16,6 +17,7 @@ export const extraRoutes: { path: string; element: ReactNode }[] = [
   { path: "/policies/objects", element: <FwObjects /> },
   { path: "/policies/:id", element: <PolicyDetail /> },
   { path: "/ztp", element: <ZeroTouch /> },
+  { path: "/feeds", element: <Feeds /> },
   { path: "/content-filter", element: <ContentFilter /> },
   { path: "/remote", element: <RemoteSessions /> },
   { path: "/firmware", element: <Firmware /> },

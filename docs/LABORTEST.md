@@ -327,6 +327,19 @@ Vorbereitung: WAN eingerichtet (Schritt 4). Auf dem L009 existieren die defconf-
 - [ ] Config-Suche nach einem bekannten WireGuard-Private-Key bzw. einem Passwort (nur wenn `sensitive`
       exportiert wird). **Erwartet:** kein Treffer; in anderen Treffern steht `private-key=***`.
 
+## 13. Script-Bibliothek (Phase 17)
+
+- [ ] Scripts → „Systeminformationen“ → „Ausführen“ auf dem L009 (Vorschau prüfen: Variablen ersetzt).
+      **Erwartet:** Ausgabe wie im Terminal (resource, routerboard, update). Status „Erfolgreich“.
+- [ ] **Annahme prüfen:** Ein mehrzeiliges Script läuft per SSH vollständig. Ergebnis: ______
+- [ ] Eigenes „nur lesend“-Script mit einem Tippfehler (z. B. `/system resurce print`).
+      **Erwartet:** Status „fehlgeschlagen“, Fehlertext aus der Ausgabe (`bad command name` o. ä.).
+      Tatsächlicher Fehlertext: ______
+- [ ] Beispiel „DNS-Cache leeren“ (ändernd) als Admin ausführen. **Erwartet:** Namenseingabe ist Pflicht.
+      Vorher entsteht ein Backup „Vor Script“, danach ist der DNS-Cache leer (`/ip dns cache print`).
+- [ ] Als Techniker: Das ändernde Script ist nicht ausführbar (Button fehlt, API 403).
+- [ ] „Ausgaben durchsuchen“ nach „Gerät:“. **Erwartet:** Treffer der Systeminfo-Ausführung.
+
 ---
 
 ## Ergebnis
@@ -345,3 +358,4 @@ Vorbereitung: WAN eingerichtet (Schritt 4). Auf dem L009 existieren die defconf-
 | 10 Firewall-Editor | ☐ ok ☐ Abweichung | |
 | 11 Threat-Feeds | ☐ ok ☐ Abweichung | |
 | 12 Compliance/Suche | ☐ ok ☐ Abweichung | |
+| 13 Scripts | ☐ ok ☐ Abweichung | |

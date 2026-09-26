@@ -74,7 +74,14 @@ async def apply_compliance(db: AsyncSession) -> None:
         await _upsert(db, ComplianceRuleSet, rs)
 
 
-APPLIERS = [apply_firewall, apply_feeds, apply_compliance]
+async def apply_scripts(db: AsyncSession) -> None:
+    from app.models import Script
+
+    for sc in load("scripts")["scripts"]:
+        await _upsert(db, Script, {"version": 1, **sc})
+
+
+APPLIERS = [apply_firewall, apply_feeds, apply_compliance, apply_scripts]
 
 
 async def apply_all() -> None:

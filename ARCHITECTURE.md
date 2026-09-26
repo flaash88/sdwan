@@ -691,6 +691,30 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   - Jede Suche steht im Audit-Log.
 * **Annahmen (Labor):** `/system/ntp/client` mit Feld `enabled` (Selbsttest `ntp_client`).
 
+## Phase 17 – Script-Bibliothek und Massen-Ausführung
+
+* **Scripts** (`scripts`, global oder mandantenweit, versioniert in `script_versions`; Beispiele als Seed in
+  `app/seeds/scripts.json`). Kategorien:
+  - `read` (nur lesend): anlegen und ausführen ab Techniker.
+  - `change` (ändernd): nur Admin/MSP-Admin.
+* **Variablen:** nur die feste Liste `device.name/identity/tunnel_ip/serial/model`, `site.name`, `tenant.name/slug`
+  als `{{ … }}`; eigener Ersetzer, kein Template-Motor. Unbekannte Variablen und Werte mit `"`, `\`, `$`,
+  `[]`, `{}`, `;` oder Zeilenumbruch sind Fehler, damit Gerätenamen das Script nicht verändern können.
+* **Warnungen** (`services/scripts.warnings`) bei Bezug auf verwaltete Objekte (`sdwan:`/`sdwan-`), bei
+  Neustart/Reset und bei Änderungen an Benutzern/Diensten.
+* **Ausführung** (`script_runs`/`script_run_items`, Worker alle 15 s, Muster wie Firmware-Rollout):
+  1. Vorschau mit gerenderten Befehlen je Gerät.
+  2. Bei `change` Pflicht-Bestätigung durch den exakten Script-Namen und Backup je Gerät (Auslöser
+     `pre-script`, gepinnt). Schlägt das Backup fehl, wird auf diesem Gerät **nicht** ausgeführt.
+  3. Abarbeitung gestaffelt in Gruppen. Ab `max_failures` Fehlern wird angehalten; es gibt Fortsetzen und
+     Abbrechen.
+* **Ausführung per SSH** (wie der Backup-Export) mit Zeitlimit 120 s. Die Ausgabe wird gespeichert (max. 64 KB)
+  und ist durchsuchbar (`/script-runs/search`). Als Fehler gilt ein Exit-Status ≠ 0 oder eine
+  RouterOS-Fehlermeldung in der Ausgabe (`syntax error`, `failure:` …).
+* **Audit:** `script.run` mit vollem Script-Text, dazu Anlegen, Ändern und Status.
+* **Annahme (Labor):** Mehrzeilige Scripts laufen als SSH-Befehl wie eingetippt; die Fehlererkennung über die
+  Ausgabe greift.
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

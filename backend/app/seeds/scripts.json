@@ -1,0 +1,17 @@
+{
+  "_hinweis": "Beispiel-Scripts (global, schreibgeschützt; Kopieren zum Anpassen).",
+  "scripts": [
+    {"seed_key": "script-sysinfo", "name": "Systeminformationen", "category": "read",
+     "description": "Ressourcen, RouterBOARD und Paketstand anzeigen.",
+     "content": ":put \"Gerät: {{ device.name }} ({{ device.identity }})\"\n/system resource print\n/system routerboard print\n/system package update print"},
+    {"seed_key": "script-connections", "name": "Verbindungen zählen", "category": "read",
+     "description": "Anzahl der Einträge in der Verbindungstabelle ausgeben.",
+     "content": ":put (\"{{ device.name }}: \" . [/ip firewall connection print count-only] . \" Verbindungen\")"},
+    {"seed_key": "script-dhcp-leases", "name": "DHCP-Leases anzeigen", "category": "read",
+     "description": "Aktuelle DHCP-Leases aller DHCP-Server.",
+     "content": "/ip dhcp-server lease print"},
+    {"seed_key": "script-dns-flush", "name": "DNS-Cache leeren", "category": "change",
+     "description": "Leert den DNS-Cache des Routers (z. B. nach DNS-Änderungen beim Provider).",
+     "content": "/ip dns cache flush\n:put \"DNS-Cache geleert\""}
+  ]
+}

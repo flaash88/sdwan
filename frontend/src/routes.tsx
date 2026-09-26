@@ -10,6 +10,7 @@ import Mesh from "./pages/Mesh";
 import Policies, { PolicyDetail } from "./pages/Policies";
 import RemoteSessions from "./pages/RemoteSessions";
 import Reports from "./pages/Reports";
+import Scripts, { ScriptRunPage } from "./pages/Scripts";
 import ZeroTouch from "./pages/ZeroTouch";
 
 /** Routen späterer Phasen (Mesh, Policies, Alerts, …). */
@@ -22,6 +23,8 @@ export const extraRoutes: { path: string; element: ReactNode }[] = [
   { path: "/feeds", element: <Feeds /> },
   { path: "/compliance", element: <Compliance /> },
   { path: "/config-search", element: <ConfigSearch /> },
+  { path: "/scripts", element: <Scripts /> },
+  { path: "/scripts/runs/:id", element: <ScriptRunPage /> },
   { path: "/content-filter", element: <ContentFilter /> },
   { path: "/remote", element: <RemoteSessions /> },
   { path: "/firmware", element: <Firmware /> },

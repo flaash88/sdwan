@@ -70,8 +70,8 @@ def make_diff(old: str, new: str, context: int = 2) -> dict[str, Any]:
     return {"added": added, "removed": removed, "lines": lines[:5000]}
 
 
-TRIGGERS = ("scheduled", "manual", "pre-update", "post-policy")
-PINNED_TRIGGERS = ("manual", "pre-update")  # von der Aufbewahrungsgrenze ausgenommen
+TRIGGERS = ("scheduled", "manual", "pre-update", "post-policy", "pre-script")
+PINNED_TRIGGERS = ("manual", "pre-update", "pre-script")  # von der Aufbewahrungsgrenze ausgenommen
 
 
 async def take_backup(

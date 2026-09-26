@@ -405,3 +405,14 @@ Parameter wie Zone oder Objekt werden beim Einfügen per Auswahl gesetzt.
   - `compliance_failed` ist nicht in den Standard-Alarmregeln: „standardmäßig aus“, und der bestehende
     Default-Umfang bleibt unverändert.
 - **Im Labor zu verifizieren:** `/system/ntp/client` (Feld `enabled`), Maskierung bei Export mit `sensitive`.
+
+### Stand Phase 17 – Script-Bibliothek
+- **Erledigt:**
+  - Scripts global/mandantenweit mit Versionen, Kategorien nur lesend/ändernd, Variablen-Allowlist mit
+    Werteprüfung.
+  - Vorschau, Pflicht-Bestätigung, Backup vor Änderung (ohne Backup keine Ausführung), Gruppen mit
+    Abbruch/Fortsetzen/Abbrechen.
+  - Gespeicherte, durchsuchbare Ausgaben, Warnung bei `sdwan:`, Audit mit vollem Text.
+- **Entscheidung:** Ausführung per SSH statt API: Ausgabe erfassbar, Verhalten wie im Terminal.
+- **Im Labor zu verifizieren:** SSH-Ausführung mehrzeiliger Scripts und die Fehlererkennung anhand der
+  RouterOS-Ausgabe.

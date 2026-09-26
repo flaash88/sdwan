@@ -45,6 +45,7 @@ Installation auf einem Server: [INSTALL.md](INSTALL.md) · Aufbau und Design-Ent
 | 14 | Firewall-Editor (einfach): Zonen, Netzwerk-Objekte, Dienste, Bausteine als Seed-Daten, Grundregeln mit Plattform-Zugängen, Drag & Drop, Lint, Vorschau mit Diff, Vorprüfung auf manuelle Regeln, Trefferzähler; Expertenmodus bleibt | ✅ |
 | 15 | Threat-Feeds: Blocklisten (Spamhaus DROP als Seed, eigene URLs), Prüfung auf öffentliche Netze und Obergrenze, differenzielle Verteilung als Address-List mit RAM-Check, Objekt im Firewall-Editor, Alarm „Threat-Feed veraltet“ | ✅ |
 | 16 | Compliance und Config-Suche: Regelsets (MSP-Baseline als Seed), Text-/Regex-/Live-Prüfungen, Auswertung nach jedem Backup, Flottenbericht mit CSV/PDF und Trend, Alarm „Compliance verletzt“ (optional); Volltext-/Regex-Suche über die letzten Backups mit maskierten Geheimnissen | ✅ |
+| 17 | Script-Bibliothek: Scripts mit Variablen und Versionen (nur lesend / ändernd), Vorschau je Gerät, Pflicht-Bestätigung und Backup vor ändernden Scripts, gestaffelte Ausführung mit Abbruch, durchsuchbare Ausgaben, Audit mit Script-Text | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

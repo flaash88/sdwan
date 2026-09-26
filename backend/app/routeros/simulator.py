@@ -322,6 +322,26 @@ class SimRouter:
         if extra:
             raise RouterOSError(f"failure: not enough permissions ({', '.join(sorted(extra))})")
 
+    def run_user_script(self, text: str) -> str:
+        """Tests/Demo: Script-Ausführung (Phase 17). ``:put "..."`` erzeugt Ausgabe, ``/pfad … print`` eine
+        Platzhalter-Ausgabe; eine Zeile mit ``SIM-FAIL`` oder ``script_fail`` liefert einen RouterOS-Fehler."""
+        import re
+
+        self.script_log = [*getattr(self, "script_log", [])[-19:], text]
+        if getattr(self, "script_fail", False) or "SIM-FAIL" in text:
+            return "syntax error (line 1 column 1)"
+        out = []
+        for line in text.splitlines():
+            line = line.strip()
+            m = re.match(r'^:put\s+"(.*)"$', line)
+            if m:
+                out.append(m.group(1))
+            elif line.startswith(":put"):
+                out.append(line[4:].strip())
+            elif line.startswith("/") and line.endswith("print"):
+                out.append(f"# {line}: {len(self.tables.get('/' + '/'.join(line[1:-6].split()), []))} Einträge (Simulator)")
+        return "\n".join(out) + ("\n" if out else "")
+
     def fire_scheduler(self, name: str) -> None:
         """Tests: führt einen Scheduler-Eintrag aus. Der Simulator versteht nur die Befehle, die die Plattform
         selbst in Scheduler schreibt (``/user set … group=…`` und ``/system scheduler remove …``)."""

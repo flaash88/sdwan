@@ -59,6 +59,15 @@ services:
     depends_on:
       api: { condition: service_healthy }
 
+  syslog:
+    # Phase 18: Syslog-Empfänger im Netz-Namespace des Hubs -> erreichbar unter der Hub-Tunnel-IP (UDP 514)
+    <<: *backend
+    command: ["python", "-m", "app.syslog_receiver"]
+    network_mode: "service:wireguard-hub"
+    depends_on:
+      api: { condition: service_healthy }
+      wireguard-hub: { condition: service_started }
+
   wireguard-hub:
     build: ./hub
     restart: unless-stopped

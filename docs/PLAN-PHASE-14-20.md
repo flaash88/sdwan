@@ -416,3 +416,19 @@ Parameter wie Zone oder Objekt werden beim Einfügen per Auswahl gesetzt.
 - **Entscheidung:** Ausführung per SSH statt API: Ausgabe erfassbar, Verhalten wie im Terminal.
 - **Im Labor zu verifizieren:** SSH-Ausführung mehrzeiliger Scripts und die Fehlererkennung anhand der
   RouterOS-Ausgabe.
+
+### Stand Phase 18 – Wartungsfenster, Speedtest, Syslog
+- **Erledigt:**
+  - Wartungsfenster (Mandant/Standort/Gerät, einmalig/wöchentlich, Zeitzone des Mandanten, über Mitternacht).
+    Alarme werden sichtbar unterdrückt (`suppressed_reason`); Firmware-Option „nur im Fenster“ je Gerät.
+  - Speedtest je WAN über eine vorübergehende /32-Route, Schätzung des Datenverbrauchs, Pflicht-Bestätigung bei
+    Volumenlimit, Verlauf im WAN-Tab, wöchentliche Planung (Standard aus).
+  - Zentrales Syslog opt-in je Gerät, Empfänger-Container im Netz des Hubs, Aufbewahrung je Mandant mit
+    Lösch-Job, Tab „Log“ mit Filtern und Absprung aus VRRP-Verlauf und Metriken.
+- **Weggelassen:** Eingebauter btest-Server auf dem Hub (Hub ist Linux; Entscheidung 10). Gezielte
+  Unterdrückung einzelner Alarmtypen je Fenster (alle Alarme des Geltungsbereichs werden unterdrückt).
+  Einstellung der Syslog-Aufbewahrung in der Oberfläche (API `PUT /syslog/retention` vorhanden).
+- **Im Labor zu verifizieren:** Feldnamen und Richtungen von `/tool bandwidth-test`; Route über das
+  gewählte WAN; Felder der Logging-Aktion (`remote`, `remote-port`, `src-address`) und fehlendes
+  Kommentarfeld; Format der empfangenen Syslog-Zeilen; Erreichbarkeit UDP 514 auf der Hub-Tunnel-IP.
+

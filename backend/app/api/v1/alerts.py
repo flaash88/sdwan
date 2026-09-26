@@ -91,7 +91,7 @@ def _alert_out(a: Alert, names: dict | None = None, durations: dict | None = Non
     return {"fires_at": fires_at, "id": str(a.id), "rule_id": str(a.rule_id) if a.rule_id else None, "device_id": str(a.device_id) if a.device_id else None,
             "device": (names or {}).get(a.device_id), "subject": a.subject, "status": a.status, "severity": a.severity, "message": a.message,
             "value": a.value, "started_at": a.started_at, "fired_at": a.fired_at, "resolved_at": a.resolved_at, "notified": a.notified,
-            "acknowledged_by": a.acknowledged_by, "acknowledged_at": a.acknowledged_at}
+            "acknowledged_by": a.acknowledged_by, "acknowledged_at": a.acknowledged_at, "suppressed_reason": a.suppressed_reason}
 
 
 def _rule_data(data: RuleIn) -> dict:

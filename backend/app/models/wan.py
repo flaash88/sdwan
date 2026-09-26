@@ -32,6 +32,7 @@ class WanLink(IdMixin, TenantScoped, Base):
     latency_threshold_ms: Mapped[int | None] = mapped_column(Integer)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     monthly_limit_gb: Mapped[float | None] = mapped_column(Float)  # Datenvolumen-Limit (z. B. 5G-Tarif)
+    speedtest_weekly: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")  # Phase 18, opt-in
 
     # Laufzeitstatus (vom Poller)
     status: Mapped[str] = mapped_column(String(20), default="unknown")  # up | down | degraded | disabled | unknown

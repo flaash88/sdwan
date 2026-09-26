@@ -58,6 +58,8 @@ class Alert(IdMixin, TenantScoped, Base):
     notified: Mapped[bool] = mapped_column(Boolean, default=False)
     acknowledged_by: Mapped[str | None] = mapped_column(String(255))
     acknowledged_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
+    # Phase 18: Grund, warum ein anliegender Alarm (noch) nicht ausgelöst wird, z. B. "maintenance:<Fenstername>"
+    suppressed_reason: Mapped[str | None] = mapped_column(String(250))
 
 
 class SlaReport(IdMixin, TenantScoped, Base):

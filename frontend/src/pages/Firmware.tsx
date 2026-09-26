@@ -78,7 +78,7 @@ export default function Firmware() {
 }
 
 function JobModal({ ids, onClose, onCreated }: { ids: string[]; onClose: () => void; onCreated: () => void }) {
-  const [f, setF] = useState({ name: `RouterOS-Update ${new Date().toLocaleDateString("de-DE")}`, channel: "stable", batch_size: 5, batch_interval_s: 300, max_failures: 1, upgrade_routerboard: true });
+  const [f, setF] = useState({ name: `RouterOS-Update ${new Date().toLocaleDateString("de-DE")}`, channel: "stable", batch_size: 5, batch_interval_s: 300, max_failures: 1, upgrade_routerboard: true, only_in_window: false });
   const { busy, error, run } = useAction();
   return (
     <Modal open onClose={onClose} title={`${ids.length} Geräte aktualisieren`}
@@ -95,6 +95,7 @@ function JobModal({ ids, onClose, onCreated }: { ids: string[]; onClose: () => v
           <Input label="Pausieren ab Fehlern" type="number" min={0} value={f.max_failures} onChange={(e) => setF({ ...f, max_failures: Number(e.target.value) })} />
         </div>
         <Checkbox label="Danach RouterBOARD-Firmware aktualisieren (zusätzlicher Reboot)" checked={f.upgrade_routerboard} onChange={(v) => setF({ ...f, upgrade_routerboard: v })} />
+        <Checkbox label="Nur in Wartungsfenstern starten (Geräte ohne aktives Fenster warten)" checked={f.only_in_window} onChange={(v) => setF({ ...f, only_in_window: v })} />
         <p className="text-xs text-slate-500">Vor jedem Update wird ein Konfigurations-Backup erstellt. Geräte rebooten während des Updates.</p>
       </div>
     </Modal>

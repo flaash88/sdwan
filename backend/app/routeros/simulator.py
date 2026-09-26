@@ -29,6 +29,8 @@ _TABLE_PATHS = {
     "/ip/firewall/mangle",
     "/ip/firewall/address-list",
     "/ipv6/firewall/address-list",
+    "/system/logging",
+    "/system/logging/action",
     "/routing/table",
     "/ip/dns/static",
     "/tool/netwatch",
@@ -157,6 +159,7 @@ class SimRouter:
             "/system/reboot": self._reboot,
             "/system/clock/print": self._clock,
             "/system/health/print": self._health,
+            "/tool/bandwidth-test": self._btest,
             "/system/ntp/client/print": lambda p: [{"enabled": getattr(self, "ntp_enabled", "yes"), "mode": "unicast", "servers": "pool.ntp.org"}],
             "/ip/dns/print": lambda p: [dict(self.dns)],
             "/ip/dns/set": self._dns_set,
@@ -322,6 +325,16 @@ class SimRouter:
         if extra:
             raise RouterOSError(f"failure: not enough permissions ({', '.join(sorted(extra))})")
 
+    def _btest(self, p: dict[str, Any]) -> list[dict[str, Any]]:
+        """Tests: /tool bandwidth-test – nur mit einer Route zum Server (wie „über das gewählte WAN“)."""
+        self.btest_log = [*getattr(self, "btest_log", []), dict(p)]
+        routed = any(str(r.get("dst-address", "")).split("/")[0] == p.get("address") for r in self.tables["/ip/route"])
+        if not routed:
+            return [{"status": "can't connect"}]
+        down, up = getattr(self, "btest_rates", ("87.3Mbps", "21.4Mbps"))
+        return [{"status": "running", "rx-total-average": "10Mbps", "tx-total-average": "1Mbps"},
+                {"status": "done testing", "rx-total-average": down, "tx-total-average": up, "duration": p.get("duration", "10s")}]
+
     def run_user_script(self, text: str) -> str:
         """Tests/Demo: Script-Ausführung (Phase 17). ``:put "..."`` erzeugt Ausgabe, ``/pfad … print`` eine
         Platzhalter-Ausgabe; eine Zeile mit ``SIM-FAIL`` oder ``script_fail`` liefert einen RouterOS-Fehler."""
@@ -431,6 +444,11 @@ def _seed_extras(r: SimRouter) -> None:
     if not any(p.get("comment") == "sdwan:hub" for p in r.tables["/interface/wireguard/peers"]):
         r._insert("/interface/wireguard/peers", {"interface": s.wg_device_interface, "public-key": _fake_key("hub"),
                                                  "allowed-address": f"{s.wg_hub_ip}/32", "comment": "sdwan:hub"})
+    if not r.tables["/system/logging/action"]:  # wie RouterOS: Standard-Aktionen und -Regeln
+        for name, target in (("memory", "memory"), ("disk", "disk"), ("echo", "echo"), ("remote", "remote")):
+            r.tables["/system/logging/action"].append({".id": f"*L{name}", "name": name, "target": target, "default": "true"})
+        for i, t in enumerate(("info", "error", "warning", "critical")):
+            r.tables["/system/logging"].append({".id": f"*R{i}", "topics": t, "action": "memory", "default": "true"})
     if not any(x.get("builtin") == "true" for x in r.tables["/interface/list"]):
         for name in ("all", "none", "dynamic", "static"):  # wie RouterOS: eingebaute Listen
             r.tables["/interface/list"].insert(0, {".id": f"*B{name}", "name": name, "builtin": "true"})

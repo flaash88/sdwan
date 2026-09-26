@@ -77,6 +77,13 @@ class Settings(BaseSettings):
     feed_min_free_mb: int = 32
     feed_bytes_per_entry: int = 200
     feed_max_download_mb: int = 10
+    # Speedtest (Phase 18): btest-Server (RouterOS/CHR) – ohne Angabe ist der Speedtest deaktiviert
+    speedtest_server: str = ""
+    speedtest_user: str = ""
+    speedtest_password: str = ""
+    speedtest_duration_s: int = 10
+    # Syslog (Phase 18): UDP-Port des Empfängers auf der Hub-Tunnel-IP
+    syslog_port: int = 514
     offline_after_seconds: int = 180
     pairing_token_ttl_hours: int = 72
 

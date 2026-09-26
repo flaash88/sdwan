@@ -6,7 +6,7 @@ import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.config import get_settings
-from app.services import alerts, backup, feeds, firmware, mesh, metrics, poller, remote, scripts, sla
+from app.services import alerts, backup, feeds, firmware, mesh, metrics, poller, remote, scripts, sla, speedtest, syslog
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +37,8 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
     scheduler.add_job(_safe(remote.expire_sessions), "interval", seconds=30, id="remote_expire", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(backup.backup_all), "cron", hour=s.backup_hour_utc, minute=0, id="daily_backup", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(feeds.feeds_tick), "interval", minutes=5, id="threat_feeds", max_instances=1, coalesce=True)
+    scheduler.add_job(_safe(speedtest.speedtest_tick), "cron", hour=3, minute=30, id="speedtest_weekly", max_instances=1, coalesce=True)
+    scheduler.add_job(_safe(syslog.purge_old), "cron", hour=4, minute=15, id="syslog_retention", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(scripts.script_tick), "interval", seconds=15, id="script_tick", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(firmware.firmware_tick), "interval", seconds=15, id="firmware_tick", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(alerts.evaluate_all), "interval", seconds=60, id="alerts", next_run_time=now + dt.timedelta(seconds=20),

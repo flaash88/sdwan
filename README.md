@@ -46,6 +46,7 @@ Installation auf einem Server: [INSTALL.md](INSTALL.md) · Aufbau und Design-Ent
 | 15 | Threat-Feeds: Blocklisten (Spamhaus DROP als Seed, eigene URLs), Prüfung auf öffentliche Netze und Obergrenze, differenzielle Verteilung als Address-List mit RAM-Check, Objekt im Firewall-Editor, Alarm „Threat-Feed veraltet“ | ✅ |
 | 16 | Compliance und Config-Suche: Regelsets (MSP-Baseline als Seed), Text-/Regex-/Live-Prüfungen, Auswertung nach jedem Backup, Flottenbericht mit CSV/PDF und Trend, Alarm „Compliance verletzt“ (optional); Volltext-/Regex-Suche über die letzten Backups mit maskierten Geheimnissen | ✅ |
 | 17 | Script-Bibliothek: Scripts mit Variablen und Versionen (nur lesend / ändernd), Vorschau je Gerät, Pflicht-Bestätigung und Backup vor ändernden Scripts, gestaffelte Ausführung mit Abbruch, durchsuchbare Ausgaben, Audit mit Script-Text | ✅ |
+| 18 | Betrieb: Wartungsfenster je Mandant/Standort/Gerät (Alarme sichtbar unterdrückt, Firmware optional nur im Fenster), Speedtest je WAN gegen einen btest-Server mit Volumenwarnung und Verlauf, zentrales Syslog (opt-in) mit Tab „Log“ und Absprung aus Metriken/VRRP | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

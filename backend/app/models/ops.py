@@ -40,6 +40,8 @@ class FirmwareJob(IdMixin, Base):
     batch_interval_s: Mapped[int] = mapped_column(Integer, default=300)
     max_failures: Mapped[int] = mapped_column(Integer, default=1)
     upgrade_routerboard: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Phase 18: Geräte nur starten, wenn für sie ein Wartungsfenster (firmware_allowed) aktiv ist
+    only_in_window: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     status: Mapped[str] = mapped_column(String(20), default="running")  # running | paused | completed | failed | cancelled
     current_batch: Mapped[int] = mapped_column(Integer, default=0)
     next_batch_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())

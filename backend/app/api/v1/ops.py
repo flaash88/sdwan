@@ -110,11 +110,12 @@ class JobIn(BaseModel):
     batch_interval_s: int = Field(default=300, ge=0, le=86400)
     max_failures: int = Field(default=1, ge=0, le=1000)
     upgrade_routerboard: bool = False
+    only_in_window: bool = False  # Phase 18: nur in aktiven Wartungsfenstern starten
 
 
 def _job_out(j: FirmwareJob, items: list[FirmwareJobItem] | None = None, names: dict | None = None) -> dict:
     out = {"id": str(j.id), "name": j.name, "channel": j.channel, "batch_size": j.batch_size, "batch_interval_s": j.batch_interval_s,
-           "max_failures": j.max_failures, "upgrade_routerboard": j.upgrade_routerboard, "status": j.status, "current_batch": j.current_batch,
+           "max_failures": j.max_failures, "upgrade_routerboard": j.upgrade_routerboard, "only_in_window": j.only_in_window, "status": j.status, "current_batch": j.current_batch,
            "next_batch_at": j.next_batch_at, "created_by": j.created_by, "created_at": j.created_at, "finished_at": j.finished_at, "last_error": j.last_error}
     if items is not None:
         out["items"] = [{"device_id": str(i.device_id), "device": (names or {}).get(i.device_id), "batch_no": i.batch_no, "status": i.status,

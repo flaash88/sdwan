@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { Button, Card, Checkbox, EmptyState, ErrorBox, Input, Loading, Pill, Select, cls, useAction } from "../components/ui";
 import { api } from "../lib/api";
@@ -189,7 +189,8 @@ function History({ v, events }: { v: VrrpInstance; events: EventsResponse | null
             <div className="grid grid-cols-[170px_190px_minmax(0,1fr)_120px] gap-3 border-y border-line bg-panel2 px-4 py-2 text-xs font-medium text-fg3"><span>Zeitpunkt</span><span>Wechsel</span><span>Ursache (abgeleitet)</span><span className="text-right">Master-Dauer</span></div>
             {rows.map(({ e, prev, why, dur }) => (
               <div key={e.at} className="grid h-[42px] grid-cols-[170px_190px_minmax(0,1fr)_120px] items-center gap-3 border-b border-line px-4 last:border-b-0">
-                <span className="font-mono text-xs text-fg2">{fmtFull(e.at)}</span>
+                <span className="flex items-center gap-1.5 font-mono text-xs text-fg2">{fmtFull(e.at)}
+                  <Link to={`?tab=log&around=${encodeURIComponent(e.at)}`} title="Log um diesen Zeitpunkt" aria-label="Log um diesen Zeitpunkt" className="text-fg3 hover:text-fg"><Icon name="file" className="text-[12px]" /></Link></span>
                 <span className="flex items-center gap-1.5">{prev && <><RolePill state={prev} /><Icon name="arrowRight" className="text-[13px] text-fg3" /></>}<RolePill state={e.status} /></span>
                 <span className="truncate text-fg2">{why}</span>
                 <span className="text-right text-fg2">{dur}</span>

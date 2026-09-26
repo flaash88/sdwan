@@ -239,6 +239,9 @@ async def evaluate_tenant(db: AsyncSession, tenant: Tenant) -> dict[str, int]:
     open_alerts = (await db.execute(select(Alert).where(Alert.tenant_id == tenant.id, Alert.status.in_(("pending", "firing"))))).scalars().all()
     by_key = {(a.rule_id, a.subject, a.device_id): a for a in open_alerts}
     now = utcnow()
+    from app.services.maintenance import active_windows, window_for
+
+    windows = await active_windows(db, tenant, now)  # Phase 18: Wartungsfenster
     for rule in rules:
         seen: set[tuple[Any, ...]] = set()
         for c in await conditions(db, rule, devices):
@@ -254,6 +257,11 @@ async def evaluate_tenant(db: AsyncSession, tenant: Tenant) -> dict[str, int]:
             else:
                 alert.message, alert.value = c.message, c.value
             if alert.status == "pending":
+                mw = window_for(windows, c.device)
+                alert.suppressed_reason = f"maintenance:{mw.name}" if mw else None
+                if mw is not None:  # im Wartungsfenster: nicht auslösen, sichtbar markiert
+                    stats["pending"] += 1
+                    continue
                 if (now - alert.started_at).total_seconds() >= rule.duration_s:
                     alert.status, alert.fired_at = "firing", now
                     stats["fired"] += 1

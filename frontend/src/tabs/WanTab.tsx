@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
+import SpeedtestCard from "../components/ops/SpeedtestCard";
 import { Button, Card, Checkbox, EmptyState, ErrorBox, Input, Loading, Pill, Select, StatusBadge, cls, useAction } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -180,6 +181,8 @@ export default function WanTab({ device }: { device: Device }) {
           )}
         </div>
       )}
+
+      {w.links.length > 0 && <SpeedtestCard device={device} links={w.links} />}
 
       <Card title="Routen" subtitle={routes.data?.live === false ? `nicht live abrufbar – ${routes.data.error}` : "verwaltete Routen (sdwan:wan), live vom Router"} flush>
         {!routes.data ? <Loading rows={2} /> : mainRoutes.length + tableRoutes.length === 0 ? <EmptyState compact title={routes.data.live ? "Keine verwalteten Routen" : "Router nicht erreichbar"} /> : (

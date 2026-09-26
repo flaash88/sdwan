@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import type { Device } from "./lib/types";
 import BackupsTab from "./tabs/BackupsTab";
+import LogTab from "./tabs/LogTab";
 import MetricsTab from "./tabs/MetricsTab";
 import PoliciesTab from "./tabs/PoliciesTab";
 import RemoteTab from "./tabs/RemoteTab";
@@ -22,4 +23,5 @@ export const deviceTabs: DeviceTab[] = [
   { key: "backups", label: "Backups", pairedOnly: true, component: BackupsTab },
   { key: "policies", label: "Firewall", pairedOnly: true, component: PoliciesTab },
   { key: "remote", label: "Fernzugriff", pairedOnly: true, component: RemoteTab },
+  { key: "log", label: "Log", pairedOnly: true, component: LogTab },
 ];

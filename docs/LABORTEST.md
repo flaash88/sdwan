@@ -340,6 +340,36 @@ Vorbereitung: WAN eingerichtet (Schritt 4). Auf dem L009 existieren die defconf-
 - [ ] Als Techniker: Das ändernde Script ist nicht ausführbar (Button fehlt, API 403).
 - [ ] „Ausgaben durchsuchen“ nach „Gerät:“. **Erwartet:** Treffer der Systeminfo-Ausführung.
 
+## 14. Wartungsfenster, Speedtest, Syslog (Phase 18)
+
+**Wartungsfenster**
+- [ ] Wartungsfenster „jetzt + 30 min“ für das Testgerät anlegen, dann WAN-Kabel am L009 ziehen.
+      **Erwartet:** Alarm bleibt „Unterdrückt – Wartungsfenster …“, keine Mail. Nach Fensterende (Kabel noch
+      gezogen) wird normal alarmiert.
+- [ ] Firmware-Rollout mit „Nur in Wartungsfenstern starten“ außerhalb eines Fensters anlegen.
+      **Erwartet:** Gerät „wartet auf Wartungsfenster“, Start erst im Fenster.
+
+**Speedtest** (Voraussetzung: CHR/RouterOS als btest-Server, `/tool bandwidth-server set enabled=yes`,
+`SPEEDTEST_SERVER` gesetzt)
+- [ ] WAN-Tab → Speedtest → „Testen“. **Erwartet:** Dialog mit geschätztem Verbrauch; Ergebnis mit Down/Up.
+- [ ] **Annahme prüfen:** `/tool bandwidth-test` liefert `rx-total-average`/`tx-total-average` (bps) mit
+      `direction=receive`/`transmit` und `duration=10s`. Tatsächliche Feldnamen: ______
+- [ ] Während des Tests `/ip route print where comment~"sdwan:speedtest"` → genau eine /32-Route über das
+      Gateway des gewählten WAN. **Nach dem Test:** Route ist entfernt.
+- [ ] Bei zwei WAN: Test über das Backup-WAN läuft tatsächlich über dieses (Traffic-Zähler am Interface).
+- [ ] WAN mit Monatslimit: Start verlangt die Bestätigung der Volumenwarnung.
+
+**Syslog**
+- [ ] Tab „Log“ → Einstellungen → Topics `system`, `critical` aktivieren. Auf dem Router prüfen:
+      `/system logging action print` → `sdwan-syslog` mit `target=remote`, `remote=<Hub-Tunnel-IP>`,
+      `remote-port=514`, `src-address=<Tunnel-IP>`; `/system logging print` → Regeln mit `action=sdwan-syslog`.
+- [ ] **Annahme prüfen:** Aktionen und Regeln haben kein `comment`-Feld (Erkennung über den Namen).
+      Ergebnis: ______
+- [ ] Container `syslog` läuft und empfängt: WinBox-Login am Router → Meldung erscheint im Tab „Log“ mit
+      Schweregrad und Topics. Format der empfangenen Rohzeile (für den Parser): ______
+- [ ] VRRP-Verlauf → Symbol „Log um diesen Zeitpunkt“ → Log zeigt ±15 min um den Übergang.
+- [ ] Syslog abschalten → Aktion und Regeln sind entfernt, eigene Logging-Regeln bleiben.
+
 ---
 
 ## Ergebnis
@@ -359,3 +389,4 @@ Vorbereitung: WAN eingerichtet (Schritt 4). Auf dem L009 existieren die defconf-
 | 11 Threat-Feeds | ☐ ok ☐ Abweichung | |
 | 12 Compliance/Suche | ☐ ok ☐ Abweichung | |
 | 13 Scripts | ☐ ok ☐ Abweichung | |
+| 14 Wartung/Speedtest/Syslog | ☐ ok ☐ Abweichung | |

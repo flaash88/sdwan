@@ -715,6 +715,42 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
 * **Annahme (Labor):** Mehrzeilige Scripts laufen als SSH-Befehl wie eingetippt; die Fehlererkennung über die
   Ausgabe greift.
 
+## Phase 18 – Wartungsfenster, Speedtest, Syslog
+
+* **Wartungsfenster** (`maintenance_windows`, `services/maintenance.py`, Seite „Wartungsfenster“):
+  - Gilt für den ganzen Mandanten, einen Standort oder ein Gerät; einmalig (Beginn + Dauer) oder wöchentlich
+    (Wochentage, Uhrzeit, Dauer) in der Zeitzone des Mandanten, auch über Mitternacht.
+  - `suppress_alerts`: Anliegende Bedingungen lösen während des Fensters keinen Alarm aus. Der Alarm bleibt
+    „ausstehend“ mit `suppressed_reason = "maintenance:<Name>"` und wird in der Alarmliste als „Unterdrückt –
+    Wartungsfenster …“ angezeigt. Besteht die Bedingung nach dem Fenster noch, wird normal alarmiert.
+    Bereits ausgelöste Alarme bleiben unverändert.
+  - Firmware-Rollouts mit `only_in_window`: Ein Gerät startet nur, wenn für es ein Fenster mit
+    `firmware_allowed` aktiv ist; sonst bleibt es „wartet auf Wartungsfenster“. Ohne Option wie bisher.
+* **Speedtest je WAN** (`speedtest_results`, `services/speedtest.py`, Karte im WAN-Tab):
+  - `/tool bandwidth-test` gegen einen btest-Server (`SPEEDTEST_SERVER`, `SPEEDTEST_USER/PASSWORD`,
+    `SPEEDTEST_DURATION_S`). Der Hub ist Linux und **kein** btest-Server; ohne Konfiguration ist die Funktion
+    deaktiviert (mit Erklärung).
+  - Je WAN eine vorübergehende /32-Route zum Server über das Gateway dieses WAN (Kommentar
+    `sdwan:speedtest:<slot>`, bei DHCP das Gateway aus `/ip dhcp-client`). Sie wird nach dem Test immer
+    entfernt; Reste früherer Läufe werden vor jedem Test aufgeräumt.
+  - Vor dem Start: geschätzter Datenverbrauch (Dauer × letzte gemessene Rate, sonst 100 Mbit/s je Richtung).
+    Bei WAN-Links mit Monatslimit ist eine ausdrückliche Bestätigung nötig (`confirm_volume`, sonst 409).
+  - Wöchentliche Planung je WAN (`wan_links.speedtest_weekly`, Standard aus), täglicher Worker-Job (03:30) startet Tests, deren letzte Messung ≥ 7 Tage alt ist.
+  - Annahme (Labor): Antwortfelder `rx-total-average`/`tx-total-average`, Richtungen `receive`/`transmit`.
+* **Zentrales Syslog** (`device_syslog`, `syslog_messages`, `services/syslog.py`, Tab „Log“):
+  - Opt-in je Gerät (Standard aus). Beim Aktivieren legt die Plattform `/system logging action`
+    `sdwan-syslog` (target=remote, remote=Hub-Tunnel-IP, Port `SYSLOG_PORT`, src-address=Tunnel-IP) und je
+    gewähltem Topic eine Regel `/system logging` mit `action=sdwan-syslog` an. Erkannt werden die verwalteten
+    Einträge über den Aktionsnamen (Annahme: Aktionen/Regeln haben kein Kommentarfeld). Andere Aktionen und
+    Regeln bleiben unangetastet.
+  - Empfänger `app/syslog_receiver.py` als eigener Container `syslog` im Netz-Namespace des Hubs
+    (`network_mode: service:wireguard-hub`), UDP. Zuordnung über die Quell-IP = Tunnel-IP eines Geräts mit
+    aktivem Syslog; alles andere wird verworfen.
+  - Aufbewahrung je Mandant (`tenant.settings.syslog_retention_days`, Standard 30 Tage, `PUT /syslog/retention`),
+    täglicher Lösch-Job.
+  - Tab „Log“: Filter nach Text, Topic, Schweregrad und Zeit. `?tab=log&around=<Zeit>` zeigt ±15 Minuten; Absprung
+    „Log um diesen Zeitpunkt“ aus dem VRRP-Verlauf und aus den Metriken (Backup-Markierung).
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

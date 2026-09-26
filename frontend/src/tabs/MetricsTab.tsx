@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { LineChart, type Marker, type Series } from "../components/Chart";
 import { Button, Card, ErrorBox, Notice, Segment, StatusBadge, Table } from "../components/ui";
@@ -118,6 +119,7 @@ export default function MetricsTab({ device }: { device: Device }) {
       <div className="flex flex-wrap items-center gap-3">
         <Segment label="Zeitraum" value={range} onChange={setRange} options={RANGES.map((r) => ({ value: r.value, label: r.label }))} />
         <span className="text-xs text-fg3">{lastMarker ? `Letzter Backup-Betrieb ab ${new Date(lastMarker.t * 1000).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })} markiert` : "Kein Backup-Betrieb im Zeitraum"}</span>
+        {lastMarker && <Link to={`?tab=log&around=${encodeURIComponent(new Date(lastMarker.t * 1000).toISOString())}`} className="text-xs text-blue-text hover:underline">Log um diesen Zeitpunkt</Link>}
         <div className="flex-1" />
         {markers.length > 0 && <span className="flex items-center gap-1.5 text-xs text-orange-text"><span className="w-3.5 border-t-[1.5px] border-dashed border-orange" />Backup-Betrieb (Failover/VRRP-Master)</span>}
         {me?.user.is_superuser && <Button size="sm" variant="secondary" icon="external" onClick={() => void api.get<{ url: string }>(`/devices/${device.id}/metrics/grafana`).then((r) => window.open(r.url, "_blank", "noopener"))}>Grafana</Button>}

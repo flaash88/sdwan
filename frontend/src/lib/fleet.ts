@@ -6,7 +6,7 @@ import { useFetch } from "./useFetch";
 export interface AlertItem {
   id: string; rule_id: string | null; device_id: string | null; device: string | null; subject: string;
   status: "pending" | "firing" | "resolved"; severity: string; message: string; value: number | null;
-  started_at: string; fired_at: string | null; resolved_at: string | null; fires_at: string | null;
+  started_at: string; fired_at: string | null; resolved_at: string | null; fires_at: string | null; suppressed_reason?: string | null;
   notified: boolean; acknowledged_by: string | null; acknowledged_at: string | null;
 }
 

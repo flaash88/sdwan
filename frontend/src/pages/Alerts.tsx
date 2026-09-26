@@ -136,7 +136,7 @@ export default function Alerts() {
                             <span className="text-xs leading-[1.3] text-fg3">
                               {st === "ack" && `Quittiert von ${a.acknowledged_by}${a.acknowledged_at ? `, ${fmtShort(a.acknowledged_at)}` : ""}`}
                               {st === "resolved" && `Behoben ${fmtShort(a.resolved_at)}${a.acknowledged_by ? ` · quittiert von ${a.acknowledged_by}` : ""}`}
-                              {st === "pending" && (a.fires_at ? `Löst aus ${new Date(a.fires_at) > new Date() ? `um ${new Date(a.fires_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}` : "gleich"}` : "Ausstehend")}
+                              {st === "pending" && a.suppressed_reason?.startsWith("maintenance:") ? `Unterdrückt – Wartungsfenster „${a.suppressed_reason.slice(12)}“` : st === "pending" && (a.fires_at ? `Löst aus ${new Date(a.fires_at) > new Date() ? `um ${new Date(a.fires_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}` : "gleich"}` : "Ausstehend")}
                               {st === "active" && "Aktiv"}
                             </span>
                           )}

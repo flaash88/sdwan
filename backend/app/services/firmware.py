@@ -141,12 +141,21 @@ async def tick_job(db: AsyncSession, job: FirmwareJob) -> None:
         if utcnow() < job.next_batch_at:
             return
         job.current_batch, job.next_batch_at = batch, None
+    in_window: dict[Any, Any] | None = None
+    if job.only_in_window:
+        from app.services.maintenance import devices_in_window
+
+        in_window = await devices_in_window(db, [devices[i.device_id] for i in items if i.batch_no == batch and i.device_id in devices], utcnow())
     for item in (i for i in items if i.batch_no == batch):
         dev = devices.get(item.device_id)
         if dev is None:
             item.status, item.error = "failed", "Gerät gelöscht"
             continue
+        if item.status == "queued" and in_window is not None and dev.id not in in_window:
+            item.error = "wartet auf Wartungsfenster"  # bleibt queued, Start im nächsten Fenster
+            continue
         if item.status == "queued":
+            item.error = None
             await _start_item(db, job, item, dev)
         elif item.status == "rebooting":
             await _verify_item(db, job, item, dev)

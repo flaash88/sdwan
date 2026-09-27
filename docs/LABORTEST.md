@@ -216,6 +216,14 @@ FortiGate, Priorität 100 (kleiner als die FortiGate, z. B. 200), VIP `192.168.1
 - [ ] Kopf → „Fernzugriff starten“ → WinBox, 15 min, erlaubte Quelle = eigene IP.
       **Erwartet:** Verbindungsdaten mit Port aus dem Proxy-Bereich und temporärem Benutzer
       `sdwan-rs-…`. WinBox verbindet über `<server>:<port>`.
+- [ ] **Zugangsdaten kopieren:** In der Sitzungsansicht Host, Port, Benutzer, Passwort einzeln kopieren (Passwort
+      maskiert, Auge zeigt es an; Kopieren klappt auch maskiert), „Alles kopieren“ in einen Editor einfügen
+      (`Host: …:port`, `Benutzer: …`, `Passwort: …`). Audit-Log: `remote.credentials_copied` (ohne Passwort).
+- [ ] **ANNAHME (Labor): WinBox-Aufruf mit Argumenten.** Kopierten Aufruf `winbox.exe <dns>:<port> <user> <pass>`
+      in cmd/PowerShell ausführen (WinBox 3 und WinBox 4).
+      **Erwartet:** WinBox verbindet sich direkt ohne Anmeldedialog.
+      **Ergebnis:** WinBox 3 ☐ ok ☐ abweichend · WinBox 4 ☐ ok ☐ abweichend: ______________________
+- [ ] SSH-Sitzung: kopierten Befehl `ssh -p <port> <user>@<dns>` ausführen, Passwort einfügen → Anmeldung klappt.
 - [ ] Von einer anderen Quell-IP verbinden. **Erwartet:** Die Verbindung wird abgelehnt.
 - [ ] SSH-Sitzung genauso testen.
 - [ ] Sitzung beenden oder ablaufen lassen. **Erwartet:** Der temporäre Benutzer ist auf dem Router

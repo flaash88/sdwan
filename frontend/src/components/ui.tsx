@@ -420,7 +420,6 @@ export const Dialog = Modal;
 /* ----------------------------------------------------------------------------- Code */
 /** Codeblock mit Kopieren-Button; Leerzeilen zwischen Befehlen werden entfernt. */
 export function CodeBlock({ text, highlight = true, className }: { text: string; highlight?: boolean; className?: string }) {
-  const [copied, setCopied] = useState(false);
   const lines = text.split("\n").filter((l) => l.trim() !== "");
   const clean = lines.join("\n");
   return (
@@ -433,12 +432,20 @@ export function CodeBlock({ text, highlight = true, className }: { text: string;
           return m ? <div key={i}>{m[1]}<span className="text-blue-text">{m[2]}</span>{m[3]}</div> : <div key={i}>{l}</div>;
         })}
       </pre>
-      <button type="button"
-        onClick={() => { void navigator.clipboard?.writeText(clean); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-        className={cls("absolute right-2 top-2 inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-line-strong bg-panel px-2.5 font-sans text-[12.5px] font-medium hover:bg-hover", copied ? "text-green-text" : "text-fg")}>
-        <Icon name={copied ? "check" : "copy"} className="text-[13px]" />{copied ? "Kopiert" : "Kopieren"}
-      </button>
+      <CopyButton text={clean} className="absolute right-2 top-2" />
     </div>
+  );
+}
+
+/** Kopieren-Button mit kurzer Bestätigung „Kopiert“ (auch für maskierte Werte: kopiert wird ``text``). */
+export function CopyButton({ text, label = "Kopieren", onCopied, className }: { text: string; label?: string; onCopied?: () => void; className?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button type="button" aria-label={label}
+      onClick={() => { void navigator.clipboard?.writeText(text); setCopied(true); onCopied?.(); setTimeout(() => setCopied(false), 2000); }}
+      className={cls("inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-line-strong bg-panel px-2.5 font-sans text-[12.5px] font-medium hover:bg-hover", copied ? "text-green-text" : "text-fg", className)}>
+      <Icon name={copied ? "check" : "copy"} className="text-[13px]" />{copied ? "Kopiert" : label}
+    </button>
   );
 }
 /** Kompatibel zu älteren Aufrufen. */

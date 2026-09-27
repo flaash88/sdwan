@@ -105,3 +105,24 @@ async def test_remote_rbac_and_limits(client, msp, hub):
     assert r.status_code == 403
     r = await client.post(f"/api/v1/devices/{dev['id']}/remote-sessions", json={"protocol": "ssh", "duration_minutes": 9999}, headers=adm)
     assert r.status_code == 400
+
+
+async def test_credentials_copied_audit(client, msp, hub, monkeypatch):
+    monkeypatch.setattr(get_settings(), "remote_proxy_port_range", "41840-41849")
+    t = await make_tenant(client, msp)
+    adm = await make_tenant_admin(client, msp, t["id"])
+    tech = await make_tenant_admin(client, msp, t["id"], role="technician", email="tech2@acme.example.com")
+    dev = await make_paired_device(client, adm)
+    s = (await client.post(f"/api/v1/devices/{dev['id']}/remote-sessions", json={"protocol": "winbox", "duration_minutes": 15}, headers=adm)).json()
+    assert s["password"] and s["username"] and s["proxy_host"] and s["listen_port"]
+    for what in ("password", "all", "winbox"):
+        r = await client.post(f"/api/v1/remote-sessions/{s['id']}/credentials-copied", json={"what": what}, headers=adm)
+        assert r.status_code == 200
+    assert (await client.post(f"/api/v1/remote-sessions/{s['id']}/credentials-copied", json={"what": "user"}, headers=adm)).status_code == 422
+    assert (await client.post(f"/api/v1/remote-sessions/{s['id']}/credentials-copied", json={"what": "password"}, headers=tech)).status_code == 403
+    audit = (await client.get("/api/v1/audit", params={"action": "remote.credentials_copied"}, headers=adm)).json()
+    items = audit["items"] if isinstance(audit, dict) else audit
+    rows = [a for a in items if a["action"] == "remote.credentials_copied"]
+    assert sorted(a["details"]["what"] for a in rows) == ["all", "password", "winbox"]
+    assert all(a["details"]["session"] == s["id"] and s["password"] not in str(a["details"]) for a in rows)  # nie das Passwort selbst
+    await client.post(f"/api/v1/remote-sessions/{s['id']}/close", headers=adm)

@@ -286,6 +286,13 @@ eigenen Abschnitt.
 * **Audit:** `remote.open`, `remote.connect` (Quell-IP), `remote.disconnect` (Dauer, Bytes),
   `remote.denied`, `remote.close`, `remote.expired`. Nur Techniker/Admins dürfen Sessions öffnen;
   schließen dürfen der Ersteller oder Admins.
+* **Zugangsdaten in der Sitzungsansicht:** Host/DNS, Port, Benutzer, Passwort je mit Kopieren-Button
+  (`CopyButton`, Bestätigung „Kopiert“); das Passwort ist maskiert (Auge zum Anzeigen), kopiert wird immer der
+  Klartext. „Alles kopieren“ liefert `Host: <dns>:<port>` / `Benutzer:` / `Passwort:`; SSH zusätzlich
+  `ssh -p <port> <user>@<dns>`, WinBox `winbox.exe <dns>:<port> <user> <pass>` (ANNAHME Labor: WinBox 3/4
+  nehmen Adresse, Benutzer, Passwort als Argumente). Die Zwischenablage wird nicht automatisch geleert (Browser
+  erlauben das nicht zuverlässig); Hinweis „Zugangsdaten gelten nur für diese Sitzung“. Jedes Kopieren des
+  Passworts (einzeln, im Block oder im WinBox-Aufruf) → Audit `remote.credentials_copied` (ohne Passwort).
 
 ## Phase 9 – Backups & Firmware
 

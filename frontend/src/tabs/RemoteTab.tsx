@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "../components/Icon";
-import { Button, Card, CodeBlock, EmptyState, ErrorBox, Input, Loading, Modal, Notice, Select, StatusBadge, useAction } from "../components/ui";
+import { Button, Card, CodeBlock, CopyButton, EmptyState, ErrorBox, Input, Loading, Modal, Notice, Select, StatusBadge, useAction } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { fmtBytes, fmtFull, fmtSince } from "../lib/format";
@@ -27,6 +27,59 @@ const PROTO: Record<string, { name: string; icon: IconName; desc: string; port: 
   ssh: { name: "SSH", icon: "terminal", desc: "SSH-Zugang über den Fleet-Proxy mit temporärem Benutzer.", port: 22 },
 };
 
+/** Kopierzeile: Bezeichnung, Wert (optional maskiert mit Auge-Button), Kopieren – kopiert wird immer der Klartext. */
+function CopyRow({ label, value, secret, onCopied }: { label: string; value: string; secret?: boolean; onCopied?: () => void }) {
+  const [show, setShow] = useState(false);
+  const shown = secret && !show ? "•".repeat(Math.min(value.length, 16)) : value;
+  return (
+    <div className="flex items-center gap-2 border-b border-line py-1.5 last:border-b-0">
+      <span className="w-24 shrink-0 text-xs text-fg3">{label}</span>
+      <span className="min-w-0 flex-1 truncate font-mono text-[13px]" title={secret && !show ? undefined : value}>{shown}</span>
+      {secret && (
+        <button type="button" aria-label={show ? "Passwort verbergen" : "Passwort anzeigen"} onClick={() => setShow(!show)}
+          className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-fg2 hover:bg-hover">
+          <Icon name={show ? "eyeOff" : "eye"} className="text-[14px]" />
+        </button>
+      )}
+      <CopyButton text={value} onCopied={onCopied} />
+    </div>
+  );
+}
+
+/** Zugangsdaten nach „Sitzung starten“: einzeln kopierbar, „Alles kopieren“, fertiger SSH-Befehl bzw. WinBox-Aufruf. */
+function Credentials({ session: s }: { session: RemoteSession }) {
+  const host = s.proxy_host, port = String(s.listen_port), user = s.username ?? "", pass = s.password ?? "";
+  const audit = (what: "password" | "all" | "winbox") => void api.post(`/remote-sessions/${s.id}/credentials-copied`, { what }).catch(() => undefined);
+  const all = `Host: ${host}:${port}\nBenutzer: ${user}\nPasswort: ${pass}`;
+  const winbox = `winbox.exe ${host}:${port} ${user} ${pass}`;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="rounded-[7px] border border-line px-3">
+        {s.protocol === "webfig" && <CopyRow label="URL" value={s.connect} />}
+        <CopyRow label="Host / DNS" value={host} />
+        <CopyRow label="Port" value={port} />
+        {user && <CopyRow label="Benutzer" value={user} />}
+        {pass && <CopyRow label="Passwort" value={pass} secret onCopied={() => audit("password")} />}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <CopyButton text={all} label="Alles kopieren" onCopied={() => pass && audit("all")} />
+        <span className="text-xs text-fg3">Block mit Host:Port, Benutzer und Passwort zum Einfügen</span>
+      </div>
+      {s.protocol === "ssh" && <div className="flex flex-col gap-1"><span className="text-xs text-fg3">SSH-Befehl</span><CodeBlock text={`ssh -p ${port} ${user}@${host}`} highlight={false} /></div>}
+      {s.protocol === "winbox" && pass && (
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-fg3">WinBox-Aufruf (WinBox 3/4: Adresse, Benutzer, Passwort als Argumente)</span>
+          <div className="flex items-center gap-2 rounded-[7px] border border-line bg-code px-3 py-2">
+            <span className="min-w-0 flex-1 truncate font-mono text-xs">winbox.exe {host}:{port} {user} {"•".repeat(8)}</span>
+            <CopyButton text={winbox} onCopied={() => audit("winbox")} />
+          </div>
+        </div>
+      )}
+      <Notice tone="blue" icon="info">Zugangsdaten gelten nur für diese Sitzung und werden beim Ablauf auf dem Router entfernt. Das Passwort wird nur jetzt angezeigt; Kopieren des Passworts wird im Audit-Log vermerkt.</Notice>
+    </div>
+  );
+}
+
 function OpenDialog({ device, protocol, onClose, onOpened }: { device: Device; protocol: string; onClose: () => void; onOpened: () => void }) {
   const [f, setF] = useState({ duration_minutes: 60, reason: "", allowed_cidr: "" });
   const [created, setCreated] = useState<RemoteSession | null>(null);
@@ -45,11 +98,7 @@ function OpenDialog({ device, protocol, onClose, onOpened }: { device: Device; p
       {created ? (
         <div className="flex flex-col gap-3">
           <Notice tone="green" title="Zugang aktiv">Läuft ab in <Countdown until={created.expires_at} /> · Zugriff nur von <span className="font-mono">{created.allowed_cidr}</span></Notice>
-          <CodeBlock text={created.connect} highlight={false} />
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="flex flex-col gap-0.5"><span className="text-xs text-fg3">Benutzer</span><span className="font-mono">{created.username}</span></div>
-            <div className="flex flex-col gap-0.5"><span className="text-xs text-fg3">Passwort (nur jetzt sichtbar)</span><span className="font-mono">{created.password}</span></div>
-          </div>
+          <Credentials session={created} />
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">

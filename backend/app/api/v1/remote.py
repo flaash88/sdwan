@@ -84,6 +84,22 @@ async def all_sessions(ctx: Ctx = ReadCtx, active_only: bool = False) -> list[di
     return [_out(s, n) for s, n in (await ctx.db.execute(q)).all()]
 
 
+class CopiedIn(BaseModel):
+    what: Literal["password", "all", "winbox"]
+
+
+@router.post("/remote-sessions/{session_id}/credentials-copied")
+async def credentials_copied(session_id: uuid.UUID, data: CopiedIn, ctx: Ctx = TechCtx) -> dict:
+    """Audit: Passwort einer Sitzung wurde kopiert (einzeln, im Block „Alles kopieren“ oder im WinBox-Aufruf)."""
+    sess = await get_or_404(ctx.db, RemoteSession, session_id, "Session")
+    if sess.user_id != ctx.user.id and ctx.role != Role.admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Nur eigene Sessions (oder als Admin)")
+    await ctx.audit("remote.credentials_copied", target_type="device", target_id=sess.device_id,
+                    details={"session": str(sess.id), "what": data.what, "protocol": sess.protocol, "ros_user": sess.ros_username})
+    await ctx.db.commit()
+    return {"ok": True}
+
+
 @router.post("/remote-sessions/{session_id}/close")
 async def close(session_id: uuid.UUID, ctx: Ctx = TechCtx) -> dict:
     sess = await get_or_404(ctx.db, RemoteSession, session_id, "Session")

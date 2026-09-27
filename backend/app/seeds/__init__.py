@@ -100,7 +100,19 @@ async def apply_advisories(db: AsyncSession) -> None:
                 setattr(row, k, v)
 
 
-APPLIERS = [apply_firewall, apply_feeds, apply_compliance, apply_scripts, apply_hotspot, apply_advisories]
+async def apply_eol_models(db: AsyncSession) -> None:
+    from app.models import EolModel
+
+    for a in load("eol_models")["models"]:
+        row = (await db.execute(select(EolModel).where(EolModel.seed_key == a["seed_key"]))).scalar_one_or_none()
+        if row is None:
+            db.add(EolModel(builtin=True, **a))
+        elif row.builtin:
+            for k, v in a.items():
+                setattr(row, k, v)
+
+
+APPLIERS = [apply_firewall, apply_feeds, apply_compliance, apply_scripts, apply_hotspot, apply_advisories, apply_eol_models]
 
 
 async def apply_all() -> None:

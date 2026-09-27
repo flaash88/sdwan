@@ -1,0 +1,8 @@
+{
+  "_hinweis": "Liste abgekündigter Modelle (End-of-Sale/End-of-Life) ist vom MSP zu pflegen (Quelle: Herstellerangaben). Die Plattform liefert bewusst keine geratenen Daten – der Eintrag unten ist nur ein deaktiviertes BEISPIEL für das Format.",
+  "models": [
+    {"seed_key": "eol-example", "model": "BEISPIEL-MODELL", "status": "eol", "since": null, "successor": "BEISPIEL-NACHFOLGER",
+     "note": "BEISPIEL: Modellbezeichnung wie in /system/routerboard bzw. /system/resource board-name. Kopieren/anlegen und echte Daten eintragen.",
+     "link": null, "enabled": false}
+  ]
+}

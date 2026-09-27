@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Badge, Button, Card, Checkbox, ErrorBox, Input, Modal, PageHeader, Table, Textarea, useAction } from "../components/ui";
 import { api } from "../lib/api";
+import SiteTopology from "../components/SiteTopology";
 import { useAuth } from "../lib/auth";
 import type { Device, Site } from "../lib/types";
 import { useFetch } from "../lib/useFetch";
@@ -10,6 +11,7 @@ export default function Sites() {
   const sites = useFetch<Site[]>("/sites");
   const devices = useFetch<Device[]>("/devices");
   const [edit, setEdit] = useState<Partial<Site> | null>(null);
+  const [topo, setTopo] = useState<string | null>(null);
   const count = (id: string) => devices.data?.filter((d) => d.site_id === id).length ?? 0;
   const needsTenant = me?.user.is_superuser && !me.active_tenant_id;
   return (
@@ -30,12 +32,14 @@ export default function Sites() {
               <td className="px-3 py-2">{s.is_mesh_hub ? <Badge color="blue">Hub</Badge> : <Badge>Spoke</Badge>}</td>
               <td className="px-3 py-2">{count(s.id)}</td>
               <td className="px-3 py-2 text-right">
+                <Button variant="ghost" icon="network" onClick={() => setTopo(s.id)}>Topologie</Button>
                 {can("technician") && <Button variant="ghost" onClick={() => setEdit(s)}>Bearbeiten</Button>}
               </td>
             </tr>
           ))}
         </Table>
       </Card>
+      {topo && <SiteTopology siteId={topo} onClose={() => setTopo(null)} />}
       {edit && <SiteModal site={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); void sites.reload(); }} />}
     </>
   );

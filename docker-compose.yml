@@ -75,6 +75,15 @@ services:
       api: { condition: service_healthy }
       wireguard-hub: { condition: service_started }
 
+  flows:
+    # Phase 25: IPFIX-Collector (Top-Verbraucher, opt-in je Gerät) im Netz-Namespace des Hubs -> UDP 2055 auf der Hub-Tunnel-IP
+    <<: *backend
+    command: ["python", "-m", "app.flow_collector"]
+    network_mode: "service:wireguard-hub"
+    depends_on:
+      api: { condition: service_healthy }
+      wireguard-hub: { condition: service_started }
+
   wireguard-hub:
     build: ./hub
     restart: unless-stopped

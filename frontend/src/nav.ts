@@ -27,6 +27,7 @@ export const NAV: NavItem[] = [
   { to: "/content-filter", label: "Content-Filter", icon: "filter" },
   { to: "/firmware", label: "Firmware", icon: "cpu", badge: "firmware" },
   { to: "/advisories", label: "Sicherheitsmeldungen", icon: "alert" },
+  { to: "/inventory", label: "Inventar", icon: "archive" },
   { to: "/maintenance", label: "Wartungsfenster", icon: "clock" },
   { to: "/alerts", label: "Alarme", icon: "bell", badge: "alarms" },
   { to: "/reports", label: "Berichte", icon: "chart" },

@@ -14,7 +14,7 @@ from app.deps import AdminCtx, Ctx, ReadCtx, TechCtx
 from app.models import Device, PairingStatus, ProvisioningTemplate, Site
 from app.schemas import DeviceOut
 from app.services.pairing import issue_pairing_token
-from app.services.wireguard import allocate_tunnel_ip
+from app.services.ztp_import import stage_device
 from app.services.ztp import ZTP_TOKEN_TTL_HOURS, TemplateError, bootstrap_script, validate_template
 
 router = APIRouter(tags=["zero-touch"])
@@ -107,10 +107,6 @@ async def stage(data: StageIn, ctx: Ctx = TechCtx) -> list[dict]:
         site_id = item.site_id or data.site_id
         if site_id:
             await get_or_404(ctx.db, Site, site_id, "Site")
-        dev = Device(tenant_id=tenant_id, name=item.name, serial=item.serial.upper(), site_id=site_id, tags=item.tags,
-                     tunnel_ip=await allocate_tunnel_ip(ctx.db), ztp_template_id=template.id if template else None,
-                     ztp_state="staged", ztp_log=[{"at": utcnow().isoformat(), "state": "staged", "msg": f"Vorbereitet von {ctx.user.email}"}],
-                     facts={"ztp_vrrp_local_address": item.vrrp_local_address} if item.vrrp_local_address else {})
         if item.vrrp_local_address and template and (template.content or {}).get("vrrp"):
             from app.services.vrrp import VrrpError, validate_set
 
@@ -118,16 +114,8 @@ async def stage(data: StageIn, ctx: Ctx = TechCtx) -> list[dict]:
                 validate_set([{**i, "local_address": i.get("local_address") or item.vrrp_local_address} for i in template.content["vrrp"]])
             except VrrpError as exc:
                 raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{item.name}: {exc}") from exc
-        ctx.db.add(dev)
-        info = issue_pairing_token(dev, ttl_hours=data.ttl_days * 24)
-        await ctx.db.flush()
-        out.append({
-            "device": DeviceOut.model_validate(dev).model_dump(mode="json"),
-            "token": info.token,
-            "expires_at": info.expires_at,
-            "command": info.command,
-            "bootstrap_script": bootstrap_script(info.token, dev, template),
-        })
+        out.append(await stage_device(ctx.db, tenant_id, name=item.name, serial=item.serial, site_id=site_id, tags=item.tags,
+                                      template=template, ttl_days=data.ttl_days, by=ctx.user.email, vrrp_local_address=item.vrrp_local_address))
     await ctx.audit("ztp.stage", details={"count": len(out), "serials": serials, "template": str(template.id) if template else None})
     await ctx.db.commit()
     return out
@@ -155,3 +143,51 @@ async def ztp_devices(ctx: Ctx = ReadCtx) -> list[dict]:
     return [DeviceOut.model_validate(d).model_dump(mode="json") for d in rows]
 
 
+
+
+# ----------------------------------------------------------------------------- CSV-Massenimport (Phase 25)
+class ImportIn(BaseModel):
+    csv: str = Field(min_length=1, max_length=500_000)
+    ttl_days: int = Field(default=180, ge=1, le=730)
+
+
+@router.post("/ztp/import/preview")
+async def import_preview(data: ImportIn, ctx: Ctx = TechCtx) -> dict[str, Any]:
+    """Nur prüfen, nichts anlegen: je Zeile Ergebnis und Fehler."""
+    from app.services import ztp_import
+
+    try:
+        rows = await ztp_import.validate(ctx.db, ctx.require_tenant(), data.csv)
+    except ztp_import.ImportError_ as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    return {"rows": rows, "valid": sum(1 for r in rows if r["ok"]), "invalid": sum(1 for r in rows if not r["ok"])}
+
+
+class ImportCommitIn(ImportIn):
+    confirm: bool = False
+
+
+@router.post("/ztp/import/commit", status_code=201)
+async def import_commit(data: ImportCommitIn, ctx: Ctx = TechCtx) -> dict[str, Any]:
+    """Nach Bestätigung: gültige Zeilen anlegen (erneut geprüft), fehlerhafte bleiben unberücksichtigt."""
+    from app.services import ztp_import
+
+    if not data.confirm:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Bestätigung fehlt")
+    tenant_id = ctx.require_tenant()
+    try:
+        rows = await ztp_import.validate(ctx.db, tenant_id, data.csv)
+    except ztp_import.ImportError_ as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    created = []
+    for r in rows:
+        if not r["ok"]:
+            continue
+        tpl = await ctx.db.get(ProvisioningTemplate, uuid.UUID(r["template_id"])) if r["template_id"] else None
+        created.append(await stage_device(ctx.db, tenant_id, name=r["name"], serial=r["serial"],
+                                          site_id=uuid.UUID(r["site_id"]) if r["site_id"] else None, tags=r["tags"], template=tpl,
+                                          ttl_days=data.ttl_days, by=ctx.user.email, vrrp_local_address=r["vrrp_local_address"], model=r["model"]))
+    skipped = [{"line": r["line"], "serial": r["serial"], "errors": r["errors"]} for r in rows if not r["ok"]]
+    await ctx.audit("ztp.import", details={"created": len(created), "skipped": skipped, "serials": [c["device"]["serial"] for c in created]})
+    await ctx.db.commit()
+    return {"created": created, "skipped": skipped}

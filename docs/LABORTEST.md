@@ -549,6 +549,22 @@ Voraussetzung: Router im Werkszustand (defconf) onboarden; Notebook am LAN, zwei
 - [ ] API-Token „nur lesen“ erstellen → `curl -H "Authorization: Bearer sdw_…" …/api/v1/devices` klappt, POST
       liefert 403; Token widerrufen → 401.
 
+## 22. Nachbarn, Top-Verbraucher, Inventar, ZTP-Import (Phase 25)
+
+- [ ] Switch/zweiter MikroTik am LAN: nach ≤ 10 min Tab „Nachbarn“ mit Interface, Identity, Modell, MAC, Adresse
+      (**ANNAHME:** Felder von `/ip/neighbor`). Ist der Nachbar ein Plattform-Gerät, ist er verlinkt.
+- [ ] Standorte → „Topologie“: Router und Nachbarn je Interface.
+- [ ] Top-Verbraucher einschalten → `/ip traffic-flow print` enabled=yes, interfaces = WAN;
+      `/ip traffic-flow target print` → Hub-IP, Port 2055, version=ipfix (**ANNAHME:** Feldnamen).
+- [ ] Vom LAN-Notebook Datenverkehr erzeugen (Download); nach ≤ 2 min: Top-Host = Notebook-IP, Top-Ziel = Server-IP,
+      WAN korrekt zugeordnet (**ANNAHME:** IPFIX-IEs und Interface-Index).
+      **Ergebnis:** ☐ Werte plausibel ☐ keine Daten ☐ WAN falsch zugeordnet
+- [ ] Ausschalten → Ziel entfernt, `/ip traffic-flow` wieder im Vorzustand.
+- [ ] Inventar: Kaufdatum/Garantie pflegen, EOL-Eintrag für das Testmodell anlegen → Hinweis; CSV-Export in Excel
+      öffnen (Umlaute korrekt).
+- [ ] ZTP-Import: CSV mit einer gültigen und einer fehlerhaften Zeile → Vorschau zeigt den Fehler; nach Bestätigung
+      nur die gültige Zeile angelegt; Bootstrap-Script auf dem Testgerät ausführen → Provisionierung wie gewohnt.
+
 ---
 
 ## Ergebnis
@@ -576,3 +592,4 @@ Voraussetzung: Router im Werkszustand (defconf) onboarden; Notebook am LAN, zwei
 | 19 Zwei-Faktor | ☐ ok ☐ Abweichung | |
 | 20 Sicherheitsmeldungen | ☐ ok ☐ Abweichung | |
 | 21 Vor-Ort-Zugang/API-Tokens | ☐ ok ☐ Abweichung | MAC-WinBox mit Adressbeschränkung: ☐ ok ☐ abgelehnt |
+| 22 Nachbarn/Flows/Inventar/Import | ☐ ok ☐ Abweichung | IPFIX: |

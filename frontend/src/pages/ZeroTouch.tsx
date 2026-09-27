@@ -51,6 +51,7 @@ export default function ZeroTouch() {
   const [single, setSingle] = useState(false);
   const [staging, setStaging] = useState(false);
   const [result, setResult] = useState<Staged[] | null>(null);
+  const [importing, setImporting] = useState(false);
   useLive(() => void devices.reload(), ["device.ztp", "device.paired", "device.status"]);
   if (!me?.active_tenant_id) return <><PageHeader title="Zero-Touch-Provisioning" /><Card><EmptyState icon="building" title="Bitte einen Mandanten wählen" text="Vorlagen und vorbereitete Router gehören zu einem Mandanten." /></Card></>;
   const tplName = (id: string | null) => templates.data?.find((t) => t.id === id)?.name ?? "–";
@@ -71,6 +72,7 @@ export default function ZeroTouch() {
     <>
       <PageHeader title="Zero-Touch-Provisioning" subtitle="Neue Router per Bootstrap-Befehl automatisch mit einer Vorlage einrichten"
         actions={can("technician") && <>
+          <Button variant="secondary" icon="upload" onClick={() => setImporting(true)}>CSV-Import</Button>
           <Button variant="secondary" icon="list" onClick={() => setStaging(true)}>Mehrere vorbereiten</Button>
           <Button icon="plus" onClick={() => setSingle(true)}>Router vorbereiten</Button>
         </>} />
@@ -138,6 +140,7 @@ export default function ZeroTouch() {
       {edit && <TemplateModal tpl={edit} policies={policies.data ?? []} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); void templates.reload(); }} />}
       {single && <SingleStageModal templates={templates.data ?? []} sites={sites.data ?? []} onClose={() => setSingle(false)} onDone={() => void devices.reload()} />}
       {staging && <StageModal templates={templates.data ?? []} sites={sites.data ?? []} onClose={() => setStaging(false)} onDone={(r) => { setStaging(false); setResult(r); void devices.reload(); }} />}
+      {importing && <ImportModal onClose={() => setImporting(false)} onDone={(r) => { setImporting(false); if (r.length) setResult(r); void devices.reload(); }} />}
       <Modal open={!!result} onClose={() => setResult(null)} title="Bootstrap-Scripts" subtitle="Die Tokens werden nur jetzt angezeigt." size="lg"
         footer={<>
           <Button variant="secondary" icon="download" onClick={() => result && saveFile("ztp-tokens.csv", "name,serial,token,expires_at,command\n" + result.map((s) => [s.device.name, s.device.serial, s.token, s.expires_at, `"${s.command.replaceAll('"', '""')}"`].join(",")).join("\n"))}>Alle als CSV</Button>
@@ -308,6 +311,64 @@ function TemplateModal({ tpl, policies, onClose, onSaved }: { tpl: Partial<Templ
           placeholder={'[{"name": "vrrp-kassen", "interface": "ether2", "vrid": 110, "priority": 100, "vip": "192.168.110.1", "linked_wan_slot": 1}]'}
           value={vrrpJson} onChange={(e) => setVrrpJson(e.target.value)} />
       </div>
+    </Modal>
+  );
+}
+
+interface ImportRow { line: number; name: string; serial: string; model: string | null; site: string | null; template: string | null; tags: string[]; errors: string[]; ok: boolean }
+const IMPORT_EXAMPLE = "name;serial;model;site;template;tags\nfiliale-01-gw1;HGK00000001;hAP ax3;Filiale 1;Standard;kasse|nord";
+
+/** CSV-Massenimport: Vorschau mit Prüfung je Zeile, Anlegen nur gültiger Zeilen nach Bestätigung. */
+function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: (r: Staged[]) => void }) {
+  const [text, setText] = useState("");
+  const [ttl, setTtl] = useState(180);
+  const [preview, setPreview] = useState<{ rows: ImportRow[]; valid: number; invalid: number } | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const { busy, error, run } = useAction();
+  const file = (f: File | undefined) => { if (f) void f.text().then((t) => { setText(t); setPreview(null); setConfirmed(false); }); };
+  return (
+    <Modal open onClose={onClose} title="Router per CSV importieren" subtitle="Erst prüfen, dann nur gültige Zeilen anlegen" size="lg"
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Abbrechen</Button>
+        {!preview ? <Button disabled={busy || !text.trim()} onClick={() => void run(async () => setPreview(await api.post("/ztp/import/preview", { csv: text, ttl_days: ttl })))}>{busy ? "Prüfe …" : "Prüfen"}</Button>
+          : <Button disabled={busy || !confirmed || preview.valid === 0} onClick={() => void run(async () => {
+            const r = await api.post<{ created: Staged[] }>("/ztp/import/commit", { csv: text, ttl_days: ttl, confirm: true });
+            onDone(r.created);
+          })}>{busy ? "Lege an …" : `${preview.valid} Router anlegen`}</Button>}
+      </>}>
+      <ErrorBox error={error} />
+      {!preview ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-fg2">Kopfzeile mit den Spalten <span className="font-mono">name; serial</span> (Pflicht) sowie optional <span className="font-mono">model; site; template; tags; vrrp_local_address</span>.
+            Standort und Vorlage per Name, Tags mit <span className="font-mono">|</span> getrennt. Trennzeichen <span className="font-mono">;</span> oder <span className="font-mono">,</span>.</p>
+          <input type="file" accept=".csv,text/csv" onChange={(e) => file(e.target.files?.[0])} className="text-sm" aria-label="CSV-Datei" />
+          <Textarea label="CSV-Inhalt" rows={8} className="font-mono text-xs" value={text} placeholder={IMPORT_EXAMPLE} onChange={(e) => setText(e.target.value)} />
+          <Input label="Token gültig (Tage)" type="number" min={1} max={730} value={ttl} onChange={(e) => setTtl(Number(e.target.value))} className="w-40" />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-2 text-sm"><StatusBadge status="success" label={`${preview.valid} gültig`} />{preview.invalid > 0 && <StatusBadge status="failed" label={`${preview.invalid} fehlerhaft – werden nicht angelegt`} />}</div>
+          <div className="max-h-[50vh] overflow-auto rounded-md border border-line">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-panel2 text-left text-xs text-fg3"><tr>{["Zeile", "Name", "Seriennummer", "Standort", "Vorlage", "Prüfung"].map((h) => <th key={h} className="px-3 py-2 font-medium">{h}</th>)}</tr></thead>
+              <tbody>
+                {preview.rows.map((r) => (
+                  <tr key={r.line} className={cls("border-t border-line", !r.ok && "bg-red-bg")}>
+                    <td className="px-3 py-1.5 font-mono text-xs">{r.line}</td>
+                    <td className="px-3 py-1.5">{r.name}</td>
+                    <td className="px-3 py-1.5 font-mono text-xs">{r.serial}</td>
+                    <td className="px-3 py-1.5">{r.site ?? "–"}</td>
+                    <td className="px-3 py-1.5">{r.template ?? "–"}</td>
+                    <td className="px-3 py-1.5 text-xs">{r.ok ? <span className="text-green-text">ok</span> : <span className="text-red-text">{r.errors.join(" · ")}</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Checkbox label={`Ich habe die Vorschau geprüft: ${preview.valid} Router anlegen, fehlerhafte Zeilen überspringen`} checked={confirmed} onChange={setConfirmed} />
+          <button type="button" className="self-start text-sm text-blue-text hover:underline" onClick={() => { setPreview(null); setConfirmed(false); }}>Zurück zum Bearbeiten</button>
+        </div>
+      )}
     </Modal>
   );
 }

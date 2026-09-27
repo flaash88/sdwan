@@ -31,3 +31,4 @@ from app.models.hotspot import GuestRegistration, HotspotInstance, HotspotPortal
 from app.models.platform import PlatformAlert, PlatformBackup  # noqa: F401,E402
 from app.models.advisories import SecurityAdvisory  # noqa: F401,E402
 from app.models.local_access import ApiToken, LocalAccess  # noqa: F401,E402
+from app.models.operations25 import DeviceFlow, DeviceInventory, DeviceNeighbor, EolModel, FlowAggregate  # noqa: F401,E402

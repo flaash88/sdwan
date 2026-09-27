@@ -50,6 +50,9 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
     scheduler.add_job(_safe(offboarding.purge_archives), "cron", hour=4, minute=25, id="offboarding_archives", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(hotspot.purge_registrations), "cron", hour=4, minute=20, id="guest_retention", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(wlan.rotation_tick), "cron", hour=4, minute=45, id="wlan_psk_rotation", max_instances=1, coalesce=True)
+    from app.services import flows
+
+    scheduler.add_job(_safe(flows.purge_old), "cron", hour=4, minute=10, id="flow_retention", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(syslog.purge_old), "cron", hour=4, minute=15, id="syslog_retention", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(scripts.script_tick), "interval", seconds=15, id="script_tick", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(firmware.firmware_tick), "interval", seconds=15, id="firmware_tick", max_instances=1, coalesce=True)

@@ -90,6 +90,8 @@ class Settings(BaseSettings):
     speedtest_duration_s: int = 10
     # Syslog (Phase 18): UDP-Port des Empfängers auf der Hub-Tunnel-IP
     syslog_port: int = 514
+    # Phase 25: IPFIX-Collector (Top-Verbraucher), UDP auf der Hub-Tunnel-IP
+    flow_port: int = 2055
     offline_after_seconds: int = 180
     pairing_token_ttl_hours: int = 72
 

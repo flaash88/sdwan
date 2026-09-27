@@ -51,6 +51,9 @@ _TABLE_PATHS = {
     "/ip/pool",
     "/ip/dhcp-server",
     "/ip/dhcp-server/network",
+    # Nachbarn, Top-Verbraucher (Phase 25)
+    "/ip/neighbor",
+    "/ip/traffic-flow/target",
     # Hotspot (Phase 20)
     "/ip/hotspot",
     "/ip/hotspot/profile",
@@ -116,6 +119,7 @@ class SimRouter:
         self._insert("/ip/route", {"dst-address": "0.0.0.0/0", "gateway": "100.64.0.1", "distance": "1"})
         self.clock_skew_s = 0.0  # Tests: Abweichung der Router-Uhr in Sekunden
         self.mac_winbox: dict[str, Any] = {"allowed-interface-list": "LAN"}  # wie defconf
+        self.traffic_flow: dict[str, Any] | None = None  # /ip/traffic-flow (Phase 25)
         _seed_extras(self)
         _seed_wlan(self)
         # weitere Ports wie beim L009UiGS (ether5–ether8, z. B. 5G-Modem an ether8)
@@ -201,6 +205,9 @@ class SimRouter:
             # ANNAHME (Labor): Einstellungen der MAC-WinBox (allowed-interface-list)
             "/tool/mac-server/mac-winbox/print": lambda p: [dict(self._mac_winbox())],
             "/tool/mac-server/mac-winbox/set": self._mac_winbox_set,
+            # ANNAHME (Labor): /ip/traffic-flow (enabled, interfaces, …)
+            "/ip/traffic-flow/print": lambda p: [dict(self._traffic_flow())],
+            "/ip/traffic-flow/set": self._traffic_flow_set,
             "/ip/dns/set": self._dns_set,
             "/ip/dns/cache/flush": lambda p: [],
             "/interface/monitor-traffic": self._monitor_traffic,
@@ -446,6 +453,16 @@ class SimRouter:
         self._mac_winbox().update({k: _s(v) for k, v in p.items() if not k.startswith(".")})
         return []
 
+    def _traffic_flow(self) -> dict[str, Any]:
+        if getattr(self, "traffic_flow", None) is None:
+            self.traffic_flow = {"enabled": "no", "interfaces": "all", "cache-entries": "32k", "active-flow-timeout": "30m",
+                                 "inactive-flow-timeout": "15s"}
+        return self.traffic_flow
+
+    def _traffic_flow_set(self, p: dict[str, Any]) -> list[dict[str, Any]]:
+        self._traffic_flow().update({k: _s(v) for k, v in p.items() if not k.startswith(".")})
+        return []
+
     def _reboot(self, _p: dict[str, Any]) -> list[dict[str, Any]]:
         self.boot = time.time()
         return []
@@ -489,7 +506,7 @@ class SimRouter:
         return []
 
 
-_PERSIST = ("version", "channel", "identity", "board", "tables", "_next_id", "dns", "counters", "boot", "down_hosts", "vrrp_master", "wlan_driver", "mac_winbox")
+_PERSIST = ("version", "channel", "identity", "board", "tables", "_next_id", "dns", "counters", "boot", "down_hosts", "vrrp_master", "wlan_driver", "mac_winbox", "traffic_flow")
 
 
 def _default_wlan(board: str) -> str | None:
@@ -542,6 +559,10 @@ def _seed_extras(r: SimRouter) -> None:
     if not r.tables["/interface/bridge/port"]:  # LAN-Ports in der Bridge (ether1 = WAN)
         for name in ("ether2", "ether3", "ether4", "ether5"):
             r._insert("/interface/bridge/port", {"bridge": "bridge", "interface": name, "comment": "defconf"})
+    if not r.tables["/ip/neighbor"]:  # ein Switch am LAN (Discovery)
+        r.tables["/ip/neighbor"].append({".id": "*N1", "interface": "ether2,bridge", "identity": "switch-lager", "platform": "MikroTik",
+                                         "board": "CRS326-24G-2S+", "version": "7.15.3 (stable)", "mac-address": "48:A9:8A:00:11:22",
+                                         "address": "192.168.88.2"})
     if not r.tables["/ip/hotspot/profile"]:  # wie RouterOS: Standardprofile
         r.tables["/ip/hotspot/profile"].append({".id": "*HP0", "name": "default", "html-directory": "hotspot", "login-by": "cookie,http-chap", "default": "true"})
         r.tables["/ip/hotspot/user/profile"].append({".id": "*HU0", "name": "default", "shared-users": "1", "default": "true"})

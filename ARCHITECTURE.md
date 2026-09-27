@@ -1053,6 +1053,32 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
     (einrichten, abschalten, Codes, Reset, Mandanten-Pflicht), Token erstellen/widerrufen.
   - OpenAPI: Security-Scheme `Bearer` mit Beschreibung (`/docs`).
 
+## Phase 25 – Nachbarn, Top-Verbraucher, Inventar, ZTP-Import
+
+* **Nachbarn:** Poll-Hook `neighbors.neighbor_poll_hook` liest `/ip/neighbor` alle 10 min; der Post-Poll-Hook
+  ersetzt die Einträge je Gerät in `device_neighbors` (höchstens 500). `facts.neighbor_count` steuert die Sichtbarkeit
+  des Tabs „Nachbarn“. Zuordnung zu Plattform-Geräten über Identity oder eine Adresse des Geräts.
+  Standort-Topologie: `GET /sites/{id}/topology`, SVG im Dialog „Topologie“ der Standortliste.
+* **Top-Verbraucher (opt-in je Gerät, `device_flows`):**
+  - Router: `/ip/traffic-flow` (enabled, interfaces = WAN-Interfaces der WAN-Konfiguration; Vorzustand gemerkt) und
+    `/ip/traffic-flow/target` (Hub-IP, `FLOW_PORT` 2055, `version=ipfix`, Kommentar `sdwan:flow`).
+  - Collector `app/flow_collector.py` (Container `flows`, `network_mode: service:wireguard-hub`): eigener
+    IPFIX-Parser (RFC 7011, Templates je Quelle/Domain/ID, IEs 1/2/8/12/10/14 und IPv6 27/28), Zuordnung per
+    Tunnel-IP, nur Geräte mit aktivem Export.
+  - Speicherung als 5-Minuten-Aggregate `flow_aggregates` (WAN, lokaler Host, Gegenstelle, Bytes, Pakete) – keine
+    Ports, keine Einzel-Flows; je Gerät/Intervall höchstens 200 Paare, Rest „andere“.
+  - Auswertung `GET /devices/{id}/flows/top?period=1h|24h|7d&wan=`: Top-Hosts und Top-Ziele.
+  - Aufbewahrung `tenant.settings.flow_retention_days` (Default 7), Lösch-Job täglich.
+* **Inventar:** `device_inventory` (Kaufdatum, Garantie bis, Lieferant, Notizen), Seriennummer/Modell aus dem Gerät.
+  EOL-Liste `eol_models` (global, Seed nur als deaktiviertes Beispiel, Pflege durch MSP), exakter Modellvergleich.
+  Hinweise: EOL, Garantie abgelaufen bzw. endet in ≤ 60 Tagen. `GET /inventory`, `GET /inventory.csv` (Semikolon,
+  UTF-8 mit BOM), `PUT /devices/{id}/inventory`.
+* **ZTP-Massenimport:** `POST /ztp/import/preview` (nur prüfen) und `POST /ztp/import/commit` (`confirm=true`,
+  erneute Prüfung, nur gültige Zeilen). Spalten `name; serial` (Pflicht), `model; site; template; tags;
+  vrrp_local_address`. Prüfung: Format, Duplikate in der Datei, bereits registrierte Seriennummern, doppelte
+  Gerätenamen, unbekannte Standorte/Vorlagen, VRRP-Adresse. Angelegt über `ztp_import.stage_device` (dieselbe Logik
+  wie „Geräte vorbereiten“).
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

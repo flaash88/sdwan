@@ -54,6 +54,7 @@ Installation auf einem Server: [INSTALL.md](INSTALL.md) · Aufbau und Design-Ent
 | 22 | Zwei-Faktor-Anmeldung (TOTP) mit QR und 10 Wiederherstellungscodes, Pflicht je Mandant und für MSP-Admins, Sperre nach Fehlversuchen, Reset durch MSP-Admin und per CLI | ✅ |
 | 23 | Sicherheitsmeldungen (vom MSP gepflegt): Betroffenheit je Version und aktiver Funktion, Anzeige in Geräteliste/-detail, Firmware und Dashboard, Alarm, Blockade von Hotspot/WLAN bis zum Update, Compliance-Regel | ✅ |
 | 24 | Vor-Ort-Zugang (Break-Glass): lokaler Notfall-Benutzer mit eigenem Passwort je Router, nur aus LAN/Management bzw. Service-Port, Anzeige mit Begründung, Rotation, verschlüsselter KeePass-Export; API-Tokens mit Ablauf, nur lesend oder Rolle | ✅ |
+| 25 | Nachbarn (/ip/neighbor) und Standort-Topologie, Top-Verbraucher je WAN per IPFIX (opt-in, 5-Minuten-Summen, Aufbewahrung je Mandant), Inventar mit Garantie und EOL-Liste, CSV-Export, ZTP-Massenimport per CSV mit Vorschau | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

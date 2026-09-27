@@ -255,6 +255,21 @@ Grundsatz Allgemeinheit gilt: keine Kundendaten, Defaults nur markiert und ände
       darüber Passwörter umgeleitet werden könnten.
 23. **Compliance „API/SSH nur aus dem Tunnel“** toleriert die Netze eines aktiven Vor-Ort-Zugangs (bewusst
     lokal erlaubt); ohne aktiven Zugang unverändert.
+24. **Nachbarn in eigener Tabelle** (je Poll ersetzt) statt in `facts`: Die Geräteliste lädt `facts`, Nachbarlisten
+    würden sie aufblähen. In `facts` steht nur die Anzahl (Tab nur sichtbar, wenn > 0). Zuordnung zu
+    Plattform-Geräten über Identity oder Adresse.
+25. **Top-Verbraucher:**
+    - Nur IPFIX (v10), kein NetFlow v5/v9.
+    - Gespeichert wird „lokaler Host ↔ Gegenstelle je WAN“ ohne Ports; nur öffentlich↔privat wird gezählt.
+    - Je Gerät und Speicherlauf höchstens 200 Paare je 5-Minuten-Intervall, der Rest als „andere“.
+    - Exportiert werden nur die WAN-Interfaces der WAN-Konfiguration (ohne WAN-Konfiguration kein Einschalten).
+    - Recht: Techniker (wie Syslog); Aufbewahrung 1–90 Tage je Mandant, Default 7.
+26. **EOL-Abgleich:** exakter Modellvergleich (ohne Groß-/Kleinschreibung und Leerzeichen), keine Muster – im Zweifel
+    kein Treffer statt falscher Warnung. Garantie-Hinweis 60 Tage vor Ablauf.
+27. **ZTP-Import:** Anlegen über dieselbe Logik wie „Geräte vorbereiten“ (in `services/ztp_import.stage_device`
+    ausgelagert, Verhalten unverändert). Beim Anlegen wird erneut geprüft; nur gültige Zeilen werden angelegt,
+    und nur mit `confirm=true`. Zusätzlich zur bisherigen Prüfung: Gerätename darf im Mandanten nicht doppelt sein
+    (nur beim Import, damit bestehendes Verhalten unverändert bleibt). Modell aus der CSV wird als Erwartung gespeichert.
 
 ## Verifikation
 - Je Phase eine neue Testdatei: `test_phase21_platform_backup.py` … `test_phase25_*.py`.
@@ -358,4 +373,75 @@ Grundsatz Allgemeinheit gilt: keine Kundendaten, Defaults nur markiert und ände
     ein Notebook.
   - Firewall: WinBox/SSH aus LAN und Management bei Default-Drop, nicht aus dem WAN; MAC-WinBox nicht über WAN.
   - Offboarding „behalten“: Anmeldung mit dem Vor-Ort-Benutzer nach Wiederherstellung der Werks-Firewall.
+
+### Stand Phase 25 – Nachbarn, Top-Verbraucher, Inventar, ZTP-Import
+- **Erledigt:**
+  - Migration 0034 (nur neue Tabellen: `device_neighbors`, `device_flows`, `flow_aggregates`, `device_inventory`,
+    `eol_models`).
+  - Nachbarn: Poll-Hook alle 10 min (`/ip/neighbor`), Tab „Nachbarn“ (nur mit Einträgen), Standort-Topologie als SVG
+    (Sites → „Topologie“), Verlinkung erkannter Plattform-Geräte.
+  - Top-Verbraucher: Opt-in je Gerät (Tab „Top-Verbraucher“), `/ip/traffic-flow` + Ziel `sdwan:flow` mit gemerktem
+    Vorzustand, IPFIX-Collector als eigener Container (`flows`, UDP 2055 auf der Hub-IP), eigener IPFIX-Parser,
+    5-Minuten-Aggregate, Top-Hosts/Top-Ziele je WAN und Zeitraum, Aufbewahrung je Mandant mit Lösch-Job,
+    Datenschutz-Hinweis.
+  - Inventar: Seite „Inventar“ mit Kaufdatum, Garantie, Lieferant, Notizen; Seriennummer/Modell aus dem Gerät;
+    EOL-Liste als Seed (nur deaktiviertes Beispiel) und MSP-Pflege; Hinweise (EOL, Garantie abgelaufen/läuft ab);
+    CSV-Export je Mandant.
+  - ZTP-Massenimport: CSV (Datei oder Text) → Vorschau mit Fehlern je Zeile → Bestätigung → Anlegen gültiger Zeilen,
+    danach Bootstrap-Scripts wie bei „Mehrere vorbereiten“.
+  - `PATH_SPECS`: `/ip/neighbor`, `/ip/traffic-flow`, `/ip/traffic-flow/target`; Simulator-Handler.
+- **Weggelassen:**
+  - NetFlow v5/v9 und IPv6-spezifische Auswertung über die Adressfelder hinaus (IPv6-Adressen werden erkannt,
+    aber nicht gesondert getestet).
+  - Alarm bei EOL/Garantieablauf (nur Hinweis im Inventar; kein Alarmtyp ohne Auftrag).
+  - Automatisches Umbenennen/Verknüpfen von Nachbarn über LLDP-Chassis-IDs (nur Identity/Adresse).
+- **Im Labor zu verifizieren:**
+  - Felder von `/ip/neighbor` (u. a. `interface` bei Bridge-Ports als `ether2,bridge`).
+  - `/ip/traffic-flow set enabled=yes interfaces=…` und `/ip/traffic-flow/target add dst-address port version=ipfix`.
+  - IPFIX-Pakete von RouterOS 7: Template-IDs, Informationselemente 1/2/8/12/10/14, Länge der Zähler (4/8 Byte),
+    Interface-Index = Nummer aus `.id` von `/interface`.
+  - Erreichbarkeit des Collectors (UDP 2055) über den Tunnel; Container `flows` im Netz-Namespace des Hubs.
+  - Modellbezeichnungen (board-name) für den EOL-Abgleich.
+
+## Abschlussbericht Phasen 21–25
+
+### Commits
+| Commit | Inhalt |
+|--------|--------|
+| 183aea8 | Plan für die Phasen 21–25 |
+| dbb7db0 | Phase 21: Plattform-Sicherung und Disaster Recovery |
+| 5d8cfb7 | Phase 22: Zwei-Faktor-Anmeldung (TOTP), Sperre nach Fehlversuchen |
+| d009f8a | Phase 23: Sicherheitsmeldungen und Mindestversionen |
+| b3307ee | Phase 24: Vor-Ort-Zugang (Break-Glass) und API-Tokens |
+| (dieser Commit) | Phase 25: Nachbarn, Top-Verbraucher, Inventar, ZTP-Import; Abschlussbericht |
+
+Davor in derselben Sitzung: bcd7e24 (defconf-Behandlung), 57e706e (defconf-Fingerabdruck), b1de1ed (Offboarding).
+
+### Entscheidungen
+Siehe Abschnitt „Entscheidungen“ (1–27) sowie die Entscheidungen in den Abschnitten „Stand Phase …“.
+
+### Weggelassen (gesammelt)
+- Phase 21: automatisches Einspielen der InfluxDB-Sicherung; Sicherung ohne Verschlüsselung.
+- Phase 22: WebAuthn/FIDO2, „Gerät merken“, SSO (laut Auftrag).
+- Phase 23: automatischer Import/Scraping von Meldungen; Blockade von VRRP/Mesh.
+- Phase 24: Service-Port als ZTP-Vorlagen-Option; Gruppe mit „vollen Rechten“ (`full`); Umbenennen bestehender
+  Vor-Ort-Benutzer.
+- Phase 25: NetFlow v5/v9; Alarm für EOL/Garantie; LLDP-Chassis-Zuordnung.
+
+### Im Labor zu verifizieren (vollständig)
+1. Phase 21: `postgresql-client-16` und `pg_dump` im Image gegen den Produktivserver; rclone-Ziele (S3/SFTP) und
+   Aufbewahrung; `influx backup`/`restore`; vollständiger Restore auf frischer VM mit DNS-Umstellung.
+2. Phase 22: Authenticator-Apps (QR/otpauth), Server-Uhrzeit (NTP).
+3. Phase 23: Versionsformat bei rc/beta in `/system/resource`; Felder von `/ip/service` (`disabled`).
+4. Phase 24:
+   - MAC-WinBox-Anmeldung mit address-beschränktem Benutzer (LABORTEST 21, Ergebnisfeld; bei Fehlschlag Default
+     der Adressbeschränkung auf aus).
+   - Gruppe `sdwan-local` mit `LOCAL_POLICIES` durch den API-Benutzer anlegbar.
+   - `/tool/mac-server/mac-winbox allowed-interface-list`.
+   - Service-Port: Bridge-Port, DHCP-Server-Felder, DHCP-Vergabe.
+   - WinBox/SSH aus LAN/Management bei Default-Drop, nicht aus dem WAN; MAC-WinBox nicht über WAN.
+   - Offboarding „behalten“: Anmeldung nach Wiederherstellung der Werks-Firewall.
+5. Phase 25: `/ip/neighbor`-Felder; `/ip/traffic-flow`- und Ziel-Felder; IPFIX-Templates/IEs/Zählerlängen und
+   Interface-Index; UDP 2055 über den Tunnel; board-name für den EOL-Abgleich.
+6. Nachträge (defconf/Offboarding): siehe LABORTEST 10 (Werkszustand) und 17 (Offboarding).
 

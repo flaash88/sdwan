@@ -158,6 +158,14 @@ PATH_SPECS: tuple[PathSpec, ...] = (
     PathSpec("dhcp_network", "DHCP-Netze", "/ip/dhcp-server/network/print", optional=("address", "gateway", "comment"),
              used_by="Vor-Ort-Zugang (Service-Port-DHCP)"),
     PathSpec("dhcp_client", "DHCP-Clients", "/ip/dhcp-client/print", optional=("interface",), used_by="Vor-Ort-Zugang (WAN-Erkennung)"),
+    # --- Nachbarn, Top-Verbraucher (Phase 25). ANNAHME (Labor): Pfade/Felder
+    PathSpec("neighbor", "Nachbarn", "/ip/neighbor/print",
+             optional=("interface", "identity", "platform", "board", "version", "mac-address", "address"), used_by="Nachbarn, Standort-Topologie",
+             hints={"identity": "Keine Nachbarn per Discovery sichtbar (Discovery-Liste oder keine MikroTik/CDP/LLDP-Geräte)"}),
+    PathSpec("traffic_flow", "Traffic-Flow", "/ip/traffic-flow/print", optional=("enabled", "interfaces"), used_by="Top-Verbraucher (IPFIX)",
+             warn_if_missing={"enabled": "Feldname abweichend – Top-Verbraucher können nicht eingeschaltet werden"}),
+    PathSpec("traffic_flow_target", "Traffic-Flow-Ziele", "/ip/traffic-flow/target/print", optional=("dst-address", "port", "version", "comment"),
+             used_by="Top-Verbraucher (IPFIX)"),
     PathSpec("ping", "Ping", "/ping", fields=("sent", "received"), optional=("time", "packet-loss", "host"),
              used_by="Leitungstest, VRRP-Gegenstelle", must_have_rows=True, params={"count": "1"}),
 )

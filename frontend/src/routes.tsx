@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Advisories from "./pages/Advisories";
+import Inventory from "./pages/Inventory";
 import LocalAccess from "./pages/LocalAccess";
 import Alerts from "./pages/Alerts";
 import Compliance from "./pages/Compliance";
@@ -44,6 +45,7 @@ export const extraRoutes: { path: string; element: ReactNode }[] = [
   { path: "/firmware", element: <Firmware /> },
   { path: "/advisories", element: <Advisories /> },
   { path: "/local-access", element: <LocalAccess /> },
+  { path: "/inventory", element: <Inventory /> },
   { path: "/alerts", element: <Alerts /> },
   { path: "/reports", element: <Reports /> },
 ];

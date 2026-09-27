@@ -5,8 +5,11 @@
 * synchronisiert alle 10 s die Peers (``wg syncconf``) aus ``/api/v1/internal/hub/peers``. Maßgeblich ist der
   Ist-Zustand des Interfaces (``wg show <iface> dump``), nicht die Datei ``/data/<iface>.conf``: Das Volume überlebt
   Neustarts, das Interface wird beim Start aber leer angelegt. Beim Start wird immer einmal synchronisiert.
-* Healthcheck (``python agent.py --health``): unhealthy, wenn der letzte erfolgreiche Sync älter als 3 min ist oder die
-  Peer-Anzahl im Interface nicht der API-Liste entspricht (Status in ``HEALTH_FILE``).
+* prüft bei jedem Sync, dass die Route ins WG-Netz über ``dev wg0`` läuft, und korrigiert sie sonst
+  (``ip route replace <netz> dev wg0 src <hub-ip>``). Hintergrund: ein Container im Hub-Namespace (syslog/flows) mit
+  Backend-Entrypoint konnte sie auf ``via <hub>`` umbiegen – dann schickt der Hub Tunnel-Pakete an sich selbst.
+* Healthcheck (``python agent.py --health``): unhealthy, wenn der letzte erfolgreiche Sync älter als 3 min ist, die
+  Peer-Anzahl im Interface nicht der API-Liste entspricht oder die Route falsch ist (Status in ``HEALTH_FILE``).
 * meldet alle 30 s Handshake-/Traffic-Statistiken
 * Firewall: Router dürfen nur Antworten an die Control-Plane schicken, kein Router->Router
   über den Hub, keine neuen Verbindungen vom Router ins Docker-Netz.
@@ -16,6 +19,7 @@ Nur Standardbibliothek, damit das Image klein bleibt.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import os
@@ -111,6 +115,7 @@ def interface_state() -> dict[str, frozenset[str]]:
 
 class SyncState:
     def __init__(self) -> None:
+        self.route_ok = True
         self.last_ok = 0.0
         self.resync = False  # Peer-Anzahl wich nach dem letzten Sync ab -> beim nächsten Durchlauf erneut syncconf
         self.api_peers = 0
@@ -123,9 +128,32 @@ STATE = SyncState()
 def write_health() -> None:
     try:
         with open(HEALTH_FILE, "w") as f:
-            json.dump({"last_ok": STATE.last_ok, "api_peers": STATE.api_peers, "iface_peers": STATE.iface_peers}, f)
+            json.dump({"last_ok": STATE.last_ok, "api_peers": STATE.api_peers, "iface_peers": STATE.iface_peers,
+                       "route_ok": STATE.route_ok}, f)
     except OSError as exc:
         log.warning("Health-Datei nicht schreibbar: %s", exc)
+
+
+def ensure_route(address: str) -> bool:
+    """Route für das WG-Netz muss über ``dev <IFACE>`` laufen; sonst korrigieren. Rückgabe: Route (jetzt) korrekt."""
+    iface = ipaddress.ip_interface(address)
+    net, src = str(iface.network), str(iface.ip)
+
+    def ok() -> bool:
+        out = sh("ip", "route", "show", net, check=False)
+        line = next((ln for ln in out.splitlines() if ln.split()[:1] == [net]), "")
+        return f"dev {IFACE}" in f"{line} " and " via " not in f" {line} "
+
+    if ok():
+        STATE.route_ok = True
+        return True
+    log.warning("Route für %s läuft nicht über %s (%s) – korrigiere", net, IFACE, sh("ip", "route", "show", net, check=False) or "fehlt")
+    try:
+        sh("ip", "route", "replace", net, "dev", IFACE, "src", src)
+    except RuntimeError as exc:
+        log.warning("Route konnte nicht korrigiert werden: %s", exc)
+    STATE.route_ok = ok()
+    return STATE.route_ok
 
 
 def sync_peers(priv_port: int, force: bool = False) -> bool:
@@ -167,6 +195,8 @@ def health(now: float | None = None, path: str | None = None) -> tuple[bool, str
             st = json.load(f)
     except (OSError, ValueError):
         return False, "noch kein Sync"
+    if st.get("route_ok") is False:
+        return False, "Route ins WG-Netz läuft nicht über das WireGuard-Interface"
     if st.get("api_peers") != st.get("iface_peers"):
         return False, f"Peers im Interface {st.get('iface_peers')} ≠ API {st.get('api_peers')}"
     if not st.get("last_ok"):
@@ -207,6 +237,7 @@ def main() -> None:
     last_stats = 0.0
     while True:
         try:
+            ensure_route(cfg["address"])  # type: ignore[index]
             sync_peers(port, force=first)
             first = False
             if time.time() - last_stats > STATS_INTERVAL:

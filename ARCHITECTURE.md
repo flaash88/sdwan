@@ -84,8 +84,15 @@ eigenen Abschnitt.
   `/data/wg0.conf` – das Volume überlebt Neustarts, `wg0` wird beim Start aber leer angelegt. `syncconf` läuft, wenn
   Ist ≠ Soll, beim Start immer einmal, und erneut, wenn nach einem Sync die Peer-Anzahl im Interface nicht der
   API-Liste entspricht (Warnung im Log).
-* Healthcheck `python /app/agent.py --health`: unhealthy, wenn der letzte erfolgreiche Sync > 3 min alt ist oder die
-  Peer-Anzahl im Interface ≠ API-Liste. Der Hub startet erst, wenn die API healthy ist.
+* Healthcheck `python /app/agent.py --health`: unhealthy, wenn der letzte erfolgreiche Sync > 3 min alt ist, die
+  Peer-Anzahl im Interface ≠ API-Liste oder die Route ins WG-Netz nicht über `dev wg0` läuft. Der Hub startet erst,
+  wenn die API healthy ist.
+* **Route im Hub-Namespace:** syslog und flows laufen mit `network_mode: service:wireguard-hub`. Sie bekommen deshalb
+  kein `NET_ADMIN` und leere `HUB_INTERNAL_IP`/`WG_NETWORK` (die App nutzt dann den Standard für `wg_network`); der
+  Backend-Entrypoint setzt die Route `WG_NETWORK via HUB_INTERNAL_IP` nur, wenn im eigenen Namespace kein `wg0`
+  existiert. Der Hub-Agent prüft bei jedem Sync, dass die Route über `dev wg0` läuft, und korrigiert sie sonst
+  (`ip route replace <netz> dev wg0 src <hub-ip>`, Warnung im Log). `update.sh` pingt am Ende alle Tunnel-IPs vom
+  Hub aus an und gibt die Anzahl erreichbarer Geräte aus.
 * Plattform-Alarm `hub_no_peers`: `/internal/hub/stats` meldet 0 Peers, obwohl gekoppelte Geräte existieren
   (Mail an MSP-Admins, Plattform-Webhook); behoben, sobald wieder Peers gemeldet werden.
 * `deploy/update.sh`: wurde der Hub neu erstellt, werden `syslog` und `flows` (Netz-Namespace des Hubs) neu

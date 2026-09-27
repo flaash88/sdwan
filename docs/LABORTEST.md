@@ -84,7 +84,13 @@ Die Tunnel-Adresse des Hubs ist die erste Adresse aus `WG_NETWORK` (Standard `10
       **Erwartet:** Log „Peers synchronisiert: n (Start)“, `docker compose exec wireguard-hub wg show wg0 peers` zeigt
       alle Peers, Router nach ≤ 1 min wieder online, `docker compose ps` → wireguard-hub „healthy“.
 - [ ] `deploy/update.sh` nach einer Änderung am Hub-Image: syslog/flows werden neu gestartet, das Script meldet
-      „healthy“ und die Peer-Anzahl.
+      „healthy“, die Peer-Anzahl und „Vom Hub erreichbare Geräte n/n“.
+- [ ] **syslog/flows neu starten → Router bleiben online:** `docker compose restart syslog flows` (bzw.
+      `docker compose up -d --force-recreate syslog flows`). **Erwartet:** Log von syslog/flows enthält keine Zeile
+      „route … via …“ (bzw. „im Hub-Namespace – Route übersprungen“); `docker compose exec wireguard-hub ip route show
+      10.100.0.0/16` zeigt `dev wg0`; alle Router bleiben online, wireguard-hub bleibt „healthy“.
+- [ ] Gegenprobe Selbstheilung: `docker compose exec wireguard-hub ip route replace 10.100.0.0/16 via 172.30.0.10`
+      (simuliert den Fehler). **Erwartet:** Innerhalb von ≤ 10 s Warnung im Hub-Log und Route wieder `dev wg0`.
 
 ## 3. Selbsttest
 

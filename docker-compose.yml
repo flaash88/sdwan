@@ -71,6 +71,13 @@ services:
     <<: *backend
     command: ["python", "-m", "app.syslog_receiver"]
     network_mode: "service:wireguard-hub"
+    # Im Hub-Namespace KEINE Route setzen (würde die Route ins wg0 überschreiben → alle Router offline): Route-Variablen
+    # leer, kein NET_ADMIN. Der Entrypoint prüft zusätzlich, ob wg0 im eigenen Namespace existiert.
+    cap_add: []
+    environment:
+      <<: *backend-env
+      HUB_INTERNAL_IP: ""
+      WG_NETWORK: ""
     depends_on:
       api: { condition: service_healthy }
       wireguard-hub: { condition: service_started }
@@ -80,6 +87,13 @@ services:
     <<: *backend
     command: ["python", "-m", "app.flow_collector"]
     network_mode: "service:wireguard-hub"
+    # Im Hub-Namespace KEINE Route setzen (würde die Route ins wg0 überschreiben → alle Router offline): Route-Variablen
+    # leer, kein NET_ADMIN. Der Entrypoint prüft zusätzlich, ob wg0 im eigenen Namespace existiert.
+    cap_add: []
+    environment:
+      <<: *backend-env
+      HUB_INTERNAL_IP: ""
+      WG_NETWORK: ""
     depends_on:
       api: { condition: service_healthy }
       wireguard-hub: { condition: service_started }

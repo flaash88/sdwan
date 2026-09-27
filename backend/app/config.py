@@ -5,7 +5,7 @@ from __future__ import annotations
 import ipaddress
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -58,6 +58,12 @@ class Settings(BaseSettings):
 
     # --- WireGuard-Hub -------------------------------------------------------
     wg_network: str = "10.100.0.0/16"  # Management-Netz (Hub <-> Router)
+
+    @field_validator("wg_network", mode="before")
+    @classmethod
+    def _wg_network_default(cls, v: object) -> object:
+        # syslog/flows laufen im Hub-Namespace mit leerem WG_NETWORK (keine Route) – für die App gilt dann der Standard
+        return v or "10.100.0.0/16"
     wg_hub_endpoint: str = "localhost"  # öffentlicher Hostname/IP des Hubs
     wg_hub_port: int = 51820
     wg_device_interface: str = "sdwan-mgmt"

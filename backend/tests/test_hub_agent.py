@@ -117,3 +117,85 @@ async def test_platform_alert_hub_no_peers(client, msp, hub):
 
         rows = (await db.execute(select(PlatformAlert).where(PlatformAlert.type == "hub_no_peers"))).scalars().all()
     assert [r.status for r in rows] == ["resolved"]
+
+
+# ----------------------------------------------------------------------------- Route im Hub-Namespace
+ENTRYPOINT = pathlib.Path(__file__).resolve().parents[1] / "docker-entrypoint.sh"
+
+
+def _run_entrypoint(tmp_path, wg_present: bool) -> tuple[str, str]:
+    import os
+    import subprocess
+
+    bindir = tmp_path / "bin"
+    bindir.mkdir(exist_ok=True)
+    log = tmp_path / "ip.log"
+    (bindir / "ip").write_text(f'#!/bin/sh\necho "$@" >> {log}\n'
+                               f'if [ "$1" = "link" ]; then exit {0 if wg_present else 1}; fi\nexit 0\n')
+    (bindir / "ip").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HUB_INTERNAL_IP": "172.30.0.10", "WG_NETWORK": "10.100.0.0/16",
+           "RUN_MIGRATIONS": "false"}
+    res = subprocess.run(["sh", str(ENTRYPOINT), "true"], env=env, capture_output=True, text=True, check=True)
+    return res.stdout, log.read_text() if log.exists() else ""
+
+
+def test_entrypoint_skips_route_in_hub_namespace(tmp_path):
+    out, calls = _run_entrypoint(tmp_path, wg_present=True)
+    assert "im Hub-Namespace – Route übersprungen" in out and "route replace" not in calls
+    out, calls = _run_entrypoint(tmp_path, wg_present=False)  # api/worker: Route wie bisher
+    assert "route replace 10.100.0.0/16 via 172.30.0.10" in calls and "route 10.100.0.0/16 via 172.30.0.10" in out
+
+
+def test_compose_syslog_flows_without_route_env_and_net_admin():
+    import yaml
+
+    d = yaml.safe_load((pathlib.Path(__file__).resolve().parents[2] / "docker-compose.yml").read_text())
+    for name in ("syslog", "flows"):
+        svc = d["services"][name]
+        assert svc["network_mode"] == "service:wireguard-hub" and svc["cap_add"] == []
+        assert svc["environment"]["HUB_INTERNAL_IP"] == "" and svc["environment"]["WG_NETWORK"] == ""
+    assert d["services"]["api"]["cap_add"] == ["NET_ADMIN"]  # api/worker brauchen die Route weiterhin
+
+
+def test_empty_wg_network_falls_back_to_default():
+    from app.config import Settings
+
+    assert str(Settings(wg_network="").wg_net) == "10.100.0.0/16"
+
+
+class FakeRoutes:
+    def __init__(self, route: str) -> None:
+        self.route = route
+        self.replaced: list[tuple[str, ...]] = []
+
+    def sh(self, *args: str, check: bool = True, inp: str | None = None) -> str:
+        if args[:3] == ("ip", "route", "show"):
+            return self.route
+        if args[:3] == ("ip", "route", "replace"):
+            self.replaced.append(args)
+            self.route = f"{args[3]} dev {args[5]} scope link src {args[7]}"
+            return ""
+        raise AssertionError(args)
+
+
+def test_agent_corrects_wrong_route_and_health(agent, monkeypatch):
+    fr = FakeRoutes("10.100.0.0/16 via 172.30.0.10 dev eth0")  # vom Backend-Entrypoint umgebogen
+    monkeypatch.setattr(agent, "sh", fr.sh)
+    assert agent.ensure_route("10.100.0.1/16") is True
+    assert fr.replaced == [("ip", "route", "replace", "10.100.0.0/16", "dev", "wg0", "src", "10.100.0.1")]
+    # korrekte Route → nichts tun
+    assert agent.ensure_route("10.100.0.1/16") is True and len(fr.replaced) == 1
+    # Korrektur scheitert → Healthcheck unhealthy
+    class Stuck(FakeRoutes):
+        def sh(self, *args, **kw):
+            if args[:3] == ("ip", "route", "replace"):
+                raise RuntimeError("RTNETLINK answers: Operation not permitted")
+            return super().sh(*args, **kw)
+
+    st = Stuck("10.100.0.0/16 via 172.30.0.10 dev eth0")
+    monkeypatch.setattr(agent, "sh", st.sh)
+    assert agent.ensure_route("10.100.0.1/16") is False and agent.STATE.route_ok is False
+    monkeypatch.setattr(agent, "sh", agent._wg.sh)
+    agent.sync_peers(51820)  # schreibt den Status
+    ok, text = agent.health()
+    assert ok is False and "Route" in text

@@ -29,6 +29,14 @@ echo " $STATUS"
 PEERS=$(docker compose exec -T wireguard-hub sh -c 'wg show wg0 peers | wc -l' 2>/dev/null || echo "?")
 echo "WireGuard-Peers im Hub: $PEERS"
 docker compose exec -T wireguard-hub python /app/agent.py --health || true
+# Erreichbarkeit vom Hub aus: jede Tunnel-IP der gekoppelten Geräte (Peers) einmal anpingen (1 Paket, 2 s)
+REACH=$(docker compose exec -T wireguard-hub sh -c '
+  ok=0; all=0
+  for ip in $(wg show wg0 allowed-ips | awk "{for (i=2;i<=NF;i++) print \$i}" | cut -d/ -f1); do
+    all=$((all+1)); ping -c 1 -W 2 "$ip" >/dev/null 2>&1 && ok=$((ok+1))
+  done
+  echo "$ok/$all"' 2>/dev/null || echo "?")
+echo "Vom Hub erreichbare Geräte (Ping auf Tunnel-IP): $REACH"
 docker compose ps
 if [ "$STATUS" != "healthy" ]; then
   echo "WARNUNG: wireguard-hub ist nicht healthy – docker compose logs wireguard-hub prüfen" >&2

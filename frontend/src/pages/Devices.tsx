@@ -11,6 +11,7 @@ import { useAuth } from "../lib/auth";
 import { firmwareUpdate, useDevices, useFleetState, useSites } from "../lib/fleet";
 import { fmtAgo, fmtUptime } from "../lib/format";
 import type { Device, PairingInfo, Site } from "../lib/types";
+import { LA_STATUS, useLocalAccessMap } from "../lib/localAccess";
 import { useFetch } from "../lib/useFetch";
 
 type StatusFilter = "all" | "online" | "offline" | "pending";
@@ -34,6 +35,8 @@ export default function Devices() {
   const [tags, setTags] = useState<string[]>([]);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [dialog, setDialog] = useState<null | "policy" | "firmware" | "backup">(null);
+  const local = useLocalAccessMap();
+  const [laMsg, setLaMsg] = useState<string | null>(null);
   const status = (params.get("status") as StatusFilter) || "all";
   const setStatus = (s: StatusFilter) => setParams(s === "all" ? {} : { status: s }, { replace: true });
   const needsTenant = me?.user.is_superuser && !me.active_tenant_id;
@@ -112,9 +115,13 @@ export default function Devices() {
             <Button variant="secondary" icon="upload" onClick={() => setDialog("firmware")}>Firmware-Update</Button>
             <Button variant="secondary" icon="archive" onClick={() => setDialog("backup")}>Backup erstellen</Button>
           </>}
+          {can("admin") && <Button variant="secondary" icon="key" onClick={() => confirm(`Vor-Ort-Zugang auf ${sel.size} Geräten anlegen?`) && void api.post<{ results: { status: string }[] }>("/local-access/bulk", { device_ids: [...sel] })
+            .then((r) => { setLaMsg(`Vor-Ort-Zugang: ${r.results.filter((x) => x.status === "active").length} aktiv, ${r.results.filter((x) => x.status !== "active").length} nicht angelegt (Details unter Vor-Ort-Zugang)`); void local.reload(); })
+            .catch((e: Error) => setLaMsg(e.message))}>Vor-Ort-Zugang anlegen</Button>}
         </SelectionBar>
       </div>
       <ErrorBox error={devices.error} />
+      {laMsg && <div className="mb-3"><Notice tone="blue" icon="info">{laMsg}</Notice></div>}
       <section className="overflow-hidden rounded-lg border border-line bg-panel">
         {!devices.data ? <Loading rows={6} /> : (
           <div className="overflow-x-auto">
@@ -135,6 +142,8 @@ export default function Devices() {
                     <span className="flex min-w-0 flex-col leading-tight">
                       <span className="truncate font-medium">{d.name}</span>
                       <span className="truncate font-mono text-[11.5px] text-fg3">{d.tunnel_ip}</span>
+                      {(() => { const la = local.map[d.id]; return la && (la.status === "not_created" || la.status === "error")
+                        ? <span className="mt-0.5 truncate text-[11.5px] text-orange-text" title={la.reason ?? undefined}>Vor-Ort-Zugang {LA_STATUS[la.status][0]}</span> : null; })()}
                     </span>
                     <span className="truncate">{siteName(d.site_id)}</span>
                     <span className="truncate text-fg2" title={[d.model, d.architecture, d.serial && `SN ${d.serial}`].filter(Boolean).join(" · ") || undefined}>{d.model ?? "–"}</span>

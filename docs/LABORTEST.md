@@ -515,6 +515,40 @@ WAN, VRRP, Syslog, WLAN, Hotspot, offene Fernzugriffs-Sitzung).
 - [ ] Compliance MSP-Baseline: Regel „Keine bekannten Sicherheitsmeldungen“ schlägt fehl bzw. ist nach dem
       Update ok.
 
+## 21. Vor-Ort-Zugang und API-Tokens (Phase 24)
+
+Voraussetzung: Router im Werkszustand (defconf) onboarden; Notebook am LAN, zweites Notebook am WAN-Port-Netz.
+
+- [ ] Nach dem Onboarding (≤ 1 Poll-Intervall): Gerätedetail „Vor-Ort-Zugang“ aktiv; auf dem Router
+      `/user print detail where name=localadmin` → Gruppe `sdwan-local`, `address=` nur LAN-Netz(e);
+      `/user group print where name=sdwan-local` → Policies wie `LOCAL_POLICIES` (**ANNAHME:** Anlegen durch den
+      API-Benutzer klappt).
+- [ ] `/tool mac-server mac-winbox print` → `allowed-interface-list=sdwan-local-access` (**ANNAHME:** Feldname).
+- [ ] Passwort anzeigen (mit Begründung) → Audit-Eintrag und Webhook vorhanden.
+- [ ] WinBox per IP und SSH vom LAN-Notebook mit `localadmin` → Anmeldung klappt.
+- [ ] Firewall-Policy mit Default-Drop ausrollen → WinBox/SSH vom LAN weiterhin möglich.
+- [ ] WinBox/SSH vom WAN-Notebook → nicht erreichbar; MAC-WinBox über den WAN-Port → Router nicht sichtbar.
+- [ ] **ANNAHME (Labor) ausdrücklich: MAC-WinBox-Anmeldung** vom LAN-Notebook (Neighbors → MAC-Adresse) mit dem
+      address-beschränkten Benutzer `localadmin`.
+      **Ergebnis:** ☐ Anmeldung klappt ☐ Anmeldung abgelehnt („login failure“)
+      Bei „abgelehnt“: Default der Einstellung „Adressbeschränkung des Vor-Ort-Benutzers“ auf aus ändern
+      (`local_access.tenant_settings`) und diesen Schritt mit „aus“ wiederholen:
+      **Ergebnis (aus):** ☐ Anmeldung klappt ☐ abgelehnt
+- [ ] Einstellung „Adressbeschränkung“ aus, Zugang erneut anlegen → `/user` ohne `address`, `/ip service print`
+      winbox/ssh `address=` LAN-Netz + Hub-IP; WinBox vom WAN weiterhin nicht möglich.
+- [ ] Service-Port (z. B. ether5) einrichten → Port nicht mehr in der Bridge, Notebook an ether5 bekommt per DHCP
+      eine Adresse aus 192.168.254.0/29, WinBox auf 192.168.254.1 klappt. Service-Port wieder aus → Port zurück in
+      der Bridge (**ANNAHME:** DHCP-Server-/Bridge-Port-Felder).
+- [ ] Router ohne Zonen und ohne defconf-Liste LAN: Status „nicht angelegt“ mit Grund in Gerätedetail und
+      Geräteliste; Compliance „Vor-Ort-Zugang vorhanden“ schlägt fehl. Netz manuell angeben → angelegt.
+- [ ] Rotation: neues Passwort funktioniert, altes nicht mehr. Tunnel kurz trennen, Rotation auslösen → Fehler,
+      altes Passwort funktioniert weiter und wird weiter angezeigt.
+- [ ] Export age und ZIP → mit `age -d` bzw. 7-Zip öffnen, in KeePass als CSV importieren.
+- [ ] Offboarding mit „Vor-Ort-Zugang behalten“ → nach Ablauf des Scripts Anmeldung per WinBox aus dem LAN mit dem
+      exportierten Passwort möglich (Werks-Firewall aktiv); Kommentar „lokaler Zugang (ehemals verwaltet)“.
+- [ ] API-Token „nur lesen“ erstellen → `curl -H "Authorization: Bearer sdw_…" …/api/v1/devices` klappt, POST
+      liefert 403; Token widerrufen → 401.
+
 ---
 
 ## Ergebnis
@@ -541,3 +575,4 @@ WAN, VRRP, Syslog, WLAN, Hotspot, offene Fernzugriffs-Sitzung).
 | 18 Plattform-Sicherung | ☐ ok ☐ Abweichung | |
 | 19 Zwei-Faktor | ☐ ok ☐ Abweichung | |
 | 20 Sicherheitsmeldungen | ☐ ok ☐ Abweichung | |
+| 21 Vor-Ort-Zugang/API-Tokens | ☐ ok ☐ Abweichung | MAC-WinBox mit Adressbeschränkung: ☐ ok ☐ abgelehnt |

@@ -23,3 +23,10 @@ def test_policy_lists_target_state():
     assert set(REMOTE_POLICIES) == {"ssh", "read", "write", "test", "winbox", "web", "reboot", "sensitive"}
     # Temporäre Benutzer: keine Benutzerverwaltung, kein API-Zugriff, kein Konsolen-Login
     assert not {"policy", "api", "local"} & set(REMOTE_POLICIES)
+
+
+def test_local_policies_subset_of_api_policies():
+    # Vor-Ort-Gruppe (Phase 24): gleiche Annahme wie beim Fernzugriff; ohne 'api'
+    from app.routeros.schema import LOCAL_POLICIES
+
+    assert not set(LOCAL_POLICIES) - set(API_POLICIES) and "api" not in LOCAL_POLICIES

@@ -16,6 +16,7 @@ def poll_hooks() -> list[Any]:
 
 def post_poll_hooks() -> list[Any]:
     """async fn(db, devices) -> None, läuft nach jedem Polling-Durchlauf."""
-    from app.services import fw_hits, mesh, metrics, vrrp, wan, ztp
+    from app.services import fw_hits, local_access, mesh, metrics, vrrp, wan, ztp
 
-    return [fw_hits.update_hits, mesh.update_peer_status, wan.update_wan_status, vrrp.update_vrrp_status, metrics.store_metrics, ztp.ztp_post_poll]
+    return [fw_hits.update_hits, mesh.update_peer_status, wan.update_wan_status, vrrp.update_vrrp_status, metrics.store_metrics, ztp.ztp_post_poll,
+            local_access.post_poll]

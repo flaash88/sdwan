@@ -1,3 +1,4 @@
+import { ApiTokensDialog } from "./ApiTokens";
 import { TwoFactorDialog } from "./TwoFactor";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
@@ -153,6 +154,7 @@ function UserMenu() {
   const live = useLiveConnected();
   const { open, setOpen, ref } = usePopover();
   const [tfa, setTfa] = useState(false);
+  const [tokens, setTokens] = useState(false);
   if (!me) return null;
   const name = me.user.full_name || me.user.email;
   const initials = (me.user.full_name || me.user.email).split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join("");
@@ -179,11 +181,15 @@ function UserMenu() {
           <button role="menuitem" type="button" onClick={() => { setTfa(true); setOpen(false); }} className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-[7px] text-left text-fg hover:bg-hover">
             <Icon name="lock" className="text-[15px] text-fg3" />Zwei-Faktor{me.user.totp_enabled ? " (aktiv)" : ""}
           </button>
+          <button role="menuitem" type="button" onClick={() => { setTokens(true); setOpen(false); }} className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-[7px] text-left text-fg hover:bg-hover">
+            <Icon name="key" className="text-[15px] text-fg3" />API-Tokens
+          </button>
           <button role="menuitem" type="button" onClick={logout} className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-[7px] text-left text-fg hover:bg-hover">
             <Icon name="logout" className="text-[15px] text-fg3" />Abmelden
           </button>
         </div>
       )}
+      {tokens && <ApiTokensDialog onClose={() => setTokens(false)} />}
       {tfa && <TwoFactorDialog enabled={!!me.user.totp_enabled} required={!!me.mfa_required} left={me.recovery_codes_left} onClose={() => setTfa(false)} onChanged={reload} />}
     </div>
   );

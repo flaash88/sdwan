@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Icon, type IconName } from "../components/Icon";
 import DeviceAdvisories from "../components/DeviceAdvisories";
+import LocalAccessCard from "../components/LocalAccessCard";
 import OffboardDialog from "../components/OffboardDialog";
 import PairingBox from "../components/PairingBox";
 import SelftestCard from "../components/SelftestCard";
@@ -203,6 +204,7 @@ function Overview({ device: d, state, reload }: { device: Device; state?: Device
       )}
       {paired && <AddressCard device={d} />}
       {paired && <DeviceAdvisories device={d} />}
+      {paired && <LocalAccessCard device={d} />}
       {paired && <SelftestCard device={d} />}
       <DeviceAdmin device={d} reload={reload} />
     </>

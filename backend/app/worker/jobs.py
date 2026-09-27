@@ -44,6 +44,9 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
     scheduler.add_job(_safe(platform_backup.backup_job), "cron", hour=s.platform_backup_hour_utc, minute=10, id="platform_backup",
                       max_instances=1, coalesce=True)
     scheduler.add_job(_safe(platform_backup.queue_job), "interval", minutes=1, id="platform_backup_queue", max_instances=1, coalesce=True)
+    from app.services import local_access
+
+    scheduler.add_job(_safe(local_access.rotation_tick), "cron", minute=35, id="local_access_rotation", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(offboarding.purge_archives), "cron", hour=4, minute=25, id="offboarding_archives", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(hotspot.purge_registrations), "cron", hour=4, minute=20, id="guest_retention", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(wlan.rotation_tick), "cron", hour=4, minute=45, id="wlan_psk_rotation", max_instances=1, coalesce=True)

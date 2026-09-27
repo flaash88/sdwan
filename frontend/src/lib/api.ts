@@ -61,6 +61,7 @@ export const api = {
   patch: <T,>(p: string, b?: unknown) => request<T>("PATCH", p, b ?? {}),
   del: <T,>(p: string) => request<T>("DELETE", p),
   blob: (p: string) => request<Blob>("GET", p, undefined, true),
+  postBlob: (p: string, b?: unknown) => request<Blob>("POST", p, b ?? {}, true),
 };
 
 export function wsUrl(): string {
@@ -68,6 +69,15 @@ export function wsUrl(): string {
   const q = new URLSearchParams({ token: session.token ?? "" });
   if (session.tenant) q.set("tenant", session.tenant);
   return `${proto}://${location.host}/api/v1/ws?${q}`;
+}
+
+export function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export async function download(path: string, filename: string) {

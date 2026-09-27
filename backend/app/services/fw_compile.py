@@ -32,6 +32,8 @@ _PORTS = re.compile(r"^\d{1,5}(-\d{1,5})?(,\d{1,5}(-\d{1,5})?)*$")
 _SLUG = re.compile(r"[^a-z0-9]+")
 _COMMENT = re.compile(r"^[\w .:/,!\-+*=@]{0,120}$")  # wie policy._SAFE_VALUE
 # Verwaltungsdienste des Routers (RouterOS-Standardports: ftp, ssh, telnet, www, www-ssl, api, api-ssl, winbox)
+LOCAL_ACCESS_LIST = "sdwan-local-access"
+LOCAL_ACCESS_PORTS = "22,8291"  # SSH, WinBox
 MGMT_PORTS = "21,22,23,80,443,8728,8729,8291"
 ROUTER = "router"  # Zielzone „Router selbst“ -> chain=input
 
@@ -286,6 +288,15 @@ def compile_spec(spec: dict[str, Any], cat: Catalog) -> dict[str, list[dict[str,
             {"chain": "input", "action": "drop", "connection-state": "invalid", "comment": "base:input-invalid"},
             {"chain": "forward", "action": "accept", "connection-state": "established,related,untracked", "comment": "base:forward-established"},
             {"chain": "forward", "action": "drop", "connection-state": "invalid", "comment": "base:forward-invalid"},
+        ]
+        # Phase 24: Vor-Ort-Zugang – WinBox/SSH (und DHCP für den Service-Port) aus der Liste sdwan-local-access.
+        # Die Liste enthält nur Interfaces der Zonen Management/LAN (nie WAN) und ist leer, solange der Zugang auf dem
+        # Gerät nicht aktiv ist – dann wirkungslos, d. h. keine Verhaltensänderung für bestehende Geräte.
+        filt += [
+            {"chain": "input", "action": "accept", "protocol": "tcp", "dst-port": LOCAL_ACCESS_PORTS, "in-interface-list": LOCAL_ACCESS_LIST,
+             "comment": "base:local-access"},
+            {"chain": "input", "action": "accept", "protocol": "udp", "dst-port": "67", "in-interface-list": LOCAL_ACCESS_LIST,
+             "comment": "base:local-access-dhcp"},
         ]
         for z in sorted(cat.zones.values(), key=lambda z: z["slug"]):
             if z.get("management"):

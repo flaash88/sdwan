@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { Device } from "../lib/types";
-import { Button, ErrorBox, Input, Loading, Modal, Notice, Pill } from "./ui";
+import { Button, Checkbox, ErrorBox, Input, Loading, Modal, Notice, Pill } from "./ui";
 
 interface Preview { online: boolean; counts: Record<string, number>; final: Record<string, number>; warnings: string[]; defconf_disabled: number; error: string | null }
 interface Step { step: number; label: string; ok: boolean; detail: unknown }
@@ -11,6 +11,7 @@ export default function OffboardDialog({ device, onClose, onDone }: { device: De
   const [pre, setPre] = useState<Preview | null>(null);
   const [mode, setMode] = useState<"clean" | "platform_only">("clean");
   const [name, setName] = useState("");
+  const [keepLocal, setKeepLocal] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [steps, setSteps] = useState<Step[] | null>(null);
@@ -21,7 +22,7 @@ export default function OffboardDialog({ device, onClose, onDone }: { device: De
   const run = async () => {
     setBusy(true); setError(null);
     try {
-      const r = await api.post<{ steps: Step[] }>(`/devices/${device.id}/offboard`, { mode, confirm_name: name });
+      const r = await api.post<{ steps: Step[] }>(`/devices/${device.id}/offboard`, { mode, confirm_name: name, keep_local_access: keepLocal });
       setSteps(r.steps); setDone(true);
     } catch (e) {
       // Abbruch: Detail kommt als JSON {message, steps}
@@ -64,6 +65,12 @@ export default function OffboardDialog({ device, onClose, onDone }: { device: De
             </div>
           </label>
           {mode === "clean" && pre.warnings.map((w) => <Notice key={w} tone="orange" icon="alert">{w}</Notice>)}
+          {mode === "clean" && <div className="rounded-md border border-line p-3">
+            <Checkbox label="Vor-Ort-Zugang behalten (empfohlen)" checked={keepLocal} onChange={setKeepLocal} />
+            <p className="mt-1 text-xs text-fg3">{keepLocal
+              ? "Der lokale Notfall-Benutzer bleibt mit seinem Passwort erhalten (nur aus LAN/Management bzw. Service-Port), wird aber nicht mehr als „sdwan:“ markiert. Passwort vorher exportieren!"
+              : "Der Vor-Ort-Benutzer, seine Gruppe und ein Service-Port werden entfernt; MAC-WinBox und Dienst-Adressen werden zurückgestellt."}</p>
+          </div>}
           <label className={`flex cursor-pointer gap-3 rounded-md border p-3 ${mode === "platform_only" ? "border-red" : "border-line"}`}>
             <input type="radio" name="mode" checked={mode === "platform_only"} onChange={() => setMode("platform_only")} />
             <div><div className="font-medium">Nur aus der Plattform entfernen</div>

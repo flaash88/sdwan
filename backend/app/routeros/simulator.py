@@ -46,6 +46,11 @@ _TABLE_PATHS = {
     "/ip/firewall/connection",
     "/interface/vrrp",
     "/radius",
+    # Vor-Ort-Zugang / Service-Port (Phase 24)
+    "/interface/bridge/port",
+    "/ip/pool",
+    "/ip/dhcp-server",
+    "/ip/dhcp-server/network",
     # Hotspot (Phase 20)
     "/ip/hotspot",
     "/ip/hotspot/profile",
@@ -110,6 +115,7 @@ class SimRouter:
             self._insert("/ip/service", {"name": svc, "port": str(port), "disabled": "false", "address": ""})
         self._insert("/ip/route", {"dst-address": "0.0.0.0/0", "gateway": "100.64.0.1", "distance": "1"})
         self.clock_skew_s = 0.0  # Tests: Abweichung der Router-Uhr in Sekunden
+        self.mac_winbox: dict[str, Any] = {"allowed-interface-list": "LAN"}  # wie defconf
         _seed_extras(self)
         _seed_wlan(self)
         # weitere Ports wie beim L009UiGS (ether5–ether8, z. B. 5G-Modem an ether8)
@@ -192,6 +198,9 @@ class SimRouter:
             "/tool/bandwidth-test": self._btest,
             "/system/ntp/client/print": lambda p: [{"enabled": getattr(self, "ntp_enabled", "yes"), "mode": "unicast", "servers": "pool.ntp.org"}],
             "/ip/dns/print": lambda p: [dict(self.dns)],
+            # ANNAHME (Labor): Einstellungen der MAC-WinBox (allowed-interface-list)
+            "/tool/mac-server/mac-winbox/print": lambda p: [dict(self._mac_winbox())],
+            "/tool/mac-server/mac-winbox/set": self._mac_winbox_set,
             "/ip/dns/set": self._dns_set,
             "/ip/dns/cache/flush": lambda p: [],
             "/interface/monitor-traffic": self._monitor_traffic,
@@ -428,6 +437,15 @@ class SimRouter:
             if cmd:
                 raise RouterOSError(f"Simulator kennt den Scheduler-Befehl nicht: {cmd}")
 
+    def _mac_winbox(self) -> dict[str, Any]:
+        if not hasattr(self, "mac_winbox") or self.mac_winbox is None:
+            self.mac_winbox = {"allowed-interface-list": "LAN"}  # wie defconf
+        return self.mac_winbox
+
+    def _mac_winbox_set(self, p: dict[str, Any]) -> list[dict[str, Any]]:
+        self._mac_winbox().update({k: _s(v) for k, v in p.items() if not k.startswith(".")})
+        return []
+
     def _reboot(self, _p: dict[str, Any]) -> list[dict[str, Any]]:
         self.boot = time.time()
         return []
@@ -471,7 +489,7 @@ class SimRouter:
         return []
 
 
-_PERSIST = ("version", "channel", "identity", "board", "tables", "_next_id", "dns", "counters", "boot", "down_hosts", "vrrp_master", "wlan_driver")
+_PERSIST = ("version", "channel", "identity", "board", "tables", "_next_id", "dns", "counters", "boot", "down_hosts", "vrrp_master", "wlan_driver", "mac_winbox")
 
 
 def _default_wlan(board: str) -> str | None:
@@ -521,6 +539,9 @@ def _seed_extras(r: SimRouter) -> None:
             r.tables["/system/logging/action"].append({".id": f"*L{name}", "name": name, "target": target, "default": "true"})
         for i, t in enumerate(("info", "error", "warning", "critical")):
             r.tables["/system/logging"].append({".id": f"*R{i}", "topics": t, "action": "memory", "default": "true"})
+    if not r.tables["/interface/bridge/port"]:  # LAN-Ports in der Bridge (ether1 = WAN)
+        for name in ("ether2", "ether3", "ether4", "ether5"):
+            r._insert("/interface/bridge/port", {"bridge": "bridge", "interface": name, "comment": "defconf"})
     if not r.tables["/ip/hotspot/profile"]:  # wie RouterOS: Standardprofile
         r.tables["/ip/hotspot/profile"].append({".id": "*HP0", "name": "default", "html-directory": "hotspot", "login-by": "cookie,http-chap", "default": "true"})
         r.tables["/ip/hotspot/user/profile"].append({".id": "*HU0", "name": "default", "shared-users": "1", "default": "true"})

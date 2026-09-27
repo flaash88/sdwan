@@ -34,7 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db import system_session, utcnow
-from app.models import ConfigBackup, Device, DeviceStatus, OffboardingArchive, PairingStatus, RemoteSession
+from app.models import ConfigBackup, Device, DeviceStatus, LocalAccess, OffboardingArchive, PairingStatus, RemoteSession
 from app.routeros import RouterOSError, connect_device
 from app.routeros.client import DeviceAPI, _norm
 from app.routeros.schema import API_GROUP, REMOTE_GROUP
@@ -45,7 +45,7 @@ ARCHIVE_DAYS = 90
 FINAL_SCHEDULER = "sdwan-offboard"
 MGMT_IFACE_COMMENT = "sdwan:mgmt"
 # Kommentare, die erst in Schritt 5/6 entfernt werden (Tunnel-Abhängigkeiten, Zugang)
-_LATER = ("sdwan:mgmt", "sdwan:hub", "sdwan:remote", "sdwan:wan", "sdwan:ztp")
+_LATER = ("sdwan:mgmt", "sdwan:hub", "sdwan:remote", "sdwan:wan", "sdwan:ztp", "sdwan:local")
 # Pfade aus optionalen Paketen: fehlen sie, gibt es dort nichts zu bereinigen
 _PACKAGE_PATHS = ("/interface/wifi", "/interface/wireless")
 
@@ -229,7 +229,7 @@ async def _step4(db: AsyncSession, api: DeviceAPI, device: Device) -> list[dict[
     return done
 
 
-async def _step5(db: AsyncSession, api: DeviceAPI, device: Device, by: str) -> dict[str, int]:
+async def _step5(db: AsyncSession, api: DeviceAPI, device: Device, by: str) -> dict[str, Any]:
     users = [u for u in await api.print("/user") if _c(u).startswith("sdwan:remote")]
     for u in users:
         await api.remove("/user", u[".id"])
@@ -258,7 +258,7 @@ async def _step6(api: DeviceAPI) -> dict[str, Any]:
             "removes": [p for p, _ in STEP6], "api_group": API_GROUP}
 
 
-async def offboard(db: AsyncSession, device: Device, mode: str, by: str) -> dict[str, Any]:
+async def offboard(db: AsyncSession, device: Device, mode: str, by: str, keep_local_access: bool = True) -> dict[str, Any]:
     """Führt das Offboarding aus. Rückgabe {ok, steps, archive_id}. Bei ``ok=False`` bleibt das Gerät bestehen."""
     from app.services import fw_defconf
     from app.services.backup import BackupError, take_backup
@@ -297,7 +297,13 @@ async def offboard(db: AsyncSession, device: Device, mode: str, by: str) -> dict
                 step = 4
                 _step(steps, 4, "Dienste auf Ursprungszustand", True, await _step4(db, api, device))
                 step = 5
-                _step(steps, 5, "Fernzugriffs-Benutzer und Gruppe sdwan-remote entfernen", True, await _step5(db, api, device, by))
+                from app.services import local_access as la_svc
+
+                la = (await db.execute(select(LocalAccess).where(LocalAccess.device_id == device.id))).scalar_one_or_none()
+                d5 = await _step5(db, api, device, by)
+                d5.update(await la_svc.offboard_step(api, la, keep_local_access))
+                _step(steps, 5, "Fernzugriffs-Benutzer und Gruppe sdwan-remote entfernen; Vor-Ort-Zugang "
+                      + ("behalten" if keep_local_access else "entfernen"), True, d5)
                 step = 6
                 _step(steps, 6, "API-Benutzer, sdwan-api, Management-Tunnel (Scheduler auf dem Router)", True, await _step6(api))
         except RouterOSError as exc:

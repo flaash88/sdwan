@@ -35,7 +35,7 @@ log = logging.getLogger(__name__)
 TEXT_TYPES = {"contains", "not_contains", "regex"}
 LIVE_TYPES = {"service_disabled", "no_user", "ntp_enabled", "service_restricted_to_tunnel", "channel_in", "min_version"}
 # Plattform-Daten statt Router-Abfrage (Phase 23 ff.)
-PLATFORM_TYPES = {"no_security_advisory"}
+PLATFORM_TYPES = {"no_security_advisory", "local_admin_present"}
 TYPES = TEXT_TYPES | LIVE_TYPES | PLATFORM_TYPES
 REGEX_MAX = 200
 REGEX_TIMEOUT_S = 3.0
@@ -124,13 +124,15 @@ async def read_live(device: Device) -> dict[str, Any] | None:
         return None
 
 
-def _in_tunnel(address: str) -> bool:
+def _in_tunnel(address: str, local: list[str] | None = None) -> bool:
+    """Nur Tunnel-Netz – plus die Netze eines aktiven Vor-Ort-Zugangs (Phase 24, bewusst lokal erlaubt)."""
     net = get_settings().wg_net
     parts = [p.strip() for p in str(address or "").split(",") if p.strip()]
     if not parts:
         return False  # leer = von überall erlaubt
+    allowed = [net] + [ipaddress.ip_network(x, strict=False) for x in local or []]
     try:
-        return all(ipaddress.ip_network(p, strict=False).subnet_of(net) for p in parts)
+        return all(any(ipaddress.ip_network(p, strict=False).subnet_of(a) for a in allowed) for p in parts)
     except (ValueError, TypeError):
         return False
 
@@ -144,6 +146,17 @@ def evaluate_rule(rule: dict[str, Any], text: str | None, live: dict[str, Any] |
             return "fail", ", ".join(f"{a['cve']} ({a['severity']})" for a in affected)[:300]
         possible = [a for a in (platform or {}).get("advisories", []) if a["status"] == "possible"]
         return "ok", (f"keine bekannten; möglicherweise: {', '.join(a['cve'] for a in possible)}" if possible else "keine bekannten Meldungen")
+    if t == "local_admin_present":
+        la = (platform or {}).get("local_access")
+        if not la:
+            return "fail", "Vor-Ort-Zugang nicht angelegt"
+        if la["status"] != "active":
+            label = {"not_created": "nicht angelegt", "pending": "ausstehend", "error": "Fehler", "disabled": "deaktiviert"}.get(la["status"], la["status"])
+            return "fail", f"{label}: {la.get('reason') or ''}".strip(" :")[:300]
+        users = [u for u in (live or {}).get("users", []) if u.get("name") == la["username"]]
+        if live is not None and not users:
+            return "fail", f"Benutzer {la['username']} fehlt auf dem Router"
+        return "ok", f"{la['username']} · {', '.join(la['networks'])}"[:300]
     if t in TEXT_TYPES:
         if text is None:
             return "unknown", "Kein Backup vorhanden"
@@ -174,7 +187,7 @@ def evaluate_rule(rule: dict[str, Any], text: str | None, live: dict[str, Any] |
             svc = next((s for s in live["services"] if s.get("name") == name), None)
             if svc is None or _flag(svc.get("disabled")):
                 continue
-            if not _in_tunnel(str(svc.get("address") or "")):
+            if not _in_tunnel(str(svc.get("address") or ""), (platform or {}).get("local_networks")):
                 bad.append(f"{name} ({svc.get('address') or 'von überall'})")
         return ("fail", "erreichbar außerhalb des Tunnels: " + ", ".join(bad)) if bad else ("ok", "nur Tunnel-Netz")
     if t == "channel_in":
@@ -217,6 +230,13 @@ async def evaluate_device(db: AsyncSession, device: Device, rule_sets: list[Comp
         from app.services.advisories import device_advisories
 
         platform["advisories"] = await device_advisories(db, device)
+    from app.models import LocalAccess
+    from app.services.local_access import out as la_out
+
+    la = (await db.execute(select(LocalAccess).where(LocalAccess.device_id == device.id))).scalar_one_or_none()
+    platform["local_access"] = la_out(la)
+    if la is not None and la.status == "active":
+        platform["local_networks"] = la.networks or []
     now = utcnow()
     results = []
     for rs in sets:

@@ -64,7 +64,7 @@ async def test_baseline_after_backup_report_and_alert(client, msp, hub):
     rt = get_router(dev["tunnel_ip"])
     sets = (await client.get("/api/v1/compliance/rule-sets", headers=h)).json()
     base = next(s for s in sets if s["name"] == "MSP-Baseline")
-    assert base["builtin"] and base["scope"] == "global" and len(base["rules"]) == 7
+    assert base["builtin"] and base["scope"] == "global" and len(base["rules"]) == 8  # Phase 23: no-advisory, Phase 24: local-admin
     r = await client.post(f"/api/v1/compliance/rule-sets/{base['id']}/assign", json={"device_ids": [dev["id"]]}, headers=h)
     assert r.status_code == 201
     # Auswertung nach jedem Backup

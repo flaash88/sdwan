@@ -84,7 +84,8 @@ async def delete_user(user_id: uuid.UUID, ctx: Ctx = AdminCtx) -> None:
 
 @router.post("/{user_id}/2fa/reset", response_model=UserOut)
 async def reset_user_2fa(user_id: uuid.UUID, ctx: Ctx = SuperCtx) -> User:
-    """Nur MSP-Admin: 2FA eines Benutzers zurücksetzen (Audit + Plattform-Webhook)."""
+    """Nur MSP-Admin: 2FA eines Benutzers zurücksetzen (Audit + Plattform-Webhook). Nie per API-Token."""
+    ctx.forbid_token("Das Verwalten der Zwei-Faktor-Anmeldung")
     from app.services.account import reset_2fa
 
     user = await get_or_404(ctx.db, User, user_id, "Benutzer")

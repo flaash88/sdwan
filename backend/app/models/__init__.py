@@ -30,3 +30,4 @@ from app.models.wlan import WlanAssignment, WlanDeviceState, WlanProfile  # noqa
 from app.models.hotspot import GuestRegistration, HotspotInstance, HotspotPortal, Voucher, VoucherBatch, VoucherProfile  # noqa: F401,E402
 from app.models.platform import PlatformAlert, PlatformBackup  # noqa: F401,E402
 from app.models.advisories import SecurityAdvisory  # noqa: F401,E402
+from app.models.local_access import ApiToken, LocalAccess  # noqa: F401,E402

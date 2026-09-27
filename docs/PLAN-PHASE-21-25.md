@@ -230,6 +230,31 @@ Grundsatz Allgemeinheit gilt: keine Kundendaten, Defaults nur markiert und ände
     - Erlaubte Netze je Gerät manuell angebbar (`manual_networks`). Validierung: keine Netze aus WAN-Interfaces
       bzw. WAN-Adressen, kein `0.0.0.0/0`, nur gültige CIDR. Danach wird angelegt.
     - Die Compliance-Regel `local_admin_present` schlägt dann fehl, kein stilles Grün.
+17. **Rechte der Vor-Ort-Gruppe `sdwan-local`:** alle Policies der API-Gruppe außer `api`
+    (`read, write, policy, reboot, test, ssh, sensitive, winbox, web`), nicht die eingebaute Gruppe `full`.
+    Grund: Nach der bestehenden Annahme (Phase A1/A2) kann der API-Benutzer keine Gruppe mit mehr Rechten anlegen als
+    er selbst hat. Die API-Gruppe dafür zu erweitern, wäre die bequemere, aber unsicherere Variante.
+18. **Firewall-Ausnahme vor den Benutzerregeln:** `base:local-access` (tcp 22/8291) und `base:local-access-dhcp`
+    (udp 67 für den Service-Port) stehen direkt nach established/invalid, also vor allen Policy-Regeln und vor
+    `base:mgmt-only`. Keine Policy kann den Vor-Ort-Zugang aus LAN/Management aussperren; aus dem WAN nie, weil
+    WAN-Interfaces nie Mitglied der Liste werden.
+19. **Bestehende Geräte:** Es wird nichts automatisch angelegt. Automatisch nur nach dem Pairing (Onboarding/ZTP,
+    abschaltbar je Mandant), sonst per Button oder Massenaktion. Grund: keine Router-Änderung ohne Benutzeraktion.
+20. **Benutzername:** wird beim Anlegen des Datensatzes festgelegt; eine Namensänderung in den Einstellungen gilt
+    für neue Geräte (kein Umbenennen auf bestehenden Routern).
+21. **Offboarding „behalten“:** Objekte bekommen den Kommentar „lokaler Zugang (ehemals verwaltet)“; ein
+    Service-Port wird zusätzlich in die defconf-Liste `LAN` aufgenommen (falls vorhanden), damit die wieder
+    aktivierte Werks-Firewall ihn nicht verwirft; bei „Adressbeschränkung aus“ bleiben winbox/ssh auf die lokalen
+    Netze beschränkt (ohne Tunnel).
+22. **API-Tokens:**
+    - Ablauf ist Pflicht (1–365 Tage, Default 90).
+    - `read`-Tokens werden zentral bei jeder schreibenden Methode abgewiesen.
+    - Tokens umgehen die 2FA nicht im eigentlichen Sinn: Sie werden nur in einer angemeldeten (ggf. 2FA-)Sitzung
+      erstellt.
+    - Auch die Einstellungen des Vor-Ort-Zugangs (Export-Webhook, age-Empfänger) sind per Token gesperrt, weil
+      darüber Passwörter umgeleitet werden könnten.
+23. **Compliance „API/SSH nur aus dem Tunnel“** toleriert die Netze eines aktiven Vor-Ort-Zugangs (bewusst
+    lokal erlaubt); ohne aktiven Zugang unverändert.
 
 ## Verifikation
 - Je Phase eine neue Testdatei: `test_phase21_platform_backup.py` … `test_phase25_*.py`.
@@ -294,4 +319,43 @@ Grundsatz Allgemeinheit gilt: keine Kundendaten, Defaults nur markiert und ände
   (VRRP, Mesh), weil diese für den Betrieb nötig sind – dort nur Anzeige und Alarm.
 - **Im Labor zu verifizieren:** Versionsformat von `/system/resource` bzw. `routeros_version` bei rc/beta; Felder
   von `/ip/service` (disabled).
+
+### Stand Phase 24 – Vor-Ort-Zugang (Break-Glass) und API-Tokens
+- **Erledigt:**
+  - Modell `local_access` je Gerät und `api_tokens` (Migration 0033, nur neue Tabellen).
+  - Vor-Ort-Benutzer mit eigenem Zufallspasswort (24 Zeichen ohne 0/O/l/1/I, verschlüsselt gespeichert) in Gruppe
+    `sdwan-local`.
+  - Lokale Netze aus den Zonen Management/LAN bzw. der defconf-Liste `LAN`, WAN ausgeschlossen (WAN-Konfiguration,
+    Listen `sdwan-wan`/`WAN`, DHCP-Clients); manuell angebbare Netze mit Validierung.
+  - Status `not_created` mit Grund in Gerätedetail, Geräteliste und Übersicht.
+  - Firewall-Grundregel, Interface-Liste `sdwan-local-access`, MAC-WinBox auf diese Liste (Vorzustand gemerkt).
+  - Beide Varianten der Adressbeschränkung (an: `address=`; aus: `/ip service` winbox/ssh, Vorzustand gemerkt).
+  - Optionaler Service-Port (Bridge-Port, Adresse, Pool, DHCP-Server und -Netz; Default-Netz 192.168.254.0/29
+    änderbar), sein Netz immer in `address=`.
+  - Anlegen nach dem Pairing (Post-Poll-Hook), per Button und per Massenaktion (Geräteliste, Seite
+    „Vor-Ort-Zugang“).
+  - Anzeige nur Admin/MSP-Admin mit Begründung, Audit und Webhook; Rotation manuell, nach Anzeige (4 h) oder im
+    Intervall (Worker stündlich); bei Router-Fehler bleibt das alte Passwort.
+  - Export als KeePass-CSV, age oder AES-ZIP; automatischer age-Export per Webhook nach Anlegen/Rotation.
+  - Offboarding-Option „Vor-Ort-Zugang behalten“ (Default an).
+  - Compliance-Regel „Vor-Ort-Zugang vorhanden“ in der MSP-Baseline (Test auf 8 Regeln angepasst, gewollte
+    Änderung).
+  - API-Tokens: `sdw_…`, gehasht, Ablauf, nur lesend oder Rolle, letzte Nutzung, widerrufbar,
+    Audit `api_token.use`, OpenAPI-Beschreibung, Sperren für Vor-Ort-Passwörter, Export, 2FA und
+    Token-Verwaltung; Dialog im Profil, Admin-Übersicht über `/api-tokens`.
+  - `PATH_SPECS`: mac-winbox, bridge/port, ip/pool, dhcp-server, dhcp-server/network, dhcp-client; Simulator-Handler.
+- **Weggelassen:**
+  - Service-Port als Option der ZTP-Vorlage (nur je Gerät; im Zweifel weglassen, weil der Port je Modell
+    verschieden ist).
+  - „Volle Rechte“ im Sinne der Gruppe `full` (siehe Entscheidung 17).
+  - Umbenennen bestehender Vor-Ort-Benutzer bei Namensänderung (Entscheidung 20).
+- **Im Labor zu verifizieren:**
+  - **MAC-WinBox-Anmeldung mit address-beschränktem Benutzer** (LABORTEST 21, Ergebnisfeld). Scheitert sie, wird der
+    Default von `local_admin_address_restrict` auf aus geändert.
+  - Anlegen der Gruppe `sdwan-local` mit den Policies aus `LOCAL_POLICIES` durch den API-Benutzer.
+  - Feldname `allowed-interface-list` von `/tool/mac-server/mac-winbox`.
+  - Service-Port: Bridge-Port entfernen/wiederherstellen, DHCP-Server-Felder (`address-pool`, `interface`), Vergabe an
+    ein Notebook.
+  - Firewall: WinBox/SSH aus LAN und Management bei Default-Drop, nicht aus dem WAN; MAC-WinBox nicht über WAN.
+  - Offboarding „behalten“: Anmeldung mit dem Vor-Ort-Benutzer nach Wiederherstellung der Werks-Firewall.
 

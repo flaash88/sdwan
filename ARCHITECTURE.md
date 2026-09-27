@@ -1007,6 +1007,52 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   - Ohne bekannte Version wird nicht blockiert.
 * **Compliance:** Regeltyp `no_security_advisory` (Plattform-Daten statt Router-Abfrage), in der MSP-Baseline.
 
+## Phase 24 – Vor-Ort-Zugang (Break-Glass) und API-Tokens
+
+* **Ziel:** Techniker kommen auch ohne Plattform und ohne Tunnel an jeden Router – mit einem eigenen Passwort je
+  Gerät und nur von lokal (LAN/Management oder Service-Port), nie aus dem WAN.
+* **Modell `local_access`** (je Gerät, `TenantScoped`): Status `pending | active | not_created | error | disabled`
+  mit Grund, Benutzername, Passwort (Fernet), gesetzt/angezeigt/Rotation fällig, verwendete Netze und Interfaces,
+  manuelle Netze, Service-Port-Konfiguration sowie gemerkte Vorzustände (MAC-WinBox, `/ip service`, Bridge-Port).
+* **Router-Objekte** (Kommentar `sdwan:local`, Service-Port `sdwan:local:sp`):
+  - Gruppe `sdwan-local` mit `LOCAL_POLICIES` (routeros/schema.py: Policies der API-Gruppe ohne `api`).
+  - Benutzer `<Name je Mandant, Default localadmin>` mit Zufallspasswort (24 Zeichen ohne 0/O/l/1/I).
+  - Interface-Liste `sdwan-local-access` mit den lokalen Interfaces.
+  - `/tool/mac-server/mac-winbox allowed-interface-list=sdwan-local-access`.
+* **Lokale Netze:** Interfaces der Zonen Management/LAN (Plattform), sonst der defconf-Liste `LAN`. Ausgeschlossen
+  sind WAN-Interfaces (WAN-Konfiguration, Listen `sdwan-wan`/`WAN`, DHCP-Clients). Netze aus `/ip/address` dieser
+  Interfaces, plus manuell angegebene Netze (keine 0.0.0.0/0, keine Überschneidung mit WAN-Netzen) und das
+  Service-Port-Netz. Gibt es keine: Status `not_created` mit Grund, es wird nichts angelegt.
+* **Adressbeschränkung** (Mandanten-Einstellung, Default an): `address=` = lokale Netze. Aus: `address=` leer,
+  dafür `/ip service` winbox/ssh auf lokale Netze + Hub-IP (Vorzustand gemerkt, beim Deaktivieren zurück).
+* **Firewall:** Grundregeln `base:local-access` (tcp 22,8291) und `base:local-access-dhcp` (udp 67) aus
+  `in-interface-list=sdwan-local-access`, vor allen Policy-Regeln. Die Liste wird mit den Zonen immer angelegt und
+  ist ohne aktiven Zugang leer – bestehende Geräte verhalten sich unverändert.
+* **Service-Port (optional, Default aus):** Ethernet-Port aus der Bridge (Vorzustand gemerkt), Adresse `.1` des
+  Netzes (Default 192.168.254.0/29, änderbar), Pool, DHCP-Server `sdwan-local-sp`, DHCP-Netz; Aufnahme in die Liste.
+* **Lebenszyklus:** Datensatz `pending` beim Pairing (Onboarding/ZTP, abschaltbar je Mandant), angelegt vom
+  Post-Poll-Hook; für bestehende Geräte per Button (Gerätedetail) oder Massenaktion (Geräteliste, Seite
+  „Vor-Ort-Zugang“).
+* **Passwort anzeigen:** nur Admin/MSP-Admin, nie per API-Token, Begründung Pflicht, Audit `local_access.reveal`,
+  Plattform-Webhook und Mandanten-Webhook. Optional „nach Anzeige rotieren“ (4 h).
+* **Rotation:** manuell, nach Anzeige oder alle n Tage (Worker stündlich). Ändert nur diesen Benutzer; bei einem
+  Router-Fehler bleibt das alte Passwort gespeichert und gültig.
+* **Export:** KeePass-kompatible CSV (Group, Title, Username, Password, URL, Notes), nur verschlüsselt: age
+  (Public Key) oder AES-ZIP (`pyzipper`). Automatischer Export per Webhook nach Anlegen/Rotation nur age-verschlüsselt.
+* **Offboarding:** Option „Vor-Ort-Zugang behalten“ (Default). Behalten: Kommentare ohne `sdwan:`, Service-Port in
+  die defconf-Liste `LAN`. Entfernen: MAC-WinBox, Dienst-Adressen und Bridge-Port zurück, Objekte entfernt das
+  Offboarding-Script.
+* **Compliance:** Regeltyp `local_admin_present` (MSP-Baseline) schlägt bei fehlendem, ausstehendem oder nicht
+  anlegbarem Zugang fehl. `service_restricted_to_tunnel` toleriert die Netze eines aktiven Zugangs.
+* **API-Tokens (`api_tokens`):**
+  - Bearer `sdw_…`, gespeichert nur als sha256; Klartext einmal bei der Erstellung.
+  - Scope `read` (nur lesend, schreibende Methoden 403) oder `role` (Rechte der Rolle); Ablauf 1–365 Tage.
+  - Letzte Nutzung mit IP; widerrufbar durch den Besitzer oder Admin.
+  - Schreibende Aufrufe: Audit `api_token.use`.
+  - Gesperrt (`Ctx.forbid_token`): Vor-Ort-Passwörter anzeigen/exportieren, Vor-Ort-Einstellungen, 2FA
+    (einrichten, abschalten, Codes, Reset, Mandanten-Pflicht), Token erstellen/widerrufen.
+  - OpenAPI: Security-Scheme `Bearer` mit Beschreibung (`/docs`).
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

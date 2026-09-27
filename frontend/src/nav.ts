@@ -31,6 +31,7 @@ export const NAV: NavItem[] = [
   { to: "/alerts", label: "Alarme", icon: "bell", badge: "alarms" },
   { to: "/reports", label: "Berichte", icon: "chart" },
   { to: "/remote", label: "Fernzugriff", icon: "terminal" },
+  { to: "/local-access", label: "Vor-Ort-Zugang", icon: "key" },
   { to: "/audit", label: "Audit-Log", icon: "list", role: "admin" },
 ];
 

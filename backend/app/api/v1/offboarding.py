@@ -20,6 +20,7 @@ router = APIRouter(tags=["offboarding"])
 class OffboardIn(BaseModel):
     mode: Literal["clean", "platform_only"] = "clean"
     confirm_name: str
+    keep_local_access: bool = True  # Vor-Ort-Zugang behalten (Default)
 
 
 @router.get("/devices/{device_id}/offboarding/preview")
@@ -35,11 +36,11 @@ async def offboard(device_id: uuid.UUID, data: OffboardIn, ctx: Ctx = AdminCtx) 
     if data.confirm_name != dev.name:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Bestätigung: Gerätename stimmt nicht überein")
     try:
-        res = await ob.offboard(ctx.db, dev, data.mode, ctx.user.email)
+        res = await ob.offboard(ctx.db, dev, data.mode, ctx.user.email, keep_local_access=data.keep_local_access)
     except ob.OffboardError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     await ctx.audit("device.offboard", target_type="device", target_id=dev.id, success=res["ok"],
-                    details={"name": dev.name, "mode": data.mode, "steps": res["steps"], "archive_id": res["archive_id"]})
+                    details={"name": dev.name, "mode": data.mode, "keep_local_access": data.keep_local_access, "steps": res["steps"], "archive_id": res["archive_id"]})
     if not res["ok"]:
         await ctx.db.commit()  # Protokoll/Teilschritte (z. B. Backup) bleiben erhalten, Gerät bleibt bestehen
         raise HTTPException(status.HTTP_409_CONFLICT, {"message": "Offboarding abgebrochen – Gerät bleibt in der Plattform", "steps": res["steps"]})

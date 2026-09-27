@@ -147,6 +147,17 @@ PATH_SPECS: tuple[PathSpec, ...] = (
              used_by="API-Zugriff, Backup-Export (SSH), Fernzugriff", must_have_rows=True),
     PathSpec("user", "API-Benutzer", "/user/print", fields=("name", "group"), used_by="Selbsttest (Rechte)", must_have_rows=True),
     PathSpec("user_group", "Benutzergruppen", "/user/group/print", fields=("name", "policy"), used_by="Selbsttest (Rechte)", must_have_rows=True),
+    # --- Vor-Ort-Zugang (Phase 24). ANNAHME (Labor): Pfade/Felder
+    PathSpec("mac_winbox", "MAC-WinBox", "/tool/mac-server/mac-winbox/print", optional=("allowed-interface-list",),
+             used_by="Vor-Ort-Zugang (MAC-WinBox nur lokal)", warn_if_missing={"allowed-interface-list": "Feldname abweichend – MAC-WinBox kann nicht beschränkt werden"}),
+    PathSpec("bridge_port", "Bridge-Ports", "/interface/bridge/port/print", optional=("bridge", "interface", "pvid", "comment"),
+             used_by="Vor-Ort-Zugang (Service-Port)"),
+    PathSpec("ip_pool", "IP-Pools", "/ip/pool/print", optional=("name", "ranges", "comment"), used_by="Vor-Ort-Zugang (Service-Port-DHCP)"),
+    PathSpec("dhcp_server", "DHCP-Server", "/ip/dhcp-server/print", optional=("name", "interface", "address-pool", "disabled", "comment"),
+             used_by="Vor-Ort-Zugang (Service-Port-DHCP)"),
+    PathSpec("dhcp_network", "DHCP-Netze", "/ip/dhcp-server/network/print", optional=("address", "gateway", "comment"),
+             used_by="Vor-Ort-Zugang (Service-Port-DHCP)"),
+    PathSpec("dhcp_client", "DHCP-Clients", "/ip/dhcp-client/print", optional=("interface",), used_by="Vor-Ort-Zugang (WAN-Erkennung)"),
     PathSpec("ping", "Ping", "/ping", fields=("sent", "received"), optional=("time", "packet-loss", "host"),
              used_by="Leitungstest, VRRP-Gegenstelle", must_have_rows=True, params={"count": "1"}),
 )
@@ -181,6 +192,13 @@ API_POLICIES: tuple[str, ...] = ("read", "write", "api", "policy", "reboot", "te
 # Rechten anlegen, die der API-Benutzer selbst nicht hat.
 REMOTE_GROUP = "sdwan-remote"
 REMOTE_POLICIES: tuple[str, ...] = ("ssh", "read", "write", "test", "winbox", "web", "reboot", "sensitive")
+
+# Gruppe des Vor-Ort-Benutzers (Phase 24): so viele Rechte wie möglich = alle Policies der API-Gruppe außer 'api'
+# (der Notfall-Benutzer braucht keinen API-Zugang). „Volle Rechte“ inkl. local/ftp/password/telnet/sniff/romon sind
+# nach derselben Annahme nicht möglich, ohne die API-Gruppe zu erweitern – das tut die Plattform bewusst nicht.
+# Muss eine Teilmenge von API_POLICIES sein (tests/test_policies.py).
+LOCAL_GROUP = "sdwan-local"
+LOCAL_POLICIES: tuple[str, ...] = ("read", "write", "policy", "reboot", "test", "ssh", "sensitive", "winbox", "web")
 
 
 def policy_set(value: object) -> set[str]:

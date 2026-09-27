@@ -75,7 +75,8 @@ async def get_security(ctx: Ctx = ReadCtx) -> dict:
 
 @router.put("/current/security")
 async def put_security(data: SecurityIn, ctx: Ctx = AdminCtx) -> dict:
-    """Pflicht-2FA für alle Benutzer des Mandanten (greift bei der nächsten Anmeldung)."""
+    """Pflicht-2FA für alle Benutzer des Mandanten (greift bei der nächsten Anmeldung). Nie per API-Token."""
+    ctx.forbid_token("Das Verwalten der Zwei-Faktor-Anmeldung")
     t = await get_or_404(ctx.db, Tenant, ctx.require_tenant(), "Tenant")
     t.settings = {**(t.settings or {}), "require_2fa": data.require_2fa}
     await ctx.audit("tenant.security", target_type="tenant", target_id=t.id, details=data.model_dump())

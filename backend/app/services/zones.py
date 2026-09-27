@@ -46,6 +46,12 @@ async def push_zones(api: DeviceAPI, cfg: dict[str, Any]) -> dict[str, Any]:
     early = [x for x in cfg["lists"] if x["name"] not in existing]
     for x in early:
         await api.add("/interface/list", **x)
+    # Phase 24: Die Grundregel base:local-access verweist immer auf diese Liste – sie muss existieren (ggf. leer).
+    # Mitglieder verwaltet ausschließlich der Vor-Ort-Zugang (services/local_access.py).
+    from app.services.fw_compile import LOCAL_ACCESS_LIST
+
+    if LOCAL_ACCESS_LIST not in existing:
+        await api.add("/interface/list", name=LOCAL_ACCESS_LIST, comment="sdwan:local")
     stats = {"members": await api.sync_managed("/interface/list/member", "zone:", cfg["members"])}
     stats["lists"] = await api.sync_managed("/interface/list", "zone:", cfg["lists"])
     return stats

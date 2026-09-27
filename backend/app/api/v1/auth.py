@@ -166,7 +166,7 @@ async def _setup_user(request: Request, db: AsyncSession, setup_token: str | Non
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Nicht angemeldet")
     from app.deps import _user_from_token
 
-    user = await _user_from_token(creds.credentials, db)
+    user = await _user_from_token(creds.credentials, db, request)
     if getattr(request.state, "via_api_token", False):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "2FA kann nicht mit einem API-Token verwaltet werden")
     return user, False

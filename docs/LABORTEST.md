@@ -521,8 +521,16 @@ Voraussetzung: Router im Werkszustand (defconf) onboarden; Notebook am LAN, zwei
 
 - [ ] Nach dem Onboarding (≤ 1 Poll-Intervall): Gerätedetail „Vor-Ort-Zugang“ aktiv; auf dem Router
       `/user print detail where name=localadmin` → Gruppe `sdwan-local`, `address=` nur LAN-Netz(e);
-      `/user group print where name=sdwan-local` → Policies wie `LOCAL_POLICIES` (**ANNAHME:** Anlegen durch den
-      API-Benutzer klappt).
+      `/user group print where name=sdwan-local` → Policies wie `LOCAL_POLICIES_FULL`
+      (local, ssh, ftp, reboot, read, write, policy, test, winbox, password, web, sniff, sensitive, romon – ohne
+      telnet/api/rest-api), angelegt vom Pairing-Script.
+- [ ] **Konsolen-Login (Policy `local`)** mit dem Vor-Ort-Benutzer: serielle Konsole bzw. Monitor/Tastatur
+      (bei CHR: VM-Konsole) → Anmeldung mit `localadmin` und dem angezeigten Passwort.
+      **Ergebnis:** ☐ Anmeldung klappt ☐ abgelehnt
+- [ ] Nachträgliche Anlage: Mandant „automatisch anlegen“ aus, zweites Gerät onboarden, Vor-Ort-Zugang per Button
+      anlegen → Gruppe nur mit der Schnittmenge (**ANNAHME:** der API-Benutzer darf keine Gruppe mit mehr Rechten
+      anlegen); Gerätedetail zeigt „Vor-Ort-Zugang eingeschränkt: fehlt local/ftp/…“ mit Einzeiler; Compliance
+      „Warnung“. Einzeiler im Terminal als Admin ausführen, „Erneut abgleichen“ → Hinweis weg, Konsolen-Login klappt.
 - [ ] `/tool mac-server mac-winbox print` → `allowed-interface-list=sdwan-local-access` (**ANNAHME:** Feldname).
 - [ ] Passwort anzeigen (mit Begründung) → Audit-Eintrag und Webhook vorhanden.
 - [ ] WinBox per IP und SSH vom LAN-Notebook mit `localadmin` → Anmeldung klappt.
@@ -591,5 +599,5 @@ Voraussetzung: Router im Werkszustand (defconf) onboarden; Notebook am LAN, zwei
 | 18 Plattform-Sicherung | ☐ ok ☐ Abweichung | |
 | 19 Zwei-Faktor | ☐ ok ☐ Abweichung | |
 | 20 Sicherheitsmeldungen | ☐ ok ☐ Abweichung | |
-| 21 Vor-Ort-Zugang/API-Tokens | ☐ ok ☐ Abweichung | MAC-WinBox mit Adressbeschränkung: ☐ ok ☐ abgelehnt |
+| 21 Vor-Ort-Zugang/API-Tokens | ☐ ok ☐ Abweichung | MAC-WinBox mit Adressbeschränkung: ☐ ok ☐ abgelehnt · Konsolen-Login: ☐ ok ☐ abgelehnt |
 | 22 Nachbarn/Flows/Inventar/Import | ☐ ok ☐ Abweichung | IPFIX: |

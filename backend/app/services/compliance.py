@@ -156,6 +156,9 @@ def evaluate_rule(rule: dict[str, Any], text: str | None, live: dict[str, Any] |
         users = [u for u in (live or {}).get("users", []) if u.get("name") == la["username"]]
         if live is not None and not users:
             return "fail", f"Benutzer {la['username']} fehlt auf dem Router"
+        if la.get("missing_policies"):
+            # Warnung, kein Fehler: Zugang vorhanden, aber ohne volle lokale Rechte (nachträglich über die API angelegt)
+            return "warn", f"eingeschränkt – es fehlt {', '.join(la['missing_policies'])}; vollständig per Onboarding oder Terminal-Befehl"[:300]
         return "ok", f"{la['username']} · {', '.join(la['networks'])}"[:300]
     if t in TEXT_TYPES:
         if text is None:
@@ -247,9 +250,10 @@ async def evaluate_device(db: AsyncSession, device: Device, rule_sets: list[Comp
             except ComplianceError as exc:
                 st, detail = "unknown", str(exc)
             rows.append({"rule_id": r["id"], "name": r["name"], "status": st, "detail": detail})
+        # Warnung („warn“) = bestanden mit Hinweis, zählt nicht als Verstoß
         res = ComplianceResult(tenant_id=device.tenant_id, device_id=device.id, rule_set_id=rs.id, evaluated_at=now,
                                backup_id=backup.id if backup else None, results=rows,
-                               passed=sum(1 for x in rows if x["status"] == "ok"), failed=sum(1 for x in rows if x["status"] == "fail"),
+                               passed=sum(1 for x in rows if x["status"] in ("ok", "warn")), failed=sum(1 for x in rows if x["status"] == "fail"),
                                unknown=sum(1 for x in rows if x["status"] == "unknown"))
         db.add(res)
         results.append(res)

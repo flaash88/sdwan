@@ -183,7 +183,7 @@ async def report_csv(ctx: Ctx = ReadCtx, rule_set_id: uuid.UUID | None = None) -
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
     w.writerow(["Gerät", "Regelset", "Ausgewertet", "Bestanden", "Verletzt", "Unbekannt", *[c["name"] for c in m["rules"]]])
-    label = {"ok": "ok", "fail": "VERLETZT", "unknown": "unbekannt"}
+    label = {"ok": "ok", "warn": "Warnung", "fail": "VERLETZT", "unknown": "unbekannt"}
     for r in m["rows"]:
         cells = [label.get(r["cells"].get(c["rule_id"], {}).get("status", ""), "") if c["rule_set_id"] == r["rule_set_id"] else "" for c in m["rules"]]
         w.writerow([r["device"], r["rule_set"], r["evaluated_at"].isoformat(), r["passed"], r["failed"], r["unknown"], *cells])
@@ -213,12 +213,13 @@ async def report_pdf(ctx: Ctx = ReadCtx, rule_set_id: uuid.UUID | None = None) -
     head = ["Gerät", "Regelset", "ok", "verl."] + [Paragraph(c["name"], small) for c in m["rules"]]
     data: list[list[Any]] = [head]
     styles = [("GRID", (0, 0), (-1, -1), 0.3, colors.grey), ("FONTSIZE", (0, 0), (-1, -1), 7), ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke)]
-    color = {"ok": colors.HexColor("#DCFCE7"), "fail": colors.HexColor("#FEE2E2"), "unknown": colors.HexColor("#F1F5F9")}
+    color = {"ok": colors.HexColor("#DCFCE7"), "fail": colors.HexColor("#FEE2E2"), "unknown": colors.HexColor("#F1F5F9"),
+             "warn": colors.HexColor("#FFEDD5")}
     for i, r in enumerate(m["rows"], start=1):
         row: list[Any] = [r["device"], r["rule_set"], str(r["passed"]), str(r["failed"])]
         for j, c in enumerate(m["rules"], start=4):
             cell = r["cells"].get(c["rule_id"]) if c["rule_set_id"] == r["rule_set_id"] else None
-            row.append({"ok": "ok", "fail": "X", "unknown": "?"}.get(cell["status"], "") if cell else "")
+            row.append({"ok": "ok", "warn": "!", "fail": "X", "unknown": "?"}.get(cell["status"], "") if cell else "")
             if cell:
                 styles.append(("BACKGROUND", (j, i), (j, i), color[cell["status"]]))
         data.append(row)

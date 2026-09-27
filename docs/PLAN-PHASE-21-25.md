@@ -230,10 +230,16 @@ Grundsatz Allgemeinheit gilt: keine Kundendaten, Defaults nur markiert und ände
     - Erlaubte Netze je Gerät manuell angebbar (`manual_networks`). Validierung: keine Netze aus WAN-Interfaces
       bzw. WAN-Adressen, kein `0.0.0.0/0`, nur gültige CIDR. Danach wird angelegt.
     - Die Compliance-Regel `local_admin_present` schlägt dann fehl, kein stilles Grün.
-17. **Rechte der Vor-Ort-Gruppe `sdwan-local`:** alle Policies der API-Gruppe außer `api`
-    (`read, write, policy, reboot, test, ssh, sensitive, winbox, web`), nicht die eingebaute Gruppe `full`.
-    Grund: Nach der bestehenden Annahme (Phase A1/A2) kann der API-Benutzer keine Gruppe mit mehr Rechten anlegen als
-    er selbst hat. Die API-Gruppe dafür zu erweitern, wäre die bequemere, aber unsicherere Variante.
+17. **Rechte der Vor-Ort-Gruppe `sdwan-local`** (korrigiert nach Rückmeldung):
+    - `LOCAL_POLICIES_FULL` = `local, ssh, ftp, reboot, read, write, policy, test, winbox, password, web, sniff,
+      sensitive, romon`, bewusst ohne `telnet`, `api`, `rest-api`. Zentral in `routeros/schema.py`.
+    - Onboarding und ZTP legen die Gruppe im Pairing-Script mit dieser vollen Liste an, weil das Script lokal als
+      Admin läuft (nur wenn der Mandant „automatisch anlegen“ aktiv hat).
+    - Nachträglich per Button oder Massenaktion (über den API-Benutzer) nur mit der Schnittmenge aus der vollen Liste
+      und den Rechten der API-Gruppe. Das Gerätedetail zeigt dann einen orangen Hinweis mit den fehlenden Policies
+      und einem kopierbaren Terminal-Einzeiler; die Compliance-Regel meldet „eingeschränkt“ als Warnung.
+    - Eine vorhandene Gruppe (z. B. aus dem Pairing-Script) wird von der Plattform nicht verändert, damit der
+      API-Benutzer sie nicht auf die Schnittmenge herabstuft.
 18. **Firewall-Ausnahme vor den Benutzerregeln:** `base:local-access` (tcp 22/8291) und `base:local-access-dhcp`
     (udp 67 für den Service-Port) stehen direkt nach established/invalid, also vor allen Policy-Regeln und vor
     `base:mgmt-only`. Keine Policy kann den Vor-Ort-Zugang aus LAN/Management aussperren; aus dem WAN nie, weil
@@ -362,12 +368,14 @@ Grundsatz Allgemeinheit gilt: keine Kundendaten, Defaults nur markiert und ände
 - **Weggelassen:**
   - Service-Port als Option der ZTP-Vorlage (nur je Gerät; im Zweifel weglassen, weil der Port je Modell
     verschieden ist).
-  - „Volle Rechte“ im Sinne der Gruppe `full` (siehe Entscheidung 17).
+  - Nachtrag: volle lokale Rechte sind jetzt über Onboarding/ZTP bzw. den Terminal-Einzeiler möglich (Entscheidung 17);
+    per API nachträglich nur die Schnittmenge.
   - Umbenennen bestehender Vor-Ort-Benutzer bei Namensänderung (Entscheidung 20).
 - **Im Labor zu verifizieren:**
   - **MAC-WinBox-Anmeldung mit address-beschränktem Benutzer** (LABORTEST 21, Ergebnisfeld). Scheitert sie, wird der
     Default von `local_admin_address_restrict` auf aus geändert.
-  - Anlegen der Gruppe `sdwan-local` mit den Policies aus `LOCAL_POLICIES` durch den API-Benutzer.
+  - Gruppe `sdwan-local` mit `LOCAL_POLICIES_FULL` aus dem Pairing-Script; nachträgliche Anlage mit der
+    Schnittmenge durch den API-Benutzer; Konsolen-Login (`local`) mit dem Vor-Ort-Benutzer.
   - Feldname `allowed-interface-list` von `/tool/mac-server/mac-winbox`.
   - Service-Port: Bridge-Port entfernen/wiederherstellen, DHCP-Server-Felder (`address-pool`, `interface`), Vergabe an
     ein Notebook.
@@ -424,7 +432,7 @@ Siehe Abschnitt „Entscheidungen“ (1–27) sowie die Entscheidungen in den Ab
 - Phase 21: automatisches Einspielen der InfluxDB-Sicherung; Sicherung ohne Verschlüsselung.
 - Phase 22: WebAuthn/FIDO2, „Gerät merken“, SSO (laut Auftrag).
 - Phase 23: automatischer Import/Scraping von Meldungen; Blockade von VRRP/Mesh.
-- Phase 24: Service-Port als ZTP-Vorlagen-Option; Gruppe mit „vollen Rechten“ (`full`); Umbenennen bestehender
+- Phase 24: Service-Port als ZTP-Vorlagen-Option; Umbenennen bestehender
   Vor-Ort-Benutzer.
 - Phase 25: NetFlow v5/v9; Alarm für EOL/Garantie; LLDP-Chassis-Zuordnung.
 
@@ -436,7 +444,8 @@ Siehe Abschnitt „Entscheidungen“ (1–27) sowie die Entscheidungen in den Ab
 4. Phase 24:
    - MAC-WinBox-Anmeldung mit address-beschränktem Benutzer (LABORTEST 21, Ergebnisfeld; bei Fehlschlag Default
      der Adressbeschränkung auf aus).
-   - Gruppe `sdwan-local` mit `LOCAL_POLICIES` durch den API-Benutzer anlegbar.
+   - Gruppe `sdwan-local` mit `LOCAL_POLICIES_FULL` per Pairing-Script, nachträglich mit der Schnittmenge per
+     API-Benutzer; Konsolen-Login (`local`) mit dem Vor-Ort-Benutzer.
    - `/tool/mac-server/mac-winbox allowed-interface-list`.
    - Service-Port: Bridge-Port, DHCP-Server-Felder, DHCP-Vergabe.
    - WinBox/SSH aus LAN/Management bei Default-Drop, nicht aus dem WAN; MAC-WinBox nicht über WAN.

@@ -25,8 +25,12 @@ def test_policy_lists_target_state():
     assert not {"policy", "api", "local"} & set(REMOTE_POLICIES)
 
 
-def test_local_policies_subset_of_api_policies():
-    # Vor-Ort-Gruppe (Phase 24): gleiche Annahme wie beim Fernzugriff; ohne 'api'
-    from app.routeros.schema import LOCAL_POLICIES
+def test_local_policies_full_and_intersection():
+    # Vor-Ort-Gruppe (Phase 24): volle lokale Rechte ohne telnet/api/rest-api; nachträglich nur die Schnittmenge
+    from app.routeros.schema import LOCAL_POLICIES_FULL, local_policies_for
 
-    assert not set(LOCAL_POLICIES) - set(API_POLICIES) and "api" not in LOCAL_POLICIES
+    assert not {"telnet", "api", "rest-api"} & set(LOCAL_POLICIES_FULL)
+    assert {"local", "ftp", "password", "sniff", "romon"} <= set(LOCAL_POLICIES_FULL)
+    part = local_policies_for(",".join(API_POLICIES))
+    assert set(part) == set(LOCAL_POLICIES_FULL) & set(API_POLICIES) and not set(part) - set(API_POLICIES)
+    assert local_policies_for("read,write,!local") == ("read", "write")

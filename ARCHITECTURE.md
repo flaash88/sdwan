@@ -1015,7 +1015,12 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   mit Grund, Benutzername, Passwort (Fernet), gesetzt/angezeigt/Rotation fällig, verwendete Netze und Interfaces,
   manuelle Netze, Service-Port-Konfiguration sowie gemerkte Vorzustände (MAC-WinBox, `/ip service`, Bridge-Port).
 * **Router-Objekte** (Kommentar `sdwan:local`, Service-Port `sdwan:local:sp`):
-  - Gruppe `sdwan-local` mit `LOCAL_POLICIES` (routeros/schema.py: Policies der API-Gruppe ohne `api`).
+  - Gruppe `sdwan-local` mit `LOCAL_POLICIES_FULL` (routeros/schema.py: `local, ssh, ftp, reboot, read, write,
+    policy, test, winbox, password, web, sniff, sensitive, romon` – ohne telnet/api/rest-api). Angelegt im
+    Pairing-Script (Onboarding und ZTP, lokal als Admin). Fehlt die Gruppe, legt der API-Benutzer sie nachträglich mit
+    der Schnittmenge aus dieser Liste und den Rechten der API-Gruppe an; `missing_policies` hält fest, was fehlt
+    (orangener Hinweis mit Terminal-Einzeiler `schema.local_group_command()`, Compliance-Warnung). Eine vorhandene
+    Gruppe wird nicht verändert.
   - Benutzer `<Name je Mandant, Default localadmin>` mit Zufallspasswort (24 Zeichen ohne 0/O/l/1/I).
   - Interface-Liste `sdwan-local-access` mit den lokalen Interfaces.
   - `/tool/mac-server/mac-winbox allowed-interface-list=sdwan-local-access`.
@@ -1043,7 +1048,8 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   die defconf-Liste `LAN`. Entfernen: MAC-WinBox, Dienst-Adressen und Bridge-Port zurück, Objekte entfernt das
   Offboarding-Script.
 * **Compliance:** Regeltyp `local_admin_present` (MSP-Baseline) schlägt bei fehlendem, ausstehendem oder nicht
-  anlegbarem Zugang fehl. `service_restricted_to_tunnel` toleriert die Netze eines aktiven Zugangs.
+  anlegbarem Zugang fehl; bei eingeschränkter Gruppe Status `warn` („Warnung“, zählt als bestanden, nicht als
+  Verstoß). `service_restricted_to_tunnel` toleriert die Netze eines aktiven Zugangs.
 * **API-Tokens (`api_tokens`):**
   - Bearer `sdw_…`, gespeichert nur als sha256; Klartext einmal bei der Erstellung.
   - Scope `read` (nur lesend, schreibende Methoden 403) oder `role` (Rechte der Rolle); Ablauf 1–365 Tage.

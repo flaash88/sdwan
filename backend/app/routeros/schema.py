@@ -201,12 +201,21 @@ API_POLICIES: tuple[str, ...] = ("read", "write", "api", "policy", "reboot", "te
 REMOTE_GROUP = "sdwan-remote"
 REMOTE_POLICIES: tuple[str, ...] = ("ssh", "read", "write", "test", "winbox", "web", "reboot", "sensitive")
 
-# Gruppe des Vor-Ort-Benutzers (Phase 24): so viele Rechte wie möglich = alle Policies der API-Gruppe außer 'api'
-# (der Notfall-Benutzer braucht keinen API-Zugang). „Volle Rechte“ inkl. local/ftp/password/telnet/sniff/romon sind
-# nach derselben Annahme nicht möglich, ohne die API-Gruppe zu erweitern – das tut die Plattform bewusst nicht.
-# Muss eine Teilmenge von API_POLICIES sein (tests/test_policies.py).
+# Gruppe des Vor-Ort-Benutzers (Phase 24). Volle lokale Rechte – bewusst OHNE telnet (unverschlüsselt), api und
+# rest-api (der Notfall-Benutzer ist für WinBox/SSH/Konsole gedacht, nicht für Automatisierung).
+# * Onboarding (Pair-Antwort) und ZTP legen die Gruppe mit dieser Liste an – diese Scripts laufen lokal als Admin.
+# * Nachträglich über den API-Benutzer (Button/Massenaktion) nur mit der Schnittmenge aus dieser Liste und den
+#   Rechten der API-Gruppe (ANNAHME Labor: keine Gruppe mit mehr Rechten als der anlegende Benutzer).
 LOCAL_GROUP = "sdwan-local"
-LOCAL_POLICIES: tuple[str, ...] = ("read", "write", "policy", "reboot", "test", "ssh", "sensitive", "winbox", "web")
+LOCAL_POLICIES_FULL: tuple[str, ...] = ("local", "ssh", "ftp", "reboot", "read", "write", "policy", "test", "winbox", "password", "web",
+                                        "sniff", "sensitive", "romon")
+
+
+def local_group_command() -> str:
+    """Einzeiler (Terminal, als Admin): Gruppe ``sdwan-local`` auf die vollen Rechte bringen bzw. anlegen."""
+    pol = ",".join(LOCAL_POLICIES_FULL)
+    return (f':if ([:len [/user group find name="{LOCAL_GROUP}"]] = 0) do={{ /user group add name="{LOCAL_GROUP}" policy={pol} '
+            f'comment="sdwan:local" }} else={{ /user group set [find name="{LOCAL_GROUP}"] policy={pol} }}')
 
 
 def policy_set(value: object) -> set[str]:
@@ -215,3 +224,10 @@ def policy_set(value: object) -> set[str]:
 
 
 KNOWN_ARCHITECTURES = ("arm", "arm64", "mipsbe", "mmips", "smips", "tile", "ppc", "x86", "x86_64")
+
+
+def local_policies_for(api_group_policy: object) -> tuple[str, ...]:
+    """Schnittmenge aus ``LOCAL_POLICIES_FULL`` und den Rechten der API-Gruppe (Reihenfolge wie FULL)."""
+    have = policy_set(api_group_policy)
+    return tuple(p for p in LOCAL_POLICIES_FULL if p in have)
+

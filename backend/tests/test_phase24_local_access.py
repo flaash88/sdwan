@@ -158,7 +158,9 @@ async def test_address_restrict_off_uses_services_and_restores(client, msp, hub)
     await client.post(f"/api/v1/compliance/rule-sets/{base['id']}/assign", json={"device_ids": [dev["id"]]}, headers=h)
     await client.post("/api/v1/compliance/evaluate", json={"device_ids": [dev["id"]]}, headers=h)
     rows = {r["rule_id"]: r for res in (await client.get(f"/api/v1/devices/{dev['id']}/compliance", headers=h)).json() for r in res["results"]}
-    assert rows["local-admin"]["status"] == "ok"
+    # nach dem Entfernen neu per Button angelegt → Gruppe nur mit der Schnittmenge → Warnung, kein Fehler
+    assert rows["local-admin"]["status"] == "warn" and "eingeschränkt" in rows["local-admin"]["detail"]
+    assert rows["mgmt-tunnel"]["status"] != "fail" or "ssh" not in rows["mgmt-tunnel"]["detail"]
     # Deaktivieren stellt Dienst-Adressen und MAC-WinBox zurück
     await client.delete(f"/api/v1/devices/{dev['id']}/local-access", headers=h)
     svc = {x["name"]: x for x in rt.tables["/ip/service"]}
@@ -329,3 +331,51 @@ async def test_api_tokens(client, msp, hub):
     # OpenAPI dokumentiert das Bearer-Schema mit API-Token-Hinweis
     spec = (await client.get("/openapi.json")).json()
     assert "sdw_" in spec["components"]["securitySchemes"]["Bearer"]["description"]
+
+
+async def test_pair_script_full_group_and_later_creation_is_intersection(client, msp, hub):
+    from app.models import Device
+    from app.routeros.schema import API_POLICIES, LOCAL_POLICIES_FULL, policy_set
+    from app.services.onboarding import pair_response_script
+
+    full = ",".join(LOCAL_POLICIES_FULL)
+    script = pair_response_script(Device(name="x", tunnel_ip="10.100.0.9"), "A" * 43 + "=", "pw12345678", local_group=True)
+    assert f'/user group add name="sdwan-local" policy={full} comment="sdwan:local"' in script
+    assert "telnet" not in full and "rest-api" not in full and "api," not in full + ","
+    assert "sdwan-local" not in pair_response_script(Device(name="x", tunnel_ip="10.100.0.9"), "A" * 43 + "=", "pw12345678")
+    # Onboarding (Simulator bildet das lokal laufende Pair-Script nach): volle Rechte, keine Einschränkung
+    t, h, dev, rt = await _device(client, msp)
+    await poll_all()
+    g = next(x for x in rt.tables["/user/group"] if x["name"] == "sdwan-local")
+    assert policy_set(g["policy"]) == set(LOCAL_POLICIES_FULL)
+    st = (await client.get(f"/api/v1/devices/{dev['id']}/local-access", headers=h)).json()
+    assert st["status"] == "active" and st["restricted"] is False and st["missing_policies"] == []
+    # Mandant ohne automatisches Anlegen: Pair-Script ohne Gruppe; nachträglich per Button = Schnittmenge
+    s = (await client.get("/api/v1/local-access/settings", headers=h)).json()
+    await client.put("/api/v1/local-access/settings", json={**s, "local_access_auto": False, "local_access_webhook_url": None}, headers=h)
+    dev2 = await make_paired_device(client, h, name="la-spaet")
+    rt2 = get_router(dev2["tunnel_ip"])
+    _factory(rt2)
+    assert not any(x["name"] == "sdwan-local" for x in rt2.tables["/user/group"])
+    await poll_all()
+    assert (await client.get(f"/api/v1/devices/{dev2['id']}/local-access", headers=h)).json() is None
+    r = (await client.post(f"/api/v1/devices/{dev2['id']}/local-access", json={}, headers=h)).json()
+    g2 = next(x for x in rt2.tables["/user/group"] if x["name"] == "sdwan-local")
+    assert policy_set(g2["policy"]) == set(LOCAL_POLICIES_FULL) & set(API_POLICIES)
+    assert r["status"] == "active" and r["restricted"] is True
+    assert set(r["missing_policies"]) == set(LOCAL_POLICIES_FULL) - set(API_POLICIES) and "local" in r["missing_policies"]
+    assert r["full_group_command"] and f"policy={full}" in r["full_group_command"]
+    base = next(x for x in (await client.get("/api/v1/compliance/rule-sets", headers=h)).json() if x["name"] == "MSP-Baseline")
+    await client.post(f"/api/v1/compliance/rule-sets/{base['id']}/assign", json={"device_ids": [dev2["id"]]}, headers=h)
+    await client.post("/api/v1/compliance/evaluate", json={"device_ids": [dev2["id"]]}, headers=h)
+    rep = (await client.get(f"/api/v1/devices/{dev2['id']}/compliance", headers=h)).json()
+    rows = {x["rule_id"]: x for res in rep for x in res["results"]}
+    assert rows["local-admin"]["status"] == "warn" and "local" in rows["local-admin"]["detail"]
+    assert rep[0]["failed"] == sum(1 for x in rep[0]["results"] if x["status"] == "fail")  # Warnung zählt nicht als Fehler
+    # Terminal-Einzeiler (als Admin) nachgerüstet → erneuter Abgleich: nicht mehr eingeschränkt, Gruppe unverändert
+    g2["policy"] = full
+    r = (await client.post(f"/api/v1/devices/{dev2['id']}/local-access", json={}, headers=h)).json()
+    assert r["restricted"] is False and g2["policy"] == full
+    await client.post("/api/v1/compliance/evaluate", json={"device_ids": [dev2["id"]]}, headers=h)
+    rows = {x["rule_id"]: x for res in (await client.get(f"/api/v1/devices/{dev2['id']}/compliance", headers=h)).json() for x in res["results"]}
+    assert rows["local-admin"]["status"] == "ok"

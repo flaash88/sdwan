@@ -5,6 +5,7 @@ export interface LocalAccess {
   id: string; device_id: string; enabled: boolean; status: "pending" | "active" | "not_created" | "error" | "disabled"; reason: string | null;
   username: string; has_password: boolean; password_set_at: string | null; viewed_at: string | null; rotate_due_at: string | null;
   networks: string[]; interfaces: string[]; manual_networks: string[]; service_port: { enabled?: boolean; interface?: string; network?: string }; applied_at: string | null;
+  missing_policies: string[]; restricted: boolean; full_group_command: string | null;
 }
 export interface LocalAccessRow { device_id: string; device: string; device_status: string; access: LocalAccess | null }
 

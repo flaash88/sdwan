@@ -9,7 +9,7 @@ import { useFetch } from "../lib/useFetch";
 
 interface Rule { id: string; name: string; type: string; params: Record<string, unknown> }
 interface RuleSet { id: string; name: string; description: string | null; rules: Rule[]; builtin: boolean; scope: "global" | "tenant"; assignments: { id: string; targets: { device_ids: string[]; site_ids: string[]; tags: string[] } }[] }
-interface Cell { status: "ok" | "fail" | "unknown"; detail: string }
+interface Cell { status: "ok" | "warn" | "fail" | "unknown"; detail: string }
 interface Report { rules: { rule_set_id: string; rule_id: string; name: string }[]; rows: { device_id: string; device: string; rule_set_id: string; rule_set: string; evaluated_at: string; passed: number; failed: number; unknown: number; cells: Record<string, Cell> }[] }
 interface TrendDay { day: string; passed: number; failed: number; ratio: number | null; devices_failing: number }
 
@@ -24,7 +24,7 @@ export const RULE_TYPES: Record<string, { label: string; params: { key: string; 
   channel_in: { label: "Update-Kanal (live)", params: [{ key: "channels", label: "Erlaubte Kanäle (kommagetrennt)", list: true }] },
   min_version: { label: "Mindestversion RouterOS (live)", params: [{ key: "version", label: "Version, z. B. 7.15" }] },
 };
-const CELL: Record<Cell["status"], [string, Tone]> = { ok: ["ok", "green"], fail: ["verletzt", "red"], unknown: ["?", "gray"] };
+const CELL: Record<Cell["status"], [string, Tone]> = { ok: ["ok", "green"], warn: ["Warnung", "orange"], fail: ["verletzt", "red"], unknown: ["?", "gray"] };
 
 export default function Compliance() {
   const [tab, setTab] = useState<"report" | "sets">("report");
@@ -85,7 +85,7 @@ function ReportView() {
                     <td className="px-3 py-2 text-fg2">{row.rule_set}</td>
                     {r.rules.map((c) => {
                       const cell = c.rule_set_id === row.rule_set_id ? row.cells[c.rule_id] : undefined;
-                      return <td key={c.rule_set_id + c.rule_id} className="px-2 py-2">{cell ? <Pill tone={CELL[cell.status][1]} icon={cell.status === "ok" ? "checkCircle" : cell.status === "fail" ? "xCircle" : "minusCircle"} title={cell.detail}>{CELL[cell.status][0]}</Pill> : null}</td>;
+                      return <td key={c.rule_set_id + c.rule_id} className="px-2 py-2">{cell ? <Pill tone={CELL[cell.status][1]} icon={cell.status === "ok" ? "checkCircle" : cell.status === "fail" ? "xCircle" : cell.status === "warn" ? "alert" : "minusCircle"} title={cell.detail}>{CELL[cell.status][0]}</Pill> : null}</td>;
                     })}
                     <td className="whitespace-nowrap px-3 py-2 text-xs text-fg3">{fmtFull(row.evaluated_at)}</td>
                   </tr>

@@ -39,7 +39,7 @@ from app.db import system_session, utcnow
 from app.models import Device, DeviceStatus, DeviceZoneMember, FwZone, LocalAccess, PairingStatus, Tenant, WanLink
 from app.routeros import RouterOSError, connect_device
 from app.routeros.client import DeviceAPI, _norm
-from app.routeros.schema import LOCAL_GROUP, LOCAL_POLICIES
+from app.routeros.schema import LOCAL_GROUP, LOCAL_POLICIES_FULL, local_group_command, local_policies_for, policy_set
 from app.security import decrypt_secret, encrypt_secret
 from app.services.fw_compile import LOCAL_ACCESS_LIST
 
@@ -52,8 +52,6 @@ DEFAULT_NAME = "localadmin"
 DEFAULT_SP_NETWORK = "192.168.254.0/29"  # Default, je Gerät änderbar
 PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"  # ohne 0/O/l/1/I
 PASSWORD_LENGTH = 24
-# ANNAHME (Labor): Gruppe höchstens mit den Rechten der API-Gruppe anlegbar (siehe schema.LOCAL_POLICIES)
-GROUP_POLICIES = ",".join(LOCAL_POLICIES)
 ROTATE_AFTER_VIEW = dt.timedelta(hours=4)
 _NAME_RE = r"^[a-z][a-z0-9_-]{2,31}$"
 
@@ -196,7 +194,7 @@ async def apply(db: AsyncSession, la: LocalAccess, device: Device, rotate_passwo
         for i, m in have.items():
             if i not in ifaces and str(m.get("comment", "")).startswith(COMMENT):
                 await api.remove("/interface/list/member", m[".id"])
-        await _set_one(api, "/user/group", {"name": GROUP}, {"policy": GROUP_POLICIES, "comment": COMMENT})
+        la.missing_policies = await _ensure_group(api)
         users = [u for u in await api.print("/user") if u.get("name") == la.username]
         if users and not str(users[0].get("comment", "")).startswith(COMMENT):
             raise LocalAccessError(f"Auf dem Router gibt es bereits einen fremden Benutzer „{la.username}“ – anderen Namen wählen")
@@ -218,6 +216,30 @@ async def apply(db: AsyncSession, la: LocalAccess, device: Device, rotate_passwo
         la.password_enc, la.password_set_at = encrypt_secret(password), utcnow()
     la.networks, la.interfaces, la.status, la.reason, la.applied_at = networks, ifaces, "active", None, utcnow()
     return {"status": "active", "networks": networks, "interfaces": ifaces}
+
+
+async def _ensure_group(api: DeviceAPI) -> list[str]:
+    """Gruppe ``sdwan-local`` sicherstellen; Rückgabe: fehlende Policies gegenüber ``LOCAL_POLICIES_FULL``.
+
+    * Existiert sie (Pairing-Script, Terminal-Befehl): Policies bleiben unverändert – der API-Benutzer könnte sie
+      nicht setzen und würde sie sonst auf die Schnittmenge herabstufen.
+    * Fehlt sie: Anlage über den API-Benutzer mit der Schnittmenge aus FULL und den Rechten der API-Gruppe.
+    """
+    from app.config import get_settings
+
+    groups = {str(g.get("name")): g for g in await api.print("/user/group")}
+    if GROUP in groups:
+        g = groups[GROUP]
+        if not str(g.get("comment", "")).startswith(COMMENT):
+            raise LocalAccessError(f"Auf dem Router gibt es bereits eine fremde Gruppe „{GROUP}“")
+        have = policy_set(g.get("policy"))
+    else:
+        api_user = next((u for u in await api.print("/user") if u.get("name") == get_settings().routeros_api_user), None)
+        api_group = groups.get(str(api_user.get("group"))) if api_user else None
+        pol = local_policies_for(api_group.get("policy") if api_group else "")
+        await api.add("/user/group", name=GROUP, policy=",".join(pol), comment=COMMENT)
+        have = set(pol)
+    return [p for p in LOCAL_POLICIES_FULL if p not in have]
 
 
 async def _restrict_services(api: DeviceAPI, la: LocalAccess, allowed: list[str]) -> None:
@@ -317,11 +339,13 @@ async def post_poll(db: AsyncSession, devices: list[Device]) -> None:
             await after_change(db, la.tenant_id, "created")
 
 
-async def on_paired(db: AsyncSession, device: Device) -> None:
-    """Beim Onboarding: Datensatz anlegen (Status pending) – angelegt wird beim ersten Poll über die API."""
+async def on_paired(db: AsyncSession, device: Device) -> LocalAccess | None:
+    """Beim Onboarding: Datensatz anlegen (Status pending) – der Benutzer wird beim ersten Poll über die API angelegt,
+    die Gruppe mit vollen Rechten legt das Pairing-Script an. ``None`` = automatisches Anlegen abgeschaltet."""
     tenant = await db.get(Tenant, device.tenant_id)
     if tenant_settings(tenant)["local_access_auto"]:
-        await ensure_record(db, device)
+        return await ensure_record(db, device)
+    return None
 
 
 async def rotate(db: AsyncSession, la: LocalAccess, device: Device) -> dict[str, Any]:
@@ -443,7 +467,8 @@ def out(la: LocalAccess | None) -> dict[str, Any] | None:
             "username": la.username, "has_password": bool(la.password_enc), "password_set_at": la.password_set_at,
             "viewed_at": la.viewed_at, "rotate_due_at": la.rotate_due_at, "networks": la.networks or [], "interfaces": la.interfaces or [],
             "manual_networks": la.manual_networks or [], "service_port": {k: v for k, v in (la.service_port or {}).items() if k != "bridge_before"},
-            "applied_at": la.applied_at}
+            "applied_at": la.applied_at, "missing_policies": la.missing_policies or [],
+            "restricted": bool(la.missing_policies), "full_group_command": local_group_command() if la.missing_policies else None}
 
 
 _ = json  # (für Typprüfer)

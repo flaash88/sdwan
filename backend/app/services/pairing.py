@@ -90,10 +90,12 @@ async def complete_pairing(db: AsyncSession, data: PairIn, ip: str | None = None
         from app.services.ztp import ztp_script_for_device
 
         extra_script = await ztp_script_for_device(db, device)
-    script = pair_response_script(device, hub_key, password, extra=extra_script or "")
     from app.services.local_access import on_paired
 
-    await on_paired(db, device)  # Vor-Ort-Zugang: Datensatz „ausstehend“, angelegt beim ersten Poll
+    # Vor-Ort-Zugang: Datensatz „ausstehend“ (Benutzer legt der erste Poll an); die Gruppe mit vollen Rechten
+    # entsteht hier im Pairing-Script, das lokal als Admin läuft (auch bei ZTP).
+    local = await on_paired(db, device)
+    script = pair_response_script(device, hub_key, password, extra=extra_script or "", local_group=local is not None)
     await audit(db, "device.paired", tenant_id=device.tenant_id, target_type="device", target_id=device.id, ip=ip,
                 details={"serial": device.serial, "model": device.model, "version": device.routeros_version})
     await db.commit()

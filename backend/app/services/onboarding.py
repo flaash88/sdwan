@@ -20,7 +20,7 @@ import re
 
 from app.config import get_settings
 from app.models import Device
-from app.routeros.schema import API_GROUP, API_POLICIES
+from app.routeros.schema import API_GROUP, API_POLICIES, LOCAL_GROUP, LOCAL_POLICIES_FULL
 
 _SAFE = re.compile(r"^[A-Za-z0-9._:/+=@, -]*$")
 
@@ -81,7 +81,20 @@ def onboarding_script(token: str, device_name: str) -> str:
 """
 
 
-def pair_response_script(device: Device, hub_public_key: str, api_password: str, extra: str = "") -> str:
+def local_group_script() -> str:
+    """Gruppe des Vor-Ort-Benutzers mit vollen lokalen Rechten – nur im lokal als Admin laufenden Pairing-Script möglich.
+    Eine fremde Gruppe gleichen Namens (ohne Kommentar ``sdwan:local``) wird nicht verändert."""
+    pol = ",".join(LOCAL_POLICIES_FULL)
+    return f"""
+# Vor-Ort-Zugang (Break-Glass): Gruppe mit vollen lokalen Rechten (ohne telnet/api/rest-api); Benutzer legt die Plattform an
+:if ([:len [/user group find name={_q(LOCAL_GROUP)}]] = 0) do={{
+  /user group add name={_q(LOCAL_GROUP)} policy={pol} comment="sdwan:local"
+}} else={{
+  /user group set [find name={_q(LOCAL_GROUP)} comment~"^sdwan:local"] policy={pol}
+}}"""
+
+
+def pair_response_script(device: Device, hub_public_key: str, api_password: str, extra: str = "", local_group: bool = False) -> str:
     """Konfiguration, die der Router nach erfolgreichem Pairing importiert."""
     s = get_settings()
     iface = s.wg_device_interface
@@ -113,6 +126,7 @@ def pair_response_script(device: Device, hub_public_key: str, api_password: str,
   /ip firewall filter add chain=input in-interface=$iface src-address={hub_ip} action=accept comment="sdwan:mgmt"
 }}
 /system note set note="Managed by SD-WAN Cloud – Device {device.id}" show-at-login=yes
+{local_group_script() if local_group else ""}
 {extra}
 :put "SD-WAN: Tunnel-IP {device.tunnel_ip}, Device-ID {device.id}"
 """

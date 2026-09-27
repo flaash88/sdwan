@@ -19,11 +19,19 @@ export default function LocalAccessCard({ device }: { device: Device }) {
   const admin = can("admin");
   return (
     <Card title="Vor-Ort-Zugang" subtitle="Lokaler Notfall-Benutzer – nur aus LAN/Management bzw. Service-Port, nie aus dem WAN"
-      actions={<Pill tone={tone}>{label}</Pill>}>
+      actions={<Pill tone={la?.status === "active" && la.restricted ? "orange" : tone}>{la?.status === "active" && la.restricted ? "aktiv · eingeschränkt" : label}</Pill>}>
       <ErrorBox error={error ?? q.error} />
       {la?.status === "not_created" && <div className="mb-3"><Notice tone="orange" icon="alert" title="Nicht angelegt">{la.reason} {admin && "Über „Netze / Service-Port“ erlaubte Netze manuell angeben."}</Notice></div>}
       {la?.status === "error" && <div className="mb-3"><Notice tone="red" icon="alert" title="Fehler">{la.reason}</Notice></div>}
       {la?.status === "active" && la.reason && <div className="mb-3"><Notice tone="orange" icon="alert">{la.reason}</Notice></div>}
+      {la?.status === "active" && la.restricted && (
+        <div className="mb-3"><Notice tone="orange" icon="alert" title={`Vor-Ort-Zugang eingeschränkt: fehlt ${la.missing_policies.join("/")} – vollständig nur per Onboarding oder mit Terminal-Befehl`}>
+          Der Zugang wurde nachträglich über den API-Benutzer angelegt; dieser darf keine Gruppe mit mehr Rechten anlegen, als er selbst hat
+          (z. B. kein Konsolen-Login ohne <span className="font-mono">local</span>). Zum Nachrüsten den Befehl einmal im Terminal des Routers als Admin ausführen:
+          {la.full_group_command && <div className="mt-2"><CodeBlock text={la.full_group_command} highlight={false} /></div>}
+          <span className="mt-1 block text-xs">Danach „Erneut abgleichen“ – der Hinweis verschwindet.</span>
+        </Notice></div>
+      )}
       {!la && <p className="text-sm text-fg2">Für dieses Gerät ist noch kein Vor-Ort-Zugang angelegt.</p>}
       {la && (
         <dl className="grid grid-cols-[160px_1fr] gap-x-4 gap-y-1.5 text-sm">
@@ -38,6 +46,7 @@ export default function LocalAccessCard({ device }: { device: Device }) {
       )}
       {admin && (
         <div className="mt-4 flex flex-wrap gap-2">
+          {la?.status === "active" && la.restricted && <Button variant="secondary" icon="rotate" disabled={busy || device.status === "offline"} onClick={() => void run(async () => { await api.post(`/devices/${device.id}/local-access`, {}); await q.reload(); })}>Erneut abgleichen</Button>}
           {(!la || la.status !== "active") && <Button icon="plus" disabled={busy || device.status === "offline"} onClick={() => void run(async () => { await api.post(`/devices/${device.id}/local-access`, {}); await q.reload(); })}>{la ? "Erneut anlegen" : "Anlegen"}</Button>}
           {la?.has_password && <Button variant="secondary" icon="key" onClick={() => setReveal(true)}>Passwort anzeigen …</Button>}
           {la?.status === "active" && <Button variant="secondary" icon="rotate" disabled={busy} onClick={() => confirm("Neues Passwort für den Vor-Ort-Benutzer setzen?") && void run(async () => { await api.post(`/devices/${device.id}/local-access/rotate`); await q.reload(); })}>Rotieren</Button>}

@@ -114,7 +114,7 @@ async def simulate_pair(device_id: uuid.UUID, ctx: Ctx = TechCtx) -> Device:
     wg = next(r for r in router_.tables["/interface/wireguard"] if r["name"] == get_settings().wg_device_interface)
     res = await router_call_resource(router_)
     try:
-        dev, _ = await complete_pairing(
+        dev, script = await complete_pairing(
             ctx.db,
             PairIn(token=token, public_key=wg["public-key"], serial=device.serial or res["serial"],
                    routeros_version=res["version"], model=res["board"], architecture="arm64", identity=router_.identity),
@@ -122,6 +122,11 @@ async def simulate_pair(device_id: uuid.UUID, ctx: Ctx = TechCtx) -> Device:
         )
     except PairingError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    from app.routeros.schema import LOCAL_GROUP, LOCAL_POLICIES_FULL
+
+    # Wirkung des Pairing-Scripts (läuft auf echten Routern lokal als Admin): Vor-Ort-Gruppe mit vollen Rechten
+    if f'/user group add name="{LOCAL_GROUP}"' in script and not any(g.get("name") == LOCAL_GROUP for g in router_.tables["/user/group"]):
+        router_._insert("/user/group", {"name": LOCAL_GROUP, "policy": ",".join(LOCAL_POLICIES_FULL), "comment": "sdwan:local"})
     return dev
 
 

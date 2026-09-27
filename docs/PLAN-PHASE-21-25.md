@@ -413,7 +413,7 @@ Grundsatz Allgemeinheit gilt: keine Kundendaten, Defaults nur markiert und ände
 | 5d8cfb7 | Phase 22: Zwei-Faktor-Anmeldung (TOTP), Sperre nach Fehlversuchen |
 | d009f8a | Phase 23: Sicherheitsmeldungen und Mindestversionen |
 | b3307ee | Phase 24: Vor-Ort-Zugang (Break-Glass) und API-Tokens |
-| (dieser Commit) | Phase 25: Nachbarn, Top-Verbraucher, Inventar, ZTP-Import; Abschlussbericht |
+| 9538443 | Phase 25: Nachbarn, Top-Verbraucher, Inventar, ZTP-Import; Abschlussbericht |
 
 Davor in derselben Sitzung: bcd7e24 (defconf-Behandlung), 57e706e (defconf-Fingerabdruck), b1de1ed (Offboarding).
 

@@ -186,3 +186,34 @@ Alle Router-Änderungen in diesem Plan greifen nur bei einer Benutzeraktion: Onb
 ## Nicht in diesem Durchgang
 
 AP5–AP7 folgen später, darunter 019 (Rest: 0.0.0.0/0), 020, 021, 022, 031, 032, 035, 036, 038, 039, 041, 042, 044, 045, 046, 047, 048, 050, 054 und 055.
+
+## Stand (umgesetzt)
+
+| Paket | Commit | Funde |
+|---|---|---|
+| AP1 | `ca57683` | 001, 002, 005, 007, 026, 027, 028, 051 behoben; 053 teilweise |
+| AP2 | `41ccab3` | 003, 006, 009, 023, 029, 034 behoben; 019 (Client-IP) und 024 (Timing) teilweise |
+| AP3 | `c4e34ce` | 004, 010, 012, 025, 030, 037, 040 behoben; 011 und 052 teilweise |
+| AP4 | `61b998f` | 008, 013, 014, 015, 016, 017, 018, 033, 043 behoben |
+
+**Abweichungen vom Plan:**
+- **AUDIT-008 (ReDoS)** war im Bericht keinem Arbeitspaket zugeordnet und wurde mit AP4 erledigt: Ablehnung wiederholter
+  Alternativen, dazu Suche mit dem Modul `regex` und hartem Zeitlimit statt Unterprozess.
+- **AUDIT-030:** kein `USER` im Dockerfile, weil die Route ins Management-Netz beim Start root/NET_ADMIN braucht.
+  Stattdessen gibt der Entrypoint die Rechte per `setpriv` ab. Der Worker läuft bewusst als root (`RUN_AS_ROOT`),
+  weil er die root-eigene `.env` sichert.
+- **AUDIT-016:** Deploys laufen weiter als Background-Task im API-Prozess. Die Verlagerung in den Worker entfällt, weil
+  Gerätesperre und Erkennung hängender Deploys die Folgen abdecken.
+- **AUDIT-024:** Die Kontosperre bleibt ohne IP-Kopplung (Begründung im Bericht).
+- **AUDIT-011:** `?token=` bleibt als Übergang erhalten und entfällt in AP7.
+- **Zusätzlich:** Die starlette-Konstante `HTTP_422_UNPROCESSABLE_ENTITY` wurde durch `…_CONTENT` ersetzt (Deprecation mit starlette 1.x).
+
+**Keine Router-Änderung ohne Benutzeraktion:** Neue bzw. geänderte Router-Befehle gelten nur für Onboarding und
+ZTP-Bootstrap, „Rechte einschränken/abgleichen“ und „WAN anwenden“.
+
+**Migration:** nur `0037` (`users.token_version`, additiv).
+
+**Offen für AP5–AP7:** siehe Behebungsstand in `docs/AUDIT-2026-09.md`. Ihre xfail-Tests bleiben aktiv.
+
+**Neue LABORTEST-Punkte:** 23 (Zertifikatsspeicher, ftp), 24 (Proxy, Geheimnisse), 25 (Header, WS, SSRF, Container),
+26 (Sperren, Neustarts).

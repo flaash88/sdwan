@@ -4,7 +4,7 @@ Ablauf:
 1. Techniker legt ein Device an -> einmaliger Pairing-Token (nur Hash in der DB).
 2. Auf dem Router wird EIN Befehl ausgeführt::
 
-       /tool fetch url="https://cloud/api/v1/onboard/<token>.rsc" dst-path=sdwan-onboard.rsc; /import sdwan-onboard.rsc
+       <Zertifikatsspeicher aktivieren>; /tool fetch url="https://cloud/api/v1/onboard/<token>.rsc" check-certificate=yes …; /import …
 
 3. Das Script legt das WireGuard-Interface ``sdwan-mgmt`` an (RouterOS erzeugt den
    privaten Schlüssel lokal – er verlässt das Gerät nie), liest den Public-Key und
@@ -20,9 +20,18 @@ import re
 
 from app.config import get_settings
 from app.models import Device
-from app.routeros.schema import API_GROUP, API_POLICIES, LOCAL_GROUP, LOCAL_POLICIES_FULL
+from app.routeros.naming import script_comment
+from app.routeros.schema import (
+    API_GROUP,
+    API_POLICIES,
+    CERT_ERROR,
+    LOCAL_GROUP,
+    LOCAL_POLICIES_FULL,
+    TRUST_ANCHORS_CMD,
+    TRUST_ANCHORS_MIN_VERSION,
+)
 
-_SAFE = re.compile(r"^[A-Za-z0-9._:/+=@, -]*$")
+_SAFE = re.compile(r"^[A-Za-z0-9._:/+=@, -]*\Z")
 
 
 def _q(value: str) -> str:
@@ -32,11 +41,23 @@ def _q(value: str) -> str:
     return f'"{value}"'
 
 
+def trust_store_snippet() -> str:
+    """Eingebauten Root-Zertifikatsspeicher aktivieren (AUDIT-005). Über ``:parse`` ausgeführt, damit ein älteres RouterOS,
+    das den Parameter nicht kennt, einen abfangbaren Fehler liefert → klare ``:error``-Meldung statt stillem Weiterlaufen."""
+    return f':do {{ :local sdwanTrust [:parse "{TRUST_ANCHORS_CMD}"]; $sdwanTrust }} on-error={{ :error "{CERT_ERROR}" }}'
+
+
+def fetch_checked(args: str) -> str:
+    """``/tool fetch`` mit Zertifikatsprüfung; Fehlschlag → ``:error`` (nie Rückfall auf check-certificate=no)."""
+    return f':do {{ /tool fetch {args} check-certificate=yes }} on-error={{ :error "{CERT_ERROR} (oder Cloud nicht erreichbar)" }}'
+
+
 def onboarding_command(token: str) -> str:
     base = get_settings().public_url.rstrip("/")
     return (
-        f'/tool fetch url="{base}/api/v1/onboard/{token}.rsc" dst-path=sdwan-onboard.rsc; '
-        f":delay 2s; /import file-name=sdwan-onboard.rsc"
+        f"{trust_store_snippet()}; "
+        + fetch_checked(f'url="{base}/api/v1/onboard/{token}.rsc" dst-path=sdwan-onboard.rsc')
+        + "; :delay 2s; /import file-name=sdwan-onboard.rsc"
     )
 
 
@@ -45,9 +66,9 @@ def onboarding_script(token: str, device_name: str) -> str:
     base = s.public_url.rstrip("/")
     iface = s.wg_device_interface
     return f"""# ==========================================================
-# MikroTik SD-WAN Onboarding – Gerät: {device_name}
+# MikroTik SD-WAN Onboarding – Gerät: {script_comment(device_name)}
 # Generiert: {dt.datetime.now(dt.UTC).isoformat(timespec="seconds")}
-# Voraussetzung: RouterOS >= 7.1, ausgehende HTTPS- und UDP/{s.wg_hub_port}-Verbindung
+# Voraussetzung: RouterOS >= {TRUST_ANCHORS_MIN_VERSION} (Zertifikatsprüfung), ausgehende HTTPS- und UDP/{s.wg_hub_port}-Verbindung
 # ==========================================================
 :local token {_q(token)}
 :local cloud {_q(base)}
@@ -55,6 +76,8 @@ def onboarding_script(token: str, device_name: str) -> str:
 
 :local ver [/system resource get version]
 :if ([:pick $ver 0 1] != "7") do={{ :error "SD-WAN: RouterOS 7 erforderlich" }}
+# Zertifikatsprüfung vorbereiten, bevor irgendetwas geändert wird (ältere Versionen brechen hier ab)
+{trust_store_snippet()}
 
 :if ([:len [/interface wireguard find name=$iface]] = 0) do={{
   /interface wireguard add name=$iface listen-port={s.wg_device_listen_port} mtu=1420 comment="sdwan:mgmt"
@@ -72,7 +95,7 @@ def onboarding_script(token: str, device_name: str) -> str:
 :local body ("{{\\"token\\":\\"" . $token . "\\",\\"public_key\\":\\"" . $pub . "\\",\\"serial\\":\\"" . $serial . "\\",\\"routeros_version\\":\\"" . $ver . "\\",\\"model\\":\\"" . $model . "\\",\\"architecture\\":\\"" . $arch . "\\",\\"identity\\":\\"" . $ident . "\\"}}")
 
 :put "SD-WAN: registriere Gerät bei $cloud ..."
-/tool fetch url=($cloud . "/api/v1/pair") http-method=post http-header-field="Content-Type: application/json" http-data=$body dst-path="sdwan-pair.rsc"
+{fetch_checked('url=($cloud . "/api/v1/pair") http-method=post http-header-field="Content-Type: application/json" http-data=$body dst-path="sdwan-pair.rsc"')}
 :delay 2s
 /import file-name=sdwan-pair.rsc
 /file remove [find name="sdwan-pair.rsc"]

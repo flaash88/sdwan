@@ -11,6 +11,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models import DeviceStatus, PairingStatus, Role
+from app.routeros.schema import TRUST_ANCHORS_MIN_VERSION
 
 
 class ORM(BaseModel):
@@ -67,7 +68,7 @@ class UserOut(ORM):
 
 
 # --- Tenants -----------------------------------------------------------------
-SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}$")
+SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}\Z")
 
 
 class TenantCreate(BaseModel):
@@ -190,6 +191,16 @@ class SiteOut(ORM):
 
 
 # --- Devices -----------------------------------------------------------------
+# Seriennummer (RouterBOARD) bzw. system-id als Ersatz – landet in Bootstrap-Scripts und Dateinamen (AUDIT-051)
+SERIAL_ANY_RE = re.compile(r"^[A-Za-z0-9._+/=-]{1,64}\Z")
+
+
+def _device_name(v: str | None) -> str | None:
+    from app.routeros.naming import validate_label
+
+    return None if v is None else validate_label(v, "Gerätename", 200)
+
+
 class DeviceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     site_id: uuid.UUID | None = None
@@ -197,13 +208,30 @@ class DeviceCreate(BaseModel):
     tags: list[str] = []
     notes: str | None = None
 
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str) -> str:  # AUDIT-001: kein Zeilenumbruch/Script-Sonderzeichen im Onboarding-Script
+        return _device_name(v)  # type: ignore[return-value]
+
+    @field_validator("serial")
+    @classmethod
+    def _serial(cls, v: str | None) -> str | None:
+        if v and not SERIAL_ANY_RE.match(v):
+            raise ValueError("Seriennummer: 1–64 Zeichen, nur Buchstaben, Ziffern und . _ + / = -")
+        return v or None
+
 
 class DeviceUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, max_length=200)
     site_id: uuid.UUID | None = None
     mesh_endpoint: str | None = None
     tags: list[str] | None = None
     notes: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str | None) -> str | None:
+        return _device_name(v)
 
 
 class DeviceOut(ORM):
@@ -241,6 +269,7 @@ class PairingInfo(BaseModel):
     expires_at: dt.datetime
     command: str
     script_url: str
+    min_routeros: str = TRUST_ANCHORS_MIN_VERSION  # Onboarding lädt mit Zertifikatsprüfung (AUDIT-005)
 
 
 class DeviceCreated(BaseModel):

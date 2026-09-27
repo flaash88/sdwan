@@ -42,7 +42,9 @@ def issue_pairing_token(device: Device, ttl_hours: int | None = None) -> Pairing
 async def find_device_by_token(db: AsyncSession, token: str) -> Device:
     dev = (
         await db.execute(
-            select(Device).where(Device.pairing_token_hash == hash_token(token)).execution_options(skip_tenant_filter=True)
+            # Zeilensperre: zwei gleichzeitige /pair-Aufrufe mit demselben Token koppeln nicht doppelt (AUDIT-007)
+            select(Device).where(Device.pairing_token_hash == hash_token(token)).with_for_update()
+            .execution_options(skip_tenant_filter=True)
         )
     ).scalar_one_or_none()
     if dev is None:
@@ -66,9 +68,9 @@ async def complete_pairing(db: AsyncSession, data: PairIn, ip: str | None = None
     ).scalar_one_or_none()
     if clash is not None:
         raise PairingError("Public-Key ist bereits einem anderen Gerät zugeordnet")
-    if device.serial and data.serial and device.serial.upper() != data.serial.upper():
-        # Zero-Touch: Token ist an eine Seriennummer gebunden
-        raise PairingError("Seriennummer passt nicht zum Pairing-Token")
+    if device.serial and (not data.serial or device.serial.upper() != data.serial.upper()):
+        # Zero-Touch: Token ist an eine Seriennummer gebunden – ohne Seriennummer im Request kein Pairing (AUDIT-007)
+        raise PairingError("Seriennummer passt nicht zum Pairing-Token (oder fehlt)")
     hub_key = await get_hub_public_key(db)
     if not hub_key:
         raise PairingError("WireGuard-Hub noch nicht registriert – bitte später erneut versuchen")

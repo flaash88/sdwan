@@ -96,7 +96,8 @@ async def test_pairing_flow_via_script(client, msp, hub):
     assert r.status_code == 201
     body = r.json()
     token = body["pairing"]["token"]
-    assert body["pairing"]["command"].startswith('/tool fetch url="https://cloud.test/api/v1/onboard/')
+    cmd = body["pairing"]["command"]
+    assert '/tool fetch url="https://cloud.test/api/v1/onboard/' in cmd and "check-certificate=yes" in cmd  # AUDIT-005
     assert body["device"]["tunnel_ip"] == "10.100.0.2"
 
     script = (await client.get(f"/api/v1/onboard/{token}.rsc")).text

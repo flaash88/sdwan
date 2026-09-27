@@ -1124,6 +1124,30 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   Gerätenamen, unbekannte Standorte/Vorlagen, VRRP-Adresse. Angelegt über `ztp_import.stage_device` (dieselbe Logik
   wie „Geräte vorbereiten“).
 
+## Audit-Behebung 2026-09 (docs/AUDIT-2026-09.md, docs/PLAN-AUDIT-FIX.md)
+
+### AP1 – Router-Injection und Transport
+* **Freitext in Router-Scripts** (`app/routeros/naming.py`):
+  * `validate_label` gilt für Geräte- und WAN-Namen, ZTP-Stage und CSV-Import. Verboten sind Steuerzeichen und `" \ $ [ ] { } ; \``.
+  * `routeros_str` maskiert `\ " $` im RouterOS-String, z. B. für Netwatch-Meldungen.
+  * `script_comment` erzeugt `#`-Kommentarzeilen.
+  * Validierungs-Regex sind mit `\Z` verankert; `$` ließ ein abschließendes `\n` durch.
+* **Script-Bibliothek:** Variablen außerhalb eines Strings werden immer gequotet eingesetzt.
+* **ZTP-`identity_pattern`:** Es gibt nur `{tenant} {site} {name} {serial}`, ersetzt ohne `str.format`.
+* **Zertifikatsprüfung:**
+  * Onboarding-Befehl, Onboarding-Script (vor jeder Änderung), Pair-Aufruf und ZTP-Bootstrap aktivieren zuerst den eingebauten Zertifikatsspeicher (`TRUST_ANCHORS_CMD`, über `:parse` mit `on-error` → `:error CERT_ERROR`). Danach folgt `/tool fetch … check-certificate=yes`, ohne Rückfall.
+  * ANNAHME zu Syntax und Mindestversion `TRUST_ANCHORS_MIN_VERSION` (7.19): LABORTEST 23.
+  * Der Selbsttest zeigt die Zeile „Zertifikatsspeicher“ (orange, wenn nicht vorhanden).
+* **Pairing:**
+  * Ist am Gerät eine Seriennummer hinterlegt, ist sie im Request Pflicht.
+  * Das Gerät wird mit `FOR UPDATE` gelesen.
+  * `ZTP_TOKEN_TTL_DAYS` ist der Default für neue ZTP-Tokens.
+* **Policy `ftp` in `API_POLICIES`** für den Hotspot-Upload per SFTP:
+  * Neue Geräte erhalten sie über das Pair-Script.
+  * Bestehende Geräte erhalten sie über „Rechte einschränken/abgleichen“. Lehnt der Router die Selbsterweiterung ab, gibt es den Einzeiler `api_group_command()`.
+  * Der Selbsttest meldet orange, wenn das Gerät Hotspot nutzt und `ftp` fehlt.
+  * Die MSP-Baseline prüft „Dienst ftp deaktiviert“.
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

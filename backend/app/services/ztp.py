@@ -28,14 +28,17 @@ from app.config import get_settings
 from app.db import utcnow
 from app.models import Device, DeviceStatus, FirewallPolicy, PolicyAssignment, PolicyDeployment, ProvisioningTemplate, Site, Tenant, WanLink
 from app.routeros import RouterOSError
-from app.services.onboarding import _q
+from app.routeros.naming import script_comment
+from app.routeros.schema import TRUST_ANCHORS_MIN_VERSION
+from app.services.onboarding import _q, trust_store_snippet
 
 log = logging.getLogger(__name__)
 
-_IFACE = re.compile(r"^[A-Za-z0-9._\-/]{1,64}$")
-_HOST = re.compile(r"^[A-Za-z0-9.\-]{1,253}$")
-_TZ = re.compile(r"^[A-Za-z_]+(/[A-Za-z0-9_\-+]+){0,2}$")
+_IFACE = re.compile(r"^[A-Za-z0-9._\-/]{1,64}\Z")
+_HOST = re.compile(r"^[A-Za-z0-9.\-]{1,253}\Z")
+_TZ = re.compile(r"^[A-Za-z_]+(/[A-Za-z0-9_\-+]+){0,2}\Z")
 _IDENT = re.compile(r"[^A-Za-z0-9._\-]")
+_PLACEHOLDER = re.compile(r"\{(tenant|site|name|serial)\}")
 ZTP_TOKEN_TTL_HOURS = 24 * 180
 
 
@@ -46,7 +49,8 @@ class TemplateError(ValueError):
 def validate_template(c: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     out["identity_pattern"] = str(c.get("identity_pattern") or "{name}")
-    if not re.fullmatch(r"[A-Za-z0-9._\-{}]{1,100}", out["identity_pattern"]):
+    # AUDIT-027: nur die bekannten Platzhalter – kein str.format (Attributzugriff wie {name.__class__})
+    if not re.fullmatch(r"(?:[A-Za-z0-9._\-]|\{(?:tenant|site|name|serial)\}){1,100}", out["identity_pattern"]):
         raise TemplateError("identity_pattern: nur Buchstaben, Ziffern, . _ - und {tenant} {site} {name} {serial}")
     tz = c.get("timezone") or "Europe/Vienna"
     if not _TZ.match(tz):
@@ -109,9 +113,8 @@ def validate_template(c: dict[str, Any]) -> dict[str, Any]:
 
 
 def render_identity(pattern: str, device: Device, tenant: Tenant | None, site: Site | None) -> str:
-    ident = pattern.format(
-        name=device.name, serial=device.serial or "", tenant=tenant.slug if tenant else "", site=site.name if site else ""
-    ) if "{" in pattern else pattern
+    values = {"name": device.name, "serial": device.serial or "", "tenant": tenant.slug if tenant else "", "site": site.name if site else ""}
+    ident = _PLACEHOLDER.sub(lambda m: values.get(m.group(1), ""), pattern)
     return _IDENT.sub("-", ident).strip("-")[:64] or device.name
 
 
@@ -174,10 +177,13 @@ def bootstrap_script(token: str, device: Device, template: ProvisioningTemplate 
     url = f"{s.public_url.rstrip('/')}/api/v1/onboard/{token}.rsc"
     wan_if = ((template.content or {}).get("wan_interface") if template else None) or "ether1"
     return f"""# ==========================================================
-# SD-WAN Zero-Touch Bootstrap – {_IDENT.sub('-', device.name)} (Serial {device.serial})
+# SD-WAN Zero-Touch Bootstrap – {_IDENT.sub('-', device.name)} (Serial {script_comment(device.serial or '')})
+# Voraussetzung: RouterOS >= {TRUST_ANCHORS_MIN_VERSION} (Download mit Zertifikatsprüfung)
 # Einmalig importieren: /import sdwan-ztp.rsc   oder   netinstall -s sdwan-ztp.rsc
 # Der Router meldet sich beim ersten Boot mit Internet automatisch bei der Cloud an.
 # ==========================================================
+# Zertifikatsprüfung vorbereiten – ältere RouterOS-Versionen brechen hier mit Hinweis ab (AUDIT-005)
+{trust_store_snippet()}
 :if ([:len [/ip dhcp-client find interface={_q(wan_if)}]] = 0) do={{
   /ip dhcp-client add interface={_q(wan_if)} disabled=no comment="sdwan:ztp:wan"
 }}
@@ -185,7 +191,7 @@ def bootstrap_script(token: str, device: Device, template: ProvisioningTemplate 
 /system scheduler remove [find name="sdwan-ztp"]
 /system script add name=sdwan-ztp policy=read,write,policy,test,sensitive,ftp source={{
   :do {{
-    /tool fetch url="{url}" dst-path=sdwan-onboard.rsc
+    /tool fetch url="{url}" dst-path=sdwan-onboard.rsc check-certificate=yes
     :delay 2s
     /import file-name=sdwan-onboard.rsc
     :if ([:len [/interface wireguard peers find comment="sdwan:hub"]] > 0) do={{
@@ -193,7 +199,7 @@ def bootstrap_script(token: str, device: Device, template: ProvisioningTemplate 
       /system script remove [find name="sdwan-ztp"]
       :log info "SD-WAN: Zero-Touch-Onboarding erfolgreich"
     }}
-  }} on-error={{ :log warning "SD-WAN: Cloud noch nicht erreichbar – neuer Versuch in 60s" }}
+  }} on-error={{ :log warning "SD-WAN: Cloud nicht erreichbar oder Zertifikat nicht pruefbar (RouterOS >= {TRUST_ANCHORS_MIN_VERSION}) - neuer Versuch in 60s" }}
 }}
 /system scheduler add name=sdwan-ztp start-time=startup interval=1m on-event="/system script run sdwan-ztp" policy=read,write,policy,test,sensitive,ftp
 :put "SD-WAN: Zero-Touch-Bootstrap installiert"

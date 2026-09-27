@@ -2,9 +2,10 @@
   "_hinweis": "Vordefinierte Compliance-Regelsets (global, schreibgeschützt; Kopieren zum Anpassen). Mindestversion ist ein Beispielwert.",
   "rule_sets": [
     {"seed_key": "cs-msp-baseline", "name": "MSP-Baseline",
-     "description": "Grundhärtung für verwaltete Router: unsichere Dienste aus, kein Standard-Benutzer, Zeit synchron, Verwaltung nur über den Tunnel, stabiler Update-Kanal, Mindestversion, keine bekannten Sicherheitsmeldungen, Vor-Ort-Zugang vorhanden.",
+     "description": "Grundhärtung für verwaltete Router: unsichere Dienste (www, ftp) aus, kein Standard-Benutzer, Zeit synchron, Verwaltung nur über den Tunnel, stabiler Update-Kanal, Mindestversion, keine bekannten Sicherheitsmeldungen, Vor-Ort-Zugang vorhanden.",
      "rules": [
        {"id": "www-off", "name": "Dienst www (HTTP) deaktiviert", "type": "service_disabled", "params": {"service": "www"}},
+       {"id": "ftp-off", "name": "Dienst ftp deaktiviert", "type": "service_disabled", "params": {"service": "ftp"}},
        {"id": "no-admin", "name": "Kein Benutzer „admin“", "type": "no_user", "params": {"name": "admin"}},
        {"id": "ntp", "name": "NTP-Client aktiv", "type": "ntp_enabled", "params": {}},
        {"id": "mgmt-tunnel", "name": "API und SSH nur aus dem Tunnel-Netz", "type": "service_restricted_to_tunnel", "params": {"services": ["api", "ssh"]}},

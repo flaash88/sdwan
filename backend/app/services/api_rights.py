@@ -22,7 +22,7 @@ from typing import Any
 from app.models import Device
 from app.routeros import RouterOSError, connect_device
 from app.routeros.client import DeviceAPI
-from app.routeros.schema import API_GROUP, API_POLICIES, policy_set
+from app.routeros.schema import API_GROUP, API_POLICIES, api_group_command, policy_set
 from app.routeros.util import format_router_date, format_router_time, parse_router_datetime
 
 log = logging.getLogger(__name__)
@@ -88,19 +88,36 @@ async def restrict_api_user(device: Device) -> dict[str, Any]:
             raise RouterOSError(f"API-Benutzer '{user}' nicht gefunden")
         previous = str(rows[0].get("group", ""))
         if previous == API_GROUP:
-            ok = await ensure_group(api, API_GROUP, API_POLICIES, "sdwan:mgmt")
-            return {"status": "unchanged" if ok else "readback_mismatch", "previous_group": previous}
+            # Abgleich der Policies (z. B. neu hinzugekommenes 'ftp', AUDIT-028). RouterOS lässt den API-Benutzer seiner
+            # eigenen Gruppe keine Rechte geben, die er nicht hat (ANNAHME, Simulator bildet das nach) – dann Einzeiler
+            # für die lokale Konsole statt stiller Teil-Umstellung.
+            try:
+                ok = await ensure_group(api, API_GROUP, API_POLICIES, "sdwan:mgmt")
+            except RouterOSError as exc:
+                log.info("Gruppe %s auf %s nicht erweiterbar: %s", API_GROUP, device.name, exc)
+                ok = False
+            if ok:
+                return {"status": "unchanged", "previous_group": previous}
+            return {"status": "readback_mismatch", "previous_group": previous,
+                    "message": f"Gruppe '{API_GROUP}' konnte nicht auf {', '.join(API_POLICIES)} erweitert werden (Router erlaubt dem "
+                               "API-Benutzer keine Rechte über seine eigenen hinaus). Einmalig lokal als Admin ausführen: "
+                               + api_group_command(), "fix": api_group_command()}
         clock = (await api.call("/system/clock/print") or [{}])[0]
         start = revert_start(clock)  # vor jeder Änderung: ist die Uhr nicht lesbar, wird nichts umgestellt
         await _remove_scheduler(api)
         await api.add("/system/scheduler", name=REVERT_SCHEDULER, **start, interval=REVERT_RETRY, policy=REVERT_POLICY,
                       **{"on-event": revert_script(user, previous)},
                       comment=f"sdwan:mgmt Totmannschaltung (Router-Zeitzone {clock.get('time-zone-name') or '?'})")
-        if not await ensure_group(api, API_GROUP, API_POLICIES, "sdwan:mgmt"):
+        try:
+            grouped = await ensure_group(api, API_GROUP, API_POLICIES, "sdwan:mgmt")
+            reason = f"hat nach dem Anlegen nicht exakt die Policies {', '.join(API_POLICIES)}"
+        except RouterOSError as exc:  # z. B. bisherige Gruppe ohne 'ftp': Router verweigert mehr Rechte (ANNAHME)
+            grouped, reason = False, f"konnte nicht angelegt werden ({exc})"
+        if not grouped:
             await _remove_scheduler(api)  # nichts umgestellt -> Totmannschaltung überflüssig
             return {"status": "readback_mismatch", "previous_group": previous,
-                    "message": f"Gruppe '{API_GROUP}' hat nach dem Anlegen nicht exakt die Policies {', '.join(API_POLICIES)} – "
-                               "Benutzer wurde nicht umgestellt"}
+                    "message": f"Gruppe '{API_GROUP}' {reason} – Benutzer wurde nicht umgestellt. Einmalig lokal als Admin ausführen: "
+                               + api_group_command(), "fix": api_group_command()}
         await api.set("/user", rows[0][".id"], group=API_GROUP)
     # alte Sitzung ist geschlossen; ab hier nur neue Verbindungen
     try:

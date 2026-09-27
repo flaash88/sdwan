@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Device, MaintenanceWindow, Tenant
 from app.services.mail_render import tzinfo
 
-_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d\Z")
 
 
 class MaintenanceError(ValueError):

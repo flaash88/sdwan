@@ -52,8 +52,8 @@ BANDS = ("2ghz", "5ghz", "both")
 # ANNAHME (Labor): Bandbezeichnungen für supported-bands der Provisioning-Regeln
 PROV_BANDS = {"2ghz": "2ghz-g,2ghz-n,2ghz-ax", "5ghz": "5ghz-a,5ghz-n,5ghz-ac,5ghz-ax"}
 POLL_INTERVAL_S = 600
-_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,19}$")
-_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,19}\Z")
+_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d\Z")
 
 # ISO-3166 → Ländername, wie ihn das wifi-Paket für ``country`` erwartet (ANNAHME Labor). Normtabelle, keine Kundendaten.
 COUNTRIES = {

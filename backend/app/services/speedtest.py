@@ -25,7 +25,7 @@ from app.routeros import RouterOSError, connect_device
 from app.routeros.client import DeviceAPI
 
 log = logging.getLogger(__name__)
-_RATE = re.compile(r"^([\d.]+)\s*([kKmMgG]?)bps$")
+_RATE = re.compile(r"^([\d.]+)\s*([kKmMgG]?)bps\Z")
 DEFAULT_RATE_MBPS = 100.0  # Annahme für die Volumenschätzung ohne früheres Ergebnis
 
 

@@ -11,6 +11,7 @@ from app.api.v1.router import api_router
 from app.bootstrap import ensure_bootstrap_admin
 from app.config import get_settings
 from app.db import TenantIsolationError, create_all
+from app.routeros.schema import TRUST_ANCHORS_MIN_VERSION
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
             "smtp_configured": bool(s.smtp_host),
             "product_name": s.product_name,
             "product_short": s.product_short,
+            "onboarding_min_routeros": TRUST_ANCHORS_MIN_VERSION,
         }
 
     app.include_router(api_router)

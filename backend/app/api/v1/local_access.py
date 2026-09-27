@@ -137,7 +137,7 @@ async def _configure(ctx: Ctx, dev: Device, data: AccessIn) -> tuple[LocalAccess
     if data.service_port is not None:
         sp = data.service_port
         if sp.enabled:
-            if not sp.interface or not re.match(r"^[A-Za-z0-9_.-]{1,64}$", sp.interface):
+            if not sp.interface or not re.match(r"^[A-Za-z0-9_.-]{1,64}\Z", sp.interface):
                 raise HTTPException(422, "Service-Port: Ethernet-Interface angeben")
             try:
                 la_svc.sp_plan(sp.network)

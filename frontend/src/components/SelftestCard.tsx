@@ -6,12 +6,12 @@ import { useMeta } from "../lib/meta";
 import type { Device } from "../lib/types";
 import { useFetch } from "../lib/useFetch";
 import { Icon } from "./Icon";
-import { Button, Card, CodeBlock, EmptyState, ErrorBox, Loading, Modal, Notice, Pill, Segment, cls, useAction, type Tone } from "./ui";
+import { Button, Card, CodeBlock, CopyBox, EmptyState, ErrorBox, Loading, Modal, Notice, Pill, Segment, cls, useAction, type Tone } from "./ui";
 
 type St = "ok" | "warn" | "error";
 interface Check {
   key: string; label: string; kind: "path" | "check"; status: St; command?: string; used_by?: string; ms?: number; rows?: number; count?: number | null;
-  reachable?: boolean; missing?: string[]; action?: string; group?: string; missing_optional?: string[]; notes?: string[]; error?: string | null; expected?: string[]; sample_fields?: string[]; value?: unknown;
+  reachable?: boolean; missing?: string[]; action?: string; group?: string; fix?: string; missing_optional?: string[]; notes?: string[]; error?: string | null; expected?: string[]; sample_fields?: string[]; value?: unknown;
 }
 interface Selftest { status: St; ran_at: string; ran_by: string | null; duration_ms: number; checks: Check[]; summary?: Record<St, number> }
 
@@ -19,7 +19,7 @@ const TONE: Record<St, [string, Tone, "checkCircle" | "alert" | "xCircle"]> = {
   ok: ["OK", "green", "checkCircle"], warn: ["Warnung", "orange", "alert"], error: ["Fehler", "red", "xCircle"],
 };
 interface RestrictResult {
-  status: "ok" | "unchanged" | "readback_mismatch" | "reverting"; previous_group: string; message?: string;
+  status: "ok" | "unchanged" | "readback_mismatch" | "reverting"; previous_group: string; message?: string; fix?: string;
   scheduler: string; revert_after: string; api_user: string; selftest?: Selftest; revert_at?: { "start-date": string; "start-time": string };
 }
 
@@ -50,7 +50,14 @@ function RestrictNotice({ r, onRetest, busy }: { r: RestrictResult; onRetest: ()
   if (r.status === "ok" || r.status === "unchanged")
     return <Notice tone="green" title="Rechte eingeschränkt">Der API-Benutzer ist in der Gruppe <span className="font-mono">sdwan-api</span>{r.status === "ok" ? `, vorher „${r.previous_group}“. Die Totmannschaltung wurde entfernt.` : "."}</Notice>;
   if (r.status === "readback_mismatch")
-    return <Notice tone="red" title="Nicht umgestellt">{r.message ?? "Die Gruppe hat nach dem Anlegen nicht die erwarteten Policies."} Der Benutzer bleibt in „{r.previous_group}“.</Notice>;
+    return (
+      <Notice tone={r.previous_group === "sdwan-api" ? "orange" : "red"} title={r.previous_group === "sdwan-api" ? "Rechte nicht abgeglichen" : "Nicht umgestellt"}>
+        <div className="flex flex-col gap-2">
+          <span>{r.message ?? "Die Gruppe hat nach dem Anlegen nicht die erwarteten Policies."} Der Benutzer bleibt in „{r.previous_group}“.</span>
+          {r.fix && <CopyBox text={r.fix} />}
+        </div>
+      </Notice>
+    );
   return (
     <Notice tone="orange" title={`Rechte werden in ca. ${r.revert_after.replace("m", " Minuten")} automatisch zurückgestellt`}>
       <div className="flex flex-col gap-2">
@@ -119,6 +126,7 @@ export default function SelftestCard({ device }: { device: Device }) {
   const [restrict, setRestrict] = useState<RestrictResult | null>(null);
   const t = last.data;
   const rights = t?.checks.find((c) => c.key === "rights");
+  const hotspotRights = t?.checks.find((c) => c.key === "rights_hotspot" && c.status !== "ok");
   const runTest = () => void run(async () => { last.setData(await api.post<Selftest>(`/devices/${device.id}/selftest`)); });
   const exportJson = () => {
     if (!t) return;
@@ -149,6 +157,17 @@ export default function SelftestCard({ device }: { device: Device }) {
             <div className="flex flex-wrap items-center gap-3">
               <span className="flex-1">Mit „Rechte einschränken“ erhält der Benutzer die Gruppe <span className="font-mono">sdwan-api</span> mit genau den nötigen Rechten. Die bisherige Gruppe wird automatisch wiederhergestellt, falls danach etwas nicht funktioniert.</span>
               {can("technician") && <Button size="sm" icon="shield" disabled={device.status !== "online"} onClick={() => setRestrictOpen(true)}>Rechte einschränken</Button>}
+            </div>
+          </Notice>
+        </div>
+      )}
+      {!restrict && hotspotRights && (
+        <div className="px-4 pt-3">
+          <Notice tone="orange" title="Hotspot: Recht 'ftp' fehlt – Upload der Login-Seiten schlägt fehl">
+            <div className="flex flex-col gap-2">
+              <span>Neue Geräte erhalten es beim Onboarding. Bei diesem Gerät zuerst „Rechte abgleichen“ versuchen; lehnt der Router das ab, den Befehl einmalig im WinBox-Terminal (als Admin) ausführen:</span>
+              {hotspotRights.fix && <CopyBox text={hotspotRights.fix} />}
+              {can("technician") && <span><Button size="sm" icon="shield" disabled={device.status !== "online"} onClick={() => setRestrictOpen(true)}>Rechte abgleichen</Button></span>}
             </div>
           </Notice>
         </div>

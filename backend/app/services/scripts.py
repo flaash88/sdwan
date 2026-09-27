@@ -74,17 +74,40 @@ def context_for(device: Device, site: Site | None, tenant: Tenant | None) -> dic
     }
 
 
+def _inside_quotes(text: str, pos: int) -> bool:
+    """Steht ``pos`` innerhalb eines RouterOS-Strings ("…", ``\"`` maskiert)?"""
+    inside, i = False, 0
+    while i < pos:
+        c = text[i]
+        if c == "\\" and inside:
+            i += 2
+            continue
+        if c == '"':
+            inside = not inside
+        i += 1
+    return inside
+
+
 def render(text: str, ctx: dict[str, str]) -> str:
-    def sub(m: re.Match[str]) -> str:
+    """Variablen einsetzen. Außerhalb eines Strings wird der Wert immer als RouterOS-String gequotet – ein Wert mit
+    Leerzeichen oder ``=`` kann so keine zusätzlichen Parameter einschleusen (AUDIT-051); innerhalb eines Strings wird
+    er unverändert eingesetzt (Sonderzeichen sind ohnehin abgelehnt)."""
+    from app.routeros.naming import routeros_str
+
+    out: list[str] = []
+    last = 0
+    for m in _VAR.finditer(text):
         key = m.group(1)
         if key not in VARIABLES:
             raise ScriptError(f"Unbekannte Variable {key}")
         val = ctx.get(key, "")
         if _UNSAFE.search(val):
             raise ScriptError(f"Wert von {key} enthält unzulässige Zeichen – Script würde verändert")
-        return val
-
-    return _VAR.sub(sub, text)
+        out.append(text[last:m.start()])
+        out.append(val if _inside_quotes(text, m.start()) else routeros_str(val))
+        last = m.end()
+    out.append(text[last:])
+    return "".join(out)
 
 
 async def render_for(db: AsyncSession, text: str, device: Device) -> str:

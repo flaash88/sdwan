@@ -34,7 +34,7 @@ async def _admin(client, msp, slug="acme"):
 
 
 # ============================================================================= Injection in RouterOS-Scripte
-@xf("AUDIT-001")
+# AUDIT-001: behoben (AP1)
 async def test_001_device_name_cannot_inject_into_onboarding_script(client, msp, hub):
     _t, h = await _admin(client, msp)
     evil = "x\n/user add name=pwn password=Pwn-12345678 group=full\n#"
@@ -46,7 +46,7 @@ async def test_001_device_name_cannot_inject_into_onboarding_script(client, msp,
     assert not any(line.strip().startswith("/user add name=pwn") for line in script.splitlines()), script[:400]
 
 
-@xf("AUDIT-002")
+# AUDIT-002: behoben (AP1)
 async def test_002_wan_link_name_cannot_inject_into_netwatch_script(client, msp, hub):
     _t, h = await _admin(client, msp)
     dev = await make_paired_device(client, h)
@@ -60,7 +60,7 @@ async def test_002_wan_link_name_cannot_inject_into_netwatch_script(client, msp,
     assert "/user add name=pwn" not in scripts, scripts[:300]
 
 
-@xf("AUDIT-026")
+# AUDIT-026: behoben (AP1)
 def test_026_quote_helper_rejects_trailing_newline():
     from app.services.onboarding import _q
 
@@ -68,7 +68,7 @@ def test_026_quote_helper_rejects_trailing_newline():
         _q("ab\n")  # re.match(r"^...$") lässt ein abschließendes \n durch
 
 
-@xf("AUDIT-027")
+# AUDIT-027: behoben (AP1)
 def test_027_ztp_identity_pattern_no_format_attribute_access():
     from app.services.ztp import TemplateError, validate_template
 
@@ -96,7 +96,7 @@ async def test_003_login_ip_limit_not_bypassable_via_x_forwarded_for(msp):
     assert 429 in codes, "IP-Limit greift nicht, weil X-Forwarded-For vom Client übernommen wird"
 
 
-@xf("AUDIT-005")
+# AUDIT-005: behoben (AP1)
 def test_005_onboarding_fetch_checks_certificate():
     from app.models import Device
     from app.services.onboarding import onboarding_command, onboarding_script
@@ -119,7 +119,7 @@ async def test_006_production_refuses_default_secrets(monkeypatch):
             pass
 
 
-@xf("AUDIT-007")
+# AUDIT-007: behoben (AP1)
 async def test_007_ztp_token_bound_to_serial_even_without_serial_in_request(client, msp, hub):
     _t, h = await _admin(client, msp)
     r = await client.post("/api/v1/ztp/stage", json={"devices": [{"name": "ztp1", "serial": "HGK0001"}]}, headers=h)

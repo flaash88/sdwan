@@ -23,8 +23,8 @@ import unicodedata
 
 # Art -> erlaubtes Muster
 RULES: dict[str, re.Pattern[str]] = {
-    "logging_action": re.compile(r"^[A-Za-z0-9]+$"),  # auf Hardware bestätigt
-    "generic": re.compile(r"^[A-Za-z0-9._-]+$"),  # ANNAHME (Labor)
+    "logging_action": re.compile(r"^[A-Za-z0-9]+\Z"),  # auf Hardware bestätigt
+    "generic": re.compile(r"^[A-Za-z0-9._-]+\Z"),  # ANNAHME (Labor)
 }
 _INVALID = {"logging_action": re.compile(r"[^A-Za-z0-9]+"), "generic": re.compile(r"[^A-Za-z0-9._-]+")}
 
@@ -56,3 +56,38 @@ def routeros_safe_name(name: str, kind: str = "generic") -> str:
     if not s:
         raise ValueError(f"Kein gültiger RouterOS-Name aus {name!r}")
     return s
+
+
+# --------------------------------------------------------------------------- Freitext in RouterOS-Scripts (AUDIT-001/002/051)
+# Zeichen mit Bedeutung in der RouterOS-Scriptsprache: Anführungszeichen, Escape, Variablen, Befehls-Substitution,
+# Blöcke und Befehlstrenner. In Namen (Gerät, WAN-Leitung, …) nie nötig – werden abgelehnt.
+_LABEL_FORBIDDEN = re.compile(r'[\x00-\x1f\x7f"\\$\[\]{};`]')
+_COMMENT_UNSAFE = re.compile(r"[^A-Za-z0-9 ._:/+=@,()-]")
+
+
+def validate_label(value: str, what: str = "Name", max_len: int = 64) -> str:
+    """Freitext-Namen, die (auch) in RouterOS-Scripts landen: 1..max_len Zeichen, keine Steuerzeichen (Zeilenumbruch)
+    und keine Script-Sonderzeichen ``" \\ $ [ ] { } ; ` ``. Löst ``ValueError`` aus."""
+    bad = _LABEL_FORBIDDEN.search(str(value))  # vor dem Trimmen: auch ein abschließender Zeilenumbruch ist unzulässig
+    v = str(value).strip()
+    if not v or len(v) > max_len:
+        raise ValueError(f"{what}: 1 bis {max_len} Zeichen")
+    if bad:
+        ch = bad.group(0)
+        shown = repr(ch) if ch.isprintable() else "Steuerzeichen/Zeilenumbruch"
+        raise ValueError(f"{what}: Zeichen {shown} nicht erlaubt (Sonderzeichen der RouterOS-Scriptsprache)")
+    return v
+
+
+def routeros_str(value: str) -> str:
+    """RouterOS-String in Anführungszeichen mit maskierten ``\\``, ``"`` und ``$``. Steuerzeichen werden abgelehnt
+    (ein Zeilenumbruch beendet sonst den Befehl)."""
+    v = str(value)
+    if re.search(r"[\x00-\x1f\x7f]", v):
+        raise ValueError(f"Steuerzeichen in RouterOS-String nicht erlaubt: {v!r}")
+    return '"' + v.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$") + '"'
+
+
+def script_comment(value: str, max_len: int = 80) -> str:
+    """Text für eine ``#``-Kommentarzeile bzw. ``:log``-Meldung: nur unkritische Zeichen, einzeilig, gekürzt."""
+    return _COMMENT_UNSAFE.sub("-", str(value))[:max_len]

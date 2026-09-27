@@ -10,6 +10,7 @@ export interface Meta {
   smtp_configured: boolean;
   product_name: string;
   product_short: string;
+  onboarding_min_routeros?: string;
 }
 
 let cache: Promise<Meta> | null = null;

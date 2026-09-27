@@ -74,7 +74,7 @@ def validate_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if t not in TYPES:
             raise ComplianceError(f"Regel {i + 1}: Typ {t!r} unbekannt")
         rid = str(r.get("id") or f"r{i + 1}")
-        if not re.match(r"^[a-z0-9\-_]{1,40}$", rid) or rid in ids:
+        if not re.match(r"^[a-z0-9\-_]{1,40}\Z", rid) or rid in ids:
             raise ComplianceError(f"Regel {i + 1}: ID {rid!r} ungültig oder doppelt")
         ids.add(rid)
         p = dict(r.get("params") or {})
@@ -83,7 +83,7 @@ def validate_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if t == "regex":
             check_regex(str(p.get("pattern", "")))
             p["expect"] = p.get("expect", "match") if p.get("expect", "match") in ("match", "no_match") else "match"
-        if t == "service_disabled" and not re.match(r"^[a-z\-]{2,20}$", str(p.get("service", ""))):
+        if t == "service_disabled" and not re.match(r"^[a-z\-]{2,20}\Z", str(p.get("service", ""))):
             raise ComplianceError(f"Regel {i + 1}: Dienst fehlt")
         if t == "no_user" and not str(p.get("name", "")).strip():
             raise ComplianceError(f"Regel {i + 1}: Benutzername fehlt")
@@ -91,7 +91,7 @@ def validate_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
             p["services"] = ["api", "ssh"]
         if t == "channel_in" and not p.get("channels"):
             raise ComplianceError(f"Regel {i + 1}: Kanäle fehlen")
-        if t == "min_version" and not re.match(r"^\d+(\.\d+){0,2}$", str(p.get("version", ""))):
+        if t == "min_version" and not re.match(r"^\d+(\.\d+){0,2}\Z", str(p.get("version", ""))):
             raise ComplianceError(f"Regel {i + 1}: Version im Format 7.15 bzw. 7.15.3")
         out.append({"id": rid, "name": str(r.get("name") or t)[:120], "type": t, "params": p})
     return out

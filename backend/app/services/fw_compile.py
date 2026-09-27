@@ -29,9 +29,9 @@ from app.routeros.naming import routeros_safe_name
 
 ACTIONS = ("accept", "drop", "reject")
 PROTOCOLS = ("tcp", "udp", "icmp", "gre", "esp", "ah", "")
-_PORTS = re.compile(r"^\d{1,5}(-\d{1,5})?(,\d{1,5}(-\d{1,5})?)*$")
+_PORTS = re.compile(r"^\d{1,5}(-\d{1,5})?(,\d{1,5}(-\d{1,5})?)*\Z")
 _SLUG = re.compile(r"[^a-z0-9]+")
-_COMMENT = re.compile(r"^[\w .:/,!\-+*=@]{0,120}$")  # wie policy._SAFE_VALUE
+_COMMENT = re.compile(r"^[\w .:/,!\-+*=@]{0,120}\Z")  # wie policy._SAFE_VALUE
 # Verwaltungsdienste des Routers (RouterOS-Standardports: ftp, ssh, telnet, www, www-ssl, api, api-ssl, winbox)
 LOCAL_ACCESS_LIST = "sdwan-local-access"
 LOCAL_ACCESS_PORTS = "22,8291"  # SSH, WinBox
@@ -172,7 +172,7 @@ def normalize_spec(spec: dict[str, Any]) -> dict[str, Any]:
         if comment and not _COMMENT.match(comment):
             raise SpecError(f"Kommentar enthält unzulässige Zeichen: {comment!r}")
         rid = str(r.get("id") or new_id())
-        if not re.match(r"^[a-z0-9]{4,12}$", rid):
+        if not re.match(r"^[a-z0-9]{4,12}\Z", rid):
             raise SpecError(f"Ungültige Regel-ID {rid!r}")
         rules.append({
             "id": rid, "enabled": bool(r.get("enabled", True)), "src_zone": r.get("src_zone") or None,

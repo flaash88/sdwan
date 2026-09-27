@@ -52,7 +52,7 @@ def parse_rate(value: object) -> int:
         return 0
     if isinstance(value, (int, float)):
         return int(value)
-    m = re.match(r"^([\d.]+)\s*([kMG]?)(bps)?$", str(value).strip())
+    m = re.match(r"^([\d.]+)\s*([kMG]?)(bps)?\Z", str(value).strip())
     if not m:
         return 0
     return int(float(m.group(1)) * {"": 1, "k": 1e3, "M": 1e6, "G": 1e9}[m.group(2)])
@@ -60,7 +60,7 @@ def parse_rate(value: object) -> int:
 
 # ----------------------------------------------------------------------------- Datum/Uhrzeit des Routers
 _MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
-_LEGACY_DATE = re.compile(r"^([a-z]{3})/(\d{1,2})/(\d{4})$")
+_LEGACY_DATE = re.compile(r"^([a-z]{3})/(\d{1,2})/(\d{4})\Z")
 
 
 def parse_router_datetime(date: object, time: object) -> tuple[dt.datetime, str] | None:

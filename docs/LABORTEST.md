@@ -623,6 +623,32 @@ Voraussetzung: Router im Werkszustand (defconf) onboarden; Notebook am LAN, zwei
 - [ ] ZTP-Import: CSV mit einer gültigen und einer fehlerhaften Zeile → Vorschau zeigt den Fehler; nach Bestätigung
       nur die gültige Zeile angelegt; Bootstrap-Script auf dem Testgerät ausführen → Provisionierung wie gewohnt.
 
+## 23. Audit-Behebung AP1: Zertifikatsprüfung beim Onboarding, Hotspot-Recht ftp
+
+- [ ] **Onboarding mit Zertifikatsprüfung, aktuelle 7.x (≥ 7.19)**, Router im Werkszustand. Onboarding-Befehl aus der
+      Oberfläche ausführen.
+      **Erwartet:** Der Befehl aktiviert zuerst den eingebauten Zertifikatsspeicher
+      (**ANNAHME:** `/certificate settings set builtin-trust-anchors=trusted`, ab 7.19), lädt dann mit
+      `check-certificate=yes` und wird ohne Fehler durchlaufen.
+      Danach `/certificate settings print`: Feld `builtin-trust-anchors` = `trusted`.
+      **Ergebnis:** ☐ ok ☐ Syntax/Feldname abweichend: ________ ☐ Mindestversion abweichend: ________
+- [ ] **Onboarding auf älterer 7.x (< 7.19)**, Werkszustand.
+      **Erwartet:** Abbruch mit „SD-WAN: RouterOS zu alt oder Zertifikat nicht pruefbar – bitte auf RouterOS >= 7.19
+      aktualisieren“. Auf dem Router wird nichts angelegt (kein `sdwan-mgmt`, kein Benutzer). Es gibt keinen Rückfall
+      auf einen Download ohne Prüfung.
+- [ ] **Falsches Zertifikat:** PUBLIC_URL auf einen Host mit selbstsigniertem Zertifikat → Abbruch mit derselben
+      Meldung (Zusatz „oder Cloud nicht erreichbar“).
+- [ ] **ZTP-Bootstrap** auf älterer 7.x importieren → Abbruch beim Import mit Hinweis. Auf ≥ 7.19 → Pairing wie gewohnt.
+- [ ] **Selbsttest:** Zeile „Zertifikatsspeicher“ grün auf ≥ 7.19, orange auf älteren Versionen (nur Hinweis).
+- [ ] **Hotspot-Upload mit `sdwan-api` (Policy `ftp`)**: Neues Gerät onboarden → `/user group print where name=sdwan-api`
+      enthält `ftp`. Hotspot-Instanz anlegen → Login-Seiten liegen unter `sdwan-hs-<kürzel>/` (`/file print`).
+      **Ergebnis:** ☐ Upload ok ☐ Upload abgelehnt (Meldung: ________)
+- [ ] **Altgerät** (Gruppe ohne `ftp`) mit Hotspot: Selbsttest orange „Recht 'ftp' fehlt“ → „Rechte abgleichen“.
+      **Erwartet:** Entweder die Gruppe erhält `ftp`, oder – falls der Router die Selbsterweiterung ablehnt (**ANNAHME**) –
+      erscheint der Einzeiler. Nach Ausführung im WinBox-Terminal (als Admin) ist der Selbsttest grün.
+      **Ergebnis:** ☐ Router erlaubt Abgleich ☐ Router lehnt ab, Einzeiler nötig
+- [ ] **Compliance:** Die MSP-Baseline enthält „Dienst ftp deaktiviert“ (`/ip service print where name=ftp` → disabled).
+
 ---
 
 ## Ergebnis
@@ -651,3 +677,4 @@ Voraussetzung: Router im Werkszustand (defconf) onboarden; Notebook am LAN, zwei
 | 20 Sicherheitsmeldungen | ☐ ok ☐ Abweichung | |
 | 21 Vor-Ort-Zugang/API-Tokens | ☐ ok ☐ Abweichung | MAC-WinBox mit Adressbeschränkung: ☐ ok ☐ abgelehnt · Konsolen-Login: ☐ ok ☐ abgelehnt |
 | 22 Nachbarn/Flows/Inventar/Import | ☐ ok ☐ Abweichung | IPFIX: |
+| 23 Audit AP1 (Zertifikate, ftp) | ☐ ok ☐ Abweichung | Mindestversion: |

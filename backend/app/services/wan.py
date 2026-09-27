@@ -34,7 +34,7 @@ from app.models import Device, WanLink
 from app.routeros import RouterOSError, connect_device
 from app.routeros.client import DeviceAPI
 from app.routeros.util import parse_ms
-from app.routeros.naming import routeros_safe_name
+from app.routeros.naming import routeros_safe_name, routeros_str
 
 log = logging.getLogger(__name__)
 
@@ -76,12 +76,12 @@ def _scripts(link: WanLink, mode: str, recovery_s: int, flush: bool) -> tuple[st
     down = f"/ip route disable {find}"
     if flush:
         down += "; " + flush_snippet(link, mode)
-    down += f'; :log warning "SD-WAN: WAN{link.slot} ({link.name}) DOWN"'
+    down += f"; :log warning {routeros_str(f'SD-WAN: WAN{link.slot} ({link.name}) DOWN')}"
     up = (
         f":delay {recovery_s}s; "
         f':if ([/tool netwatch get [find where comment="sdwan:wan:check:{link.slot}"] status] = "up") do={{ '
         f"/ip route enable {find}; "
-        f':log info "SD-WAN: WAN{link.slot} ({link.name}) wieder UP" }}'
+        f":log info {routeros_str(f'SD-WAN: WAN{link.slot} ({link.name}) wieder UP')} }}"
     )
     return down, up
 

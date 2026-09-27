@@ -105,7 +105,7 @@ async def test_restrict_failure_keeps_scheduler_which_reverts(client, msp, hub):
     rt = get_router(dev["tunnel_ip"])
     _legacy(rt)
     _user(rt)["group"] = "admins-alt"  # vorherige Gruppe wird gelesen, nicht fest 'full'
-    rt._insert("/user/group", {"name": "admins-alt", "policy": "local,ssh,read,write,policy,test,winbox,web,reboot,sensitive,api"})
+    rt._insert("/user/group", {"name": "admins-alt", "policy": "local,ssh,read,write,policy,test,winbox,web,reboot,sensitive,api,ftp"})
     rt.fail_next.add("/system/resource/print")  # Selbsttest nach der Umstellung schlägt rot fehl
     rt.clock_local = dt.datetime(2026, 9, 25, 14, 0, 30)
     body = (await client.post(f"/api/v1/devices/{dev['id']}/restrict-api-user", headers=h)).json()

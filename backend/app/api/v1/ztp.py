@@ -5,17 +5,19 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 
 from app.api.v1.common import get_or_404
 from app.db import utcnow
 from app.deps import AdminCtx, Ctx, ReadCtx, TechCtx
 from app.models import Device, PairingStatus, ProvisioningTemplate, Site
+from app.routeros.naming import routeros_safe_name
 from app.schemas import DeviceOut
 from app.services.pairing import issue_pairing_token
 from app.services.ztp_import import stage_device
-from app.services.ztp import ZTP_TOKEN_TTL_HOURS, TemplateError, bootstrap_script, validate_template
+from app.config import get_settings
+from app.services.ztp import TemplateError, bootstrap_script, validate_template
 
 router = APIRouter(tags=["zero-touch"])
 
@@ -29,6 +31,13 @@ class TemplateIn(BaseModel):
 class StageDevice(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     serial: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9\-]+$")
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str) -> str:
+        from app.routeros.naming import validate_label
+
+        return validate_label(v, "Gerätename", 200)
     site_id: uuid.UUID | None = None
     tags: list[str] = []
     # Gerätespezifische lokale Adresse für VRRP-Instanzen aus dem Template (z. B. 192.168.110.21/24)
@@ -38,7 +47,7 @@ class StageDevice(BaseModel):
 class StageIn(BaseModel):
     template_id: uuid.UUID | None = None
     site_id: uuid.UUID | None = None
-    ttl_days: int = Field(default=180, ge=1, le=730)
+    ttl_days: int = Field(default_factory=lambda: get_settings().ztp_token_ttl_days, ge=1, le=730)
     devices: list[StageDevice] = Field(min_length=1, max_length=500)
 
 
@@ -130,11 +139,11 @@ async def regenerate_bootstrap(device_id: uuid.UUID, ctx: Ctx = TechCtx) -> Plai
     if not dev.serial:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Zero-Touch erfordert eine Seriennummer")
     template = await ctx.db.get(ProvisioningTemplate, dev.ztp_template_id) if dev.ztp_template_id else None
-    info = issue_pairing_token(dev, ttl_hours=ZTP_TOKEN_TTL_HOURS)
+    info = issue_pairing_token(dev, ttl_hours=24 * get_settings().ztp_token_ttl_days)
     dev.ztp_state = "staged"
     await ctx.audit("ztp.bootstrap", target_type="device", target_id=dev.id)
     await ctx.db.commit()
-    return PlainTextResponse(bootstrap_script(info.token, dev, template), headers={"Content-Disposition": f'attachment; filename="sdwan-ztp-{dev.serial}.rsc"'})
+    return PlainTextResponse(bootstrap_script(info.token, dev, template), headers={"Content-Disposition": f'attachment; filename="sdwan-ztp-{routeros_safe_name(dev.serial or "geraet")}.rsc"'})
 
 
 @router.get("/ztp/devices")
@@ -148,7 +157,7 @@ async def ztp_devices(ctx: Ctx = ReadCtx) -> list[dict]:
 # ----------------------------------------------------------------------------- CSV-Massenimport (Phase 25)
 class ImportIn(BaseModel):
     csv: str = Field(min_length=1, max_length=500_000)
-    ttl_days: int = Field(default=180, ge=1, le=730)
+    ttl_days: int = Field(default_factory=lambda: get_settings().ztp_token_ttl_days, ge=1, le=730)
 
 
 @router.post("/ztp/import/preview")

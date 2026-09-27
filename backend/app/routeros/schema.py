@@ -166,6 +166,10 @@ PATH_SPECS: tuple[PathSpec, ...] = (
              warn_if_missing={"enabled": "Feldname abweichend – Top-Verbraucher können nicht eingeschaltet werden"}),
     PathSpec("traffic_flow_target", "Traffic-Flow-Ziele", "/ip/traffic-flow/target/print", optional=("dst-address", "port", "version", "comment"),
              used_by="Top-Verbraucher (IPFIX)"),
+    # --- AUDIT-005: eingebauter Zertifikatsspeicher (Onboarding/ZTP mit check-certificate=yes). ANNAHME (Labor): Pfad/Feld;
+    # fehlt beides (ältere Version), ist das kein Fehler des laufenden Betriebs – der Selbsttest meldet es orange.
+    PathSpec("certificate_settings", "Zertifikats-Einstellungen", "/certificate/settings/print", optional=("builtin-trust-anchors",),
+             used_by="Onboarding/Neu-Pairing (Zertifikatsprüfung)", package="certificate-settings"),
     PathSpec("ping", "Ping", "/ping", fields=("sent", "received"), optional=("time", "packet-loss", "host"),
              used_by="Leitungstest, VRRP-Gegenstelle", must_have_rows=True, params={"count": "1"}),
 )
@@ -192,7 +196,11 @@ API_RECOMMENDED_POLICIES: dict[str, str] = {
     "winbox": "ohne 'winbox' kann die Gruppe für Fernzugriffs-Benutzer nicht angelegt werden – Fernzugriff funktioniert ohne diese Policies nicht",
     "web": "ohne 'web' kann die Gruppe für Fernzugriffs-Benutzer nicht angelegt werden – Fernzugriff funktioniert ohne diese Policies nicht",
 }
-API_POLICIES: tuple[str, ...] = ("read", "write", "api", "policy", "reboot", "test", "ssh", "sensitive", "winbox", "web")
+# 'ftp': Dateizugriff per SFTP – Upload der Hotspot-Login-Seiten (AUDIT-028). Der FTP-*Dienst* bleibt davon unberührt
+# (MSP-Baseline prüft „/ip service ftp deaktiviert“).
+API_POLICIES: tuple[str, ...] = ("read", "write", "api", "policy", "reboot", "test", "ssh", "sensitive", "winbox", "web", "ftp")
+# Nur nötig, wenn Hotspot genutzt wird (Selbsttest: oranger Hinweis, wenn sie dann fehlt)
+API_HOTSPOT_POLICIES: dict[str, str] = {"ftp": "Upload der Hotspot-Login-Seiten per SFTP"}
 
 # Gruppe der temporären Fernzugriffs-Benutzer: bewusst ohne 'policy' (keine Benutzerverwaltung), ohne 'api' und
 # ohne 'local' (nur Konsolen-Login; WinBox/SSH/WebFig über den Tunnel brauchen es nicht).
@@ -218,6 +226,14 @@ def local_group_command() -> str:
             f'comment="sdwan:local" }} else={{ /user group set [find name="{LOCAL_GROUP}"] policy={pol} }}')
 
 
+def api_group_command() -> str:
+    """Einzeiler für WinBox-Terminal/Konsole (als Admin): API-Gruppe auf den Soll-Stand bringen – z. B. wenn der Router
+    dem API-Benutzer die Selbsterweiterung um neue Policies verweigert (AUDIT-028)."""
+    pol = ",".join(API_POLICIES)
+    return (f':if ([:len [/user group find name="{API_GROUP}"]] = 0) do={{ /user group add name="{API_GROUP}" policy={pol} '
+            f'comment="sdwan:mgmt" }} else={{ /user group set [find name="{API_GROUP}"] policy={pol} }}')
+
+
 def policy_set(value: object) -> set[str]:
     """RouterOS-Policy-Liste (``read,write,!ftp,…``) → Menge der aktiven Policies."""
     return {p.strip() for p in str(value or "").split(",") if p.strip() and not p.strip().startswith("!")}
@@ -231,3 +247,13 @@ def local_policies_for(api_group_policy: object) -> tuple[str, ...]:
     have = policy_set(api_group_policy)
     return tuple(p for p in LOCAL_POLICIES_FULL if p in have)
 
+
+
+# AUDIT-005: Onboarding/ZTP laden Scripts per HTTPS mit Zertifikatsprüfung (check-certificate=yes). Dafür braucht der Router
+# vertrauenswürdige Root-Zertifikate. ANNAHME (Labor, LABORTEST 36): RouterOS bringt ab TRUST_ANCHORS_MIN_VERSION einen
+# eingebauten Zertifikatsspeicher mit, aktiviert über TRUST_ANCHORS_CMD. Ältere Versionen kennen den Parameter nicht –
+# dann bricht das Script mit CERT_ERROR ab (kein Rückfall auf check-certificate=no).
+TRUST_ANCHORS_MIN_VERSION = "7.19"
+TRUST_ANCHORS_CMD = "/certificate settings set builtin-trust-anchors=trusted"
+CERT_ERROR = (f"SD-WAN: RouterOS zu alt oder Zertifikat nicht pruefbar - bitte auf RouterOS >= {TRUST_ANCHORS_MIN_VERSION} "
+              "aktualisieren")

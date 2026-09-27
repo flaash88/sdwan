@@ -17,7 +17,7 @@ from app.routeros import RouterOSError, connect_device
 from app.services.wan import MODES, WanError, apply_wan, test_link, validate_links
 
 router = APIRouter(prefix="/devices/{device_id}/wan", tags=["wan"])
-_NAME = re.compile(r"^[A-Za-z0-9._\-/]{1,100}$")
+_NAME = re.compile(r"^[A-Za-z0-9._\-/]{1,100}\Z")
 
 
 class WanLinkIn(BaseModel):
@@ -35,6 +35,13 @@ class WanLinkIn(BaseModel):
     latency_threshold_ms: int | None = Field(default=None, ge=1, le=10000)
     monthly_limit_gb: float | None = Field(default=None, gt=0, le=100000)
     enabled: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str) -> str:  # AUDIT-002: Name steht im Netwatch-Script
+        from app.routeros.naming import validate_label
+
+        return validate_label(v, "WAN-Name", 100)
 
     @field_validator("interface")
     @classmethod

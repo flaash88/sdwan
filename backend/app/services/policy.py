@@ -39,8 +39,8 @@ RULE_KEYS = {
     "jump-target", "ipsec-policy", "connection-mark", "packet-mark", "routing-mark", "new-connection-mark",
     "src-mac-address", "in-bridge-port", "out-bridge-port", "ttl", "packet-size", "dscp", "psd", "nth",
 }
-_SAFE_VALUE = re.compile(r"^[\w .:/,!\-+*=@]{0,200}$")
-_NAME = re.compile(r"^[A-Za-z0-9._\-]{1,64}$")
+_SAFE_VALUE = re.compile(r"^[\w .:/,!\-+*=@]{0,200}\Z")
+_NAME = re.compile(r"^[A-Za-z0-9._\-]{1,64}\Z")
 
 
 class PolicyError(ValueError):
@@ -69,7 +69,7 @@ def validate_content(content: dict[str, Any]) -> dict[str, Any]:
         try:
             addr = str(ipaddress.ip_network(addr, strict=False)) if "/" in addr else str(ipaddress.ip_address(addr))
         except ValueError:
-            if not re.match(r"^[a-z0-9.\-]{1,253}$", addr):  # RouterOS erlaubt auch DNS-Namen
+            if not re.match(r"^[a-z0-9.\-]{1,253}\Z", addr):  # RouterOS erlaubt auch DNS-Namen
                 raise PolicyError(f"Ungültige Adresse {addr!r}") from None
         item = {"list": lst, "address": addr}
         if e.get("comment"):

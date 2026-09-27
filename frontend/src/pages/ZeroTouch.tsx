@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
-import { Button, Card, Checkbox, CodeBlock, EmptyState, ErrorBox, Input, Loading, Modal, PageHeader, Select, StatusBadge, Textarea, cls, statusInfo, useAction } from "../components/ui";
+import { Button, Card, Checkbox, CodeBlock, EmptyState, ErrorBox, Input, Loading, Modal, Notice, PageHeader, Select, StatusBadge, Textarea, cls, statusInfo, useAction } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { fmtAgo, fmtDate, fmtShort } from "../lib/format";
 import { useLive } from "../lib/live";
+import { useMeta } from "../lib/meta";
 import type { Device, Site } from "../lib/types";
 import { useFetch } from "../lib/useFetch";
 
@@ -43,6 +44,7 @@ function tplSummary(t: Template) {
 export default function ZeroTouch() {
   const { can, me } = useAuth();
   const nav = useNavigate();
+  const meta = useMeta();
   const templates = useFetch<Template[]>(me?.active_tenant_id ? "/ztp/templates" : null);
   const devices = useFetch<Device[]>(me?.active_tenant_id ? "/ztp/devices" : null);
   const sites = useFetch<Site[]>("/sites");
@@ -76,6 +78,12 @@ export default function ZeroTouch() {
           <Button variant="secondary" icon="list" onClick={() => setStaging(true)}>Mehrere vorbereiten</Button>
           <Button icon="plus" onClick={() => setSingle(true)}>Router vorbereiten</Button>
         </>} />
+      <div className="mb-4">
+        <Notice tone="blue" icon="shield" title={`Mindestversion RouterOS ${meta?.onboarding_min_routeros ?? "7.19"}`}>
+          Bootstrap und Onboarding laden mit Zertifikatsprüfung über den eingebauten Zertifikatsspeicher des Routers. Ältere RouterOS-Versionen
+          brechen beim Import mit einem Hinweis ab – Router vor dem Versand aktualisieren (Netinstall/Upgrade).
+        </Notice>
+      </div>
       <div className={cls("mb-4 grid gap-3", stats.length > 3 ? "md:grid-cols-4" : "md:grid-cols-3")}>
         {stats.map((k) => {
           const [, tone, icon] = statusInfo(k.st);

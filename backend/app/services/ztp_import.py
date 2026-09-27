@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import utcnow
 from app.models import Device, ProvisioningTemplate, Site
+from app.routeros.naming import validate_label
 from app.services.pairing import issue_pairing_token
 from app.services.wireguard import allocate_tunnel_ip
 from app.services.ztp import bootstrap_script
@@ -25,7 +26,7 @@ from app.services.ztp import bootstrap_script
 COLUMNS = ("name", "serial", "model", "site", "template", "tags", "vrrp_local_address")
 REQUIRED = ("name", "serial")
 MAX_ROWS = 500
-SERIAL_RE = re.compile(r"^[A-Za-z0-9\-]{3,64}$")
+SERIAL_RE = re.compile(r"^[A-Za-z0-9\-]{3,64}\Z")
 
 
 class ImportError_(ValueError):
@@ -70,8 +71,11 @@ async def validate(db: AsyncSession, tenant_id: uuid.UUID, text: str) -> list[di
         name, serial = r.get("name", ""), r.get("serial", "").upper()
         if not name:
             errs.append("Name fehlt")
-        elif len(name) > 200:
-            errs.append("Name zu lang")
+        else:
+            try:
+                validate_label(name, "Name", 200)
+            except ValueError as exc:
+                errs.append(str(exc))
         if not serial:
             errs.append("Seriennummer fehlt")
         elif not SERIAL_RE.match(serial):
@@ -128,4 +132,4 @@ async def stage_device(db: AsyncSession, tenant_id: uuid.UUID, *, name: str, ser
     info = issue_pairing_token(dev, ttl_hours=ttl_days * 24)
     await db.flush()
     return {"device": DeviceOut.model_validate(dev).model_dump(mode="json"), "token": info.token, "expires_at": info.expires_at,
-            "command": info.command, "bootstrap_script": bootstrap_script(info.token, dev, template)}
+            "command": info.command, "bootstrap_script": bootstrap_script(info.token, dev, template), "min_routeros": info.min_routeros}

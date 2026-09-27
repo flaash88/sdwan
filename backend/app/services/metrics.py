@@ -115,7 +115,7 @@ def reset_sink() -> None:
 
 
 # ----------------------------------------------------------------------------- Erfassung
-_IGNORE_IFACE = re.compile(r"^(lo|<.*>)$")
+_IGNORE_IFACE = re.compile(r"^(lo|<.*>)\Z")
 
 
 def _num(v: Any) -> float | None:

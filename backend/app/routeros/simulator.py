@@ -217,6 +217,8 @@ class SimRouter:
             "/tool/fetch": lambda p: [{"status": "finished"}],
             "/system/script/run": lambda p: [],
             "/interface/wifi/monitor": lambda p: [{"channel": "5180/ax/Ceee" if str(p.get("numbers")) == "wifi2" else "2437/ax", "state": "running"}],
+            # ANNAHME (Labor): Feld des eingebauten Zertifikatsspeichers (AUDIT-005)
+            "/certificate/settings/print": lambda p: [{"builtin-trust-anchors": "trusted", "crl-use": "no"}],
             "/certificate/settings/set": lambda p: [],
             "/certificate/import": lambda p: [{"certificates-imported": 140}],
         }.get(cmd)

@@ -11,7 +11,8 @@ export default function PairingBox({ pairing }: { pairing: PairingInfo }) {
       </p>
       <CopyBox text={pairing.command} />
       <p className="text-xs text-slate-500">
-        Token gültig bis {fmtDate(pairing.expires_at)} · einmalig verwendbar · Voraussetzung: RouterOS 7, ausgehend HTTPS und UDP erlaubt.
+        Token gültig bis {fmtDate(pairing.expires_at)} · einmalig verwendbar · Voraussetzung: RouterOS ≥ {pairing.min_routeros ?? "7.19"} (Download mit
+        Zertifikatsprüfung über den eingebauten Zertifikatsspeicher), ausgehend HTTPS und UDP erlaubt. Ältere Versionen brechen mit einem Hinweis ab – dann zuerst RouterOS aktualisieren.
       </p>
     </div>
   );

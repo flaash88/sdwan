@@ -47,12 +47,12 @@ FIELD_TYPES = ("text", "email", "tel", "checkbox")
 DEFAULT_RETENTION_DAYS = 30
 REGISTER_MAX_BYTES = 4096
 REGISTER_LIMIT = (10, 600)  # max. 10 Registrierungen je IP und Portal in 10 Minuten
-_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,19}$")
-_RATE = re.compile(r"^\d+[kKmMgG]?(/\d+[kKmMgG]?)?$")
-_HOST = re.compile(r"^(\*\.)?[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
-_FILE = re.compile(r"^[a-z0-9_-]{1,40}\.(html|css|js|txt)$")
-_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
-_LOGO = re.compile(r"^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$")
+_SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,19}\Z")
+_RATE = re.compile(r"^\d+[kKmMgG]?(/\d+[kKmMgG]?)?\Z")
+_HOST = re.compile(r"^(\*\.)?[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+\Z")
+_FILE = re.compile(r"^[a-z0-9_-]{1,40}\.(html|css|js|txt)\Z")
+_COLOR = re.compile(r"^#[0-9a-fA-F]{6}\Z")
+_LOGO = re.compile(r"^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+\Z")
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
@@ -93,7 +93,7 @@ def check_portal(data: dict[str, Any]) -> None:
         raise HotspotError("Logo: PNG, JPEG oder WebP, max. ca. 150 KB")
     keys = set()
     for f in data.get("form_fields") or []:
-        if not re.match(r"^[a-z][a-z0-9_]{0,29}$", str(f.get("key", ""))) or f["key"] in keys:
+        if not re.match(r"^[a-z][a-z0-9_]{0,29}\Z", str(f.get("key", ""))) or f["key"] in keys:
             raise HotspotError("Formularfeld: eindeutiger Schlüssel a–z, 0–9, _")
         keys.add(f["key"])
         if f.get("type") not in FIELD_TYPES:
@@ -502,9 +502,9 @@ def clean_registration(portal: HotspotPortal, fields: Any) -> dict[str, Any]:
             raise HotspotError(f"{f['key']}: zu lang")
         if f.get("required") and not v:
             raise HotspotError(f"{f['key']} erforderlich")
-        if v and f["type"] == "email" and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", v):
+        if v and f["type"] == "email" and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+\Z", v):
             raise HotspotError(f"{f['key']}: E-Mail ungültig")
-        if v and f["type"] == "tel" and not re.match(r"^[0-9+()/ -]{3,40}$", v):
+        if v and f["type"] == "tel" and not re.match(r"^[0-9+()/ -]{3,40}\Z", v):
             raise HotspotError(f"{f['key']}: Telefonnummer ungültig")
         out[f["key"]] = v
     return out

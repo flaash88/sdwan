@@ -75,6 +75,7 @@ export interface PairingInfo {
   expires_at: string;
   command: string;
   script_url: string;
+  min_routeros?: string;
 }
 
 export interface AuditEntry {

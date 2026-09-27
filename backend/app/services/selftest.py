@@ -23,10 +23,13 @@ from app.routeros.client import DeviceAPI
 from app.routeros.schema import (
     API_CORE_POLICIES,
     API_GROUP,
+    API_HOTSPOT_POLICIES,
     API_RECOMMENDED_POLICIES,
     KNOWN_ARCHITECTURES,
     PATH_SPECS,
+    TRUST_ANCHORS_MIN_VERSION,
     PathSpec,
+    api_group_command,
     policy_set,
 )
 from app.routeros.util import parse_router_datetime
@@ -118,7 +121,7 @@ def _parse_clock(row: dict[str, Any]) -> dt.datetime | None:
         return None
     local = parsed[0]
     off = str(row.get("gmt-offset", "+00:00"))
-    om = re.match(r"^([+-])(\d{1,2}):(\d{2})$", off)
+    om = re.match(r"^([+-])(\d{1,2}):(\d{2})\Z", off)
     delta = dt.timedelta(hours=int(om.group(2)), minutes=int(om.group(3))) * (1 if om.group(1) == "+" else -1) if om else dt.timedelta()
     return (local - delta).replace(tzinfo=dt.UTC)
 
@@ -136,7 +139,7 @@ def _address_allows(addr: str, ip: str) -> bool:
     return False
 
 
-def extra_checks(raw: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+def extra_checks(raw: dict[str, list[dict[str, Any]]], uses_hotspot: bool = False) -> list[dict[str, Any]]:
     s = get_settings()
     out: list[dict[str, Any]] = []
     res = (raw.get("resource") or [{}])[0]
@@ -195,6 +198,26 @@ def extra_checks(raw: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
             allowed = svc.get("address") or "alle Adressen"
             out.append(_check(f"service_{name}", label, "ok", f"aktiv auf Port {port}, erlaubt: {allowed}"))
 
+    # Hotspot-Upload per SFTP braucht die Policy 'ftp' (AUDIT-028) – nur relevant, wenn Hotspot genutzt wird
+    if uses_hotspot and user is not None:
+        group = next((g for g in raw.get("user_group") or [] if g.get("name") == user.get("group")), None)
+        if group is not None and group.get("name") != "full" and "ftp" not in policy_set(group.get("policy")):
+            fix = api_group_command()
+            out.append(_check("rights_hotspot", "Rechte für Hotspot-Upload", "warn",
+                              f"Gruppe '{group['name']}' ohne 'ftp' – {API_HOTSPOT_POLICIES['ftp']} schlägt fehl. Einmalig lokal "
+                              f"(WinBox-Terminal/Konsole als Admin) ausführen: {fix}", missing=["ftp"], fix=fix))
+
+    # Zertifikatsspeicher für Onboarding/Neu-Pairing mit Zertifikatsprüfung (AUDIT-005, ANNAHME Feldname)
+    cert = (raw.get("certificate_settings") or [{}])[0]
+    anchors = str(cert.get("builtin-trust-anchors", "") or "")
+    if anchors == "trusted":
+        out.append(_check("trust_store", "Zertifikatsspeicher", "ok", "Eingebaute Root-Zertifikate aktiv (Onboarding mit Zertifikatsprüfung)"))
+    else:
+        out.append(_check("trust_store", "Zertifikatsspeicher", "warn",
+                          ("Eingebaute Root-Zertifikate nicht aktiv" if anchors else "Eingebauter Zertifikatsspeicher nicht vorhanden")
+                          + f" – ein erneutes Onboarding (Neu-Pairing) braucht RouterOS >= {TRUST_ANCHORS_MIN_VERSION}. "
+                          "Der laufende Betrieb ist nicht betroffen.", value=anchors or None))
+
     # Uhrzeit
     clock = (raw.get("clock") or [{}])[0]
     router_now = _parse_clock(clock)
@@ -206,6 +229,16 @@ def extra_checks(raw: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
         out.append(_check("clock_skew", "Uhrzeitabweichung", st, f"Abweichung Router ↔ Server: {diff:+.0f} s"
                           + (" – NTP prüfen (Zeitstempel, Tokens, Zertifikate)" if st != "ok" else ""), value=round(diff)))
     return out
+
+
+async def _uses_hotspot(device: Device) -> bool:
+    from sqlalchemy import select
+
+    from app.db import system_session
+    from app.models import HotspotInstance
+
+    async with system_session() as db:
+        return (await db.execute(select(HotspotInstance.id).where(HotspotInstance.device_id == device.id).limit(1))).first() is not None
 
 
 async def run_selftest(device: Device) -> dict[str, Any]:
@@ -226,7 +259,7 @@ async def run_selftest(device: Device) -> dict[str, Any]:
     except RouterOSError as exc:
         return {"status": "error", "duration_ms": round((time.perf_counter() - t0) * 1000), "checks": [
             _check("connect", "Verbindung", "error", f"Router über den Management-Tunnel nicht erreichbar: {exc}")]}
-    checks += extra_checks(raw)
+    checks += extra_checks(raw, uses_hotspot=await _uses_hotspot(device))
 
     # Export wie beim Backup (Produktion: SSH `/export terse`)
     e0 = time.perf_counter()

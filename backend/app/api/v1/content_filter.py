@@ -15,7 +15,7 @@ from app.services.content_filter import apply_tenant, sync_profile
 from app.services.nextdns import BLOCKLISTS, CATEGORIES, DEFAULT_SECURITY, SECURITY, SERVICES, NextDNSClient, NextDNSError
 
 router = APIRouter(prefix="/content-filter", tags=["content-filter"])
-_DOMAIN = re.compile(r"^(\*\.)?([a-z0-9-]{1,63}\.)+[a-z]{2,63}$")
+_DOMAIN = re.compile(r"^(\*\.)?([a-z0-9-]{1,63}\.)+[a-z]{2,63}\Z")
 
 
 class ProfileIn(BaseModel):

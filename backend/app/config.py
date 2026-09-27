@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     bootstrap_admin_password: str = "admin12345"
     # Shared Token zwischen Hub-Agent und Control-Plane (/internal/hub/*)
     hub_token: str = "change-me-hub-token"
+    # Gültigkeit eines ZTP-Tokens (Staging bis Erstinbetriebnahme beim Kunden); verbraucht wird es beim Pairing
+    ztp_token_ttl_days: int = 180
 
     # --- Datenbanken ---------------------------------------------------------
     database_url: str = "postgresql+asyncpg://sdwan:sdwan@localhost:5432/sdwan"

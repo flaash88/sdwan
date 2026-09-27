@@ -30,7 +30,7 @@ from app.services.fw_compile import (
 router = APIRouter(tags=["firewall"])
 
 KINDS: dict[str, Any] = {"objects": FwObject, "services": FwService, "zones": FwZone, "blocks": FwBlock}
-_IFACE = re.compile(r"^[A-Za-z0-9._\-]{1,64}$")
+_IFACE = re.compile(r"^[A-Za-z0-9._\-]{1,64}\Z")
 
 
 # ----------------------------------------------------------------------------- Ausgabe
@@ -133,7 +133,7 @@ async def _validated(ctx: Ctx, kind: str, data: ItemIn, own_id: uuid.UUID | None
             f.update(slug=slugify(data.name), source=data.source, management=data.management)
         else:
             for p in data.params:
-                if p.get("type") not in ("zone", "object", "service") or not re.match(r"^[a-z_]{1,30}$", str(p.get("key", ""))):
+                if p.get("type") not in ("zone", "object", "service") or not re.match(r"^[a-z_]{1,30}\Z", str(p.get("key", ""))):
                     raise SpecError("Parameter: key (a-z_) und type zone|object|service")
             f.update(params=data.params, rules=data.rules, nat=data.nat)
     except (SpecError, ValueError) as exc:
@@ -302,7 +302,7 @@ async def expand_block(block_id: uuid.UUID, data: ExpandIn, ctx: Ctx = ReadCtx) 
             return v
         if v.startswith("$"):
             return resolve(params.get(v[1:]))
-        m = re.match(r"^(zone|svc|obj):([a-z0-9\-]+)$", v)
+        m = re.match(r"^(zone|svc|obj):([a-z0-9\-]+)\Z", v)
         if m:
             kind, slug = m.groups()
             found = seed_keys.get(kind, {}).get(slug) or by_slug[kind].get(slug)

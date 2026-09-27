@@ -36,7 +36,7 @@ from app.routeros.client import DeviceAPI
 from app.services.wan import DEFAULT_OPTIONS, _default_comment, flush_snippet
 
 log = logging.getLogger(__name__)
-NAME_RE = re.compile(r"^[A-Za-z0-9._\-]{1,40}$")
+NAME_RE = re.compile(r"^[A-Za-z0-9._\-]{1,40}\Z")
 
 
 class VrrpError(ValueError):

@@ -78,6 +78,14 @@ Die Tunnel-Adresse des Hubs ist die erste Adresse aus `WG_NETWORK` (Standard `10
 - [ ] Auf dem Router: `/user print` und `/user group print where name=sdwan-api`.
       **Erwartet:** `sdwan` ist in der Gruppe `sdwan-api` mit genau den Policies aus Schritt 1.
 
+### 2a. Hub-Neustart (Peers nach Neustart)
+
+- [ ] Mindestens ein Router verbunden. `docker compose restart wireguard-hub` (bzw. Server-Neustart).
+      **Erwartet:** Log „Peers synchronisiert: n (Start)“, `docker compose exec wireguard-hub wg show wg0 peers` zeigt
+      alle Peers, Router nach ≤ 1 min wieder online, `docker compose ps` → wireguard-hub „healthy“.
+- [ ] `deploy/update.sh` nach einer Änderung am Hub-Image: syslog/flows werden neu gestartet, das Script meldet
+      „healthy“ und die Peer-Anzahl.
+
 ## 3. Selbsttest
 
 - [ ] Übersicht → Karte „Selbsttest“ → „Selbsttest ausführen“.

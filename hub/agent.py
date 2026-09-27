@@ -2,7 +2,11 @@
 
 * erzeugt/persistiert den Hub-Schlüssel (/data/hub.key)
 * registriert den Public-Key bei der Control-Plane
-* synchronisiert alle 10 s die Peers (``wg syncconf``) aus ``/api/v1/internal/hub/peers``
+* synchronisiert alle 10 s die Peers (``wg syncconf``) aus ``/api/v1/internal/hub/peers``. Maßgeblich ist der
+  Ist-Zustand des Interfaces (``wg show <iface> dump``), nicht die Datei ``/data/<iface>.conf``: Das Volume überlebt
+  Neustarts, das Interface wird beim Start aber leer angelegt. Beim Start wird immer einmal synchronisiert.
+* Healthcheck (``python agent.py --health``): unhealthy, wenn der letzte erfolgreiche Sync älter als 3 min ist oder die
+  Peer-Anzahl im Interface nicht der API-Liste entspricht (Status in ``HEALTH_FILE``).
 * meldet alle 30 s Handshake-/Traffic-Statistiken
 * Firewall: Router dürfen nur Antworten an die Control-Plane schicken, kein Router->Router
   über den Hub, keine neuen Verbindungen vom Router ins Docker-Netz.
@@ -21,7 +25,7 @@ import urllib.error
 import urllib.request
 
 API = os.environ.get("CONTROL_PLANE_URL", "http://api:8000").rstrip("/")
-TOKEN = os.environ["HUB_TOKEN"]
+TOKEN = os.environ.get("HUB_TOKEN", "")
 IFACE = os.environ.get("WG_INTERFACE", "wg0")
 ENDPOINT = os.environ.get("WG_HUB_ENDPOINT", "")
 DOCKER_NET = os.environ.get("DOCKER_NETWORK", "172.30.0.0/24")
@@ -29,6 +33,8 @@ KEY_FILE = "/data/hub.key"
 CONF_FILE = f"/data/{IFACE}.conf"
 SYNC_INTERVAL = int(os.environ.get("SYNC_INTERVAL", "10"))
 STATS_INTERVAL = int(os.environ.get("STATS_INTERVAL", "30"))
+HEALTH_FILE = os.environ.get("HEALTH_FILE", "/tmp/hub-health.json")
+HEALTH_MAX_AGE_S = int(os.environ.get("HEALTH_MAX_AGE_S", "180"))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s hub %(levelname)s %(message)s")
 log = logging.getLogger()
@@ -87,10 +93,47 @@ def ensure_firewall() -> None:
             sh("iptables", "-t", table, "-A", chain, *spec)
 
 
-def sync_peers(priv_port: int) -> None:
-    peers = api("GET", "/api/v1/internal/hub/peers")
+def desired_state(peers: list[dict]) -> dict[str, frozenset[str]]:
+    """Soll-Zustand aus der API: Public-Key -> AllowedIPs."""
+    return {p["public_key"]: frozenset(x.strip() for x in str(p["allowed_ips"]).split(",") if x.strip()) for p in peers}
+
+
+def interface_state() -> dict[str, frozenset[str]]:
+    """Ist-Zustand des Interfaces (``wg show <iface> dump``, erste Zeile = Interface): Public-Key -> AllowedIPs."""
+    out: dict[str, frozenset[str]] = {}
+    for line in sh("wg", "show", IFACE, "dump").splitlines()[1:]:
+        parts = line.split("\t")
+        if len(parts) >= 4:
+            allowed = "" if parts[3] == "(none)" else parts[3]
+            out[parts[0]] = frozenset(x.strip() for x in allowed.split(",") if x.strip())
+    return out
+
+
+class SyncState:
+    def __init__(self) -> None:
+        self.last_ok = 0.0
+        self.resync = False  # Peer-Anzahl wich nach dem letzten Sync ab -> beim nächsten Durchlauf erneut syncconf
+        self.api_peers = 0
+        self.iface_peers = 0
+
+
+STATE = SyncState()
+
+
+def write_health() -> None:
+    try:
+        with open(HEALTH_FILE, "w") as f:
+            json.dump({"last_ok": STATE.last_ok, "api_peers": STATE.api_peers, "iface_peers": STATE.iface_peers}, f)
+    except OSError as exc:
+        log.warning("Health-Datei nicht schreibbar: %s", exc)
+
+
+def sync_peers(priv_port: int, force: bool = False) -> bool:
+    """Peers abgleichen. ``syncconf`` nur, wenn der Ist-Zustand vom Soll abweicht, ``force`` gesetzt ist oder der
+    vorige Sync eine falsche Peer-Anzahl hinterließ. Rückgabe: ob ``syncconf`` lief."""
+    peers: list[dict] = api("GET", "/api/v1/internal/hub/peers")  # type: ignore[assignment]
     lines = ["[Interface]", f"PrivateKey = {open(KEY_FILE).read().strip()}", f"ListenPort = {priv_port}", ""]
-    for p in peers:  # type: ignore[union-attr]
+    for p in peers:
         lines += ["[Peer]", f"# device {p['device_id']}", f"PublicKey = {p['public_key']}", f"AllowedIPs = {p['allowed_ips']}", ""]
     content = "\n".join(lines)
     old = open(CONF_FILE).read() if os.path.exists(CONF_FILE) else ""
@@ -98,8 +141,40 @@ def sync_peers(priv_port: int) -> None:
         with open(CONF_FILE, "w") as f:
             f.write(content)
         os.chmod(CONF_FILE, 0o600)
+    want = desired_state(peers)
+    ran = False
+    if force or STATE.resync or interface_state() != want:
         sh("wg", "syncconf", IFACE, CONF_FILE)
-        log.info("Peers synchronisiert: %d", len(peers))  # type: ignore[arg-type]
+        ran = True
+        log.info("Peers synchronisiert: %d%s", len(peers), " (Start)" if force else "")
+    have = interface_state() if ran else want
+    STATE.api_peers, STATE.iface_peers = len(want), len(have)
+    if len(have) != len(want):
+        log.warning("Peer-Anzahl im Interface (%d) weicht von der API-Liste (%d) ab – erneuter Sync im nächsten Durchlauf",
+                    len(have), len(want))
+        STATE.resync = True
+    else:
+        STATE.resync = False
+        STATE.last_ok = time.time()
+    write_health()
+    return ran
+
+
+def health(now: float | None = None, path: str | None = None) -> tuple[bool, str]:
+    """Für den Docker-Healthcheck: (ok, Text)."""
+    try:
+        with open(path or HEALTH_FILE) as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        return False, "noch kein Sync"
+    if st.get("api_peers") != st.get("iface_peers"):
+        return False, f"Peers im Interface {st.get('iface_peers')} ≠ API {st.get('api_peers')}"
+    if not st.get("last_ok"):
+        return False, "noch kein erfolgreicher Sync"
+    age = (now or time.time()) - float(st["last_ok"])
+    if age > HEALTH_MAX_AGE_S:
+        return False, f"letzter erfolgreicher Sync vor {int(age)} s"
+    return True, f"ok, {st.get('iface_peers')} Peers"
 
 
 def report_stats() -> None:
@@ -128,10 +203,12 @@ def main() -> None:
     port = int(cfg["listen_port"])  # type: ignore[index]
     ensure_interface(cfg["address"], port)  # type: ignore[index]
     ensure_firewall()
+    first = True  # nach dem Start immer einmal syncconf: das Interface ist leer, die Datei im Volume evtl. unverändert
     last_stats = 0.0
     while True:
         try:
-            sync_peers(port)
+            sync_peers(port, force=first)
+            first = False
             if time.time() - last_stats > STATS_INTERVAL:
                 report_stats()
                 last_stats = time.time()
@@ -141,4 +218,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import sys
+
+    if "--health" in sys.argv:
+        ok, text = health()
+        print(text)
+        sys.exit(0 if ok else 1)
     main()

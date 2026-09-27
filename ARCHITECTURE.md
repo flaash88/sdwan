@@ -80,6 +80,16 @@ eigenen Abschnitt.
   Public-Key bei der API und synchronisiert alle 10 s die Peers per `wg syncconf` (nur gepairte,
   nicht gesperrte Geräte; Allowed-IPs = exakt die `/32` des Geräts). Fallback auf `wireguard-go`,
   falls das Kernel-Modul fehlt (z. B. unprivilegierter LXC).
+* Peer-Sync gegen den **Ist-Zustand** des Interfaces (`wg show wg0 dump`: Public-Keys + Allowed-IPs), nicht gegen
+  `/data/wg0.conf` – das Volume überlebt Neustarts, `wg0` wird beim Start aber leer angelegt. `syncconf` läuft, wenn
+  Ist ≠ Soll, beim Start immer einmal, und erneut, wenn nach einem Sync die Peer-Anzahl im Interface nicht der
+  API-Liste entspricht (Warnung im Log).
+* Healthcheck `python /app/agent.py --health`: unhealthy, wenn der letzte erfolgreiche Sync > 3 min alt ist oder die
+  Peer-Anzahl im Interface ≠ API-Liste. Der Hub startet erst, wenn die API healthy ist.
+* Plattform-Alarm `hub_no_peers`: `/internal/hub/stats` meldet 0 Peers, obwohl gekoppelte Geräte existieren
+  (Mail an MSP-Admins, Plattform-Webhook); behoben, sobald wieder Peers gemeldet werden.
+* `deploy/update.sh`: wurde der Hub neu erstellt, werden `syslog` und `flows` (Netz-Namespace des Hubs) neu
+  gestartet; danach wartet das Script auf „healthy“ und gibt die Peer-Anzahl aus.
 * API/Worker bekommen per Entrypoint die Route `10.100.0.0/16 via <hub>` (daher `NET_ADMIN`).
   Der Hub maskiert Docker-Traffic auf seine Tunnel-IP, sodass Router nur `10.100.0.1` kennen müssen.
 * Hub-Firewall: kein Router→Router-Verkehr über den Hub, keine neuen Verbindungen vom Router

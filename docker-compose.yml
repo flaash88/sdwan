@@ -99,6 +99,15 @@ services:
       DOCKER_NETWORK: "${SDWAN_NET:-172.30.0}.0/24"
     volumes: ["hub-data:/data"]
     ports: ["${WG_HUB_PORT:-51820}:${WG_HUB_PORT:-51820}/udp"]
+    depends_on:
+      api: { condition: service_healthy }
+    # unhealthy: letzter erfolgreicher Peer-Sync > 3 min oder Peers im Interface ≠ API-Liste
+    healthcheck:
+      test: ["CMD", "python", "/app/agent.py", "--health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
     networks: { sdwan: { ipv4_address: "${SDWAN_NET:-172.30.0}.10" } }
 
   frontend:

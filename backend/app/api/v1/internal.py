@@ -61,5 +61,22 @@ async def hub_stats(stats: list[HubPeerStatIn], db: AsyncSession = Depends(get_d
         dev = by_key.get(st.public_key)
         if dev is not None and hs is not None:
             dev.last_handshake_at = hs
+    await _check_no_peers(db, len(stats))
     await db.commit()
     return {"ok": True, "count": len(stats)}
+
+
+async def _check_no_peers(db: AsyncSession, count: int) -> None:
+    """Plattform-Alarm ``hub_no_peers``: Der Hub meldet 0 Peers, obwohl gekoppelte Geräte existieren (z. B. Interface
+    nach einem Hub-Neustart ohne Peers). Behoben, sobald der Hub wieder Peers meldet."""
+    from sqlalchemy import func
+
+    from app.services import platform_events
+
+    paired = (await db.execute(select(func.count(Device.id)).where(Device.pairing_status == PairingStatus.paired,
+                                                                  Device.wg_public_key.is_not(None)))).scalar() or 0
+    if count == 0 and paired > 0:
+        await platform_events.fire(db, "hub_no_peers", f"Der WireGuard-Hub meldet 0 Peers, obwohl {paired} Geräte gekoppelt sind. "
+                                   "Hub-Container prüfen (docker compose logs wireguard-hub, wg show).")
+    else:
+        await platform_events.resolve(db, "hub_no_peers")

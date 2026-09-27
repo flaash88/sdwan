@@ -19,7 +19,8 @@ from app.models import PlatformAlert, User
 
 log = logging.getLogger(__name__)
 
-TYPES = {"platform_backup_failed": "Plattform-Sicherung fehlgeschlagen"}
+TYPES = {"platform_backup_failed": "Plattform-Sicherung fehlgeschlagen",
+         "hub_no_peers": "WireGuard-Hub ohne Peers – alle Router offline"}
 
 
 async def _superuser_mails(db: AsyncSession) -> list[str]:

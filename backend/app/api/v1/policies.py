@@ -46,6 +46,8 @@ class DeployIn(BaseModel):
     # Phase 14 (nur einfache Policies): Geräte mit manuellen Regeln hinter dem Default-Drop ausdrücklich bestätigen
     confirm_devices: list[uuid.UUID] = []
     confirm_lint: bool = False  # Lint-Fehler (z. B. Management-Zone fehlt) bestätigt
+    # Werks-Firewall (defconf) deaktivieren statt als Hinderungsgrund zu werten; None = Standard (an bei Default-Drop)
+    disable_defconf: bool | None = None
 
 
 class RollbackIn(BaseModel):
@@ -54,6 +56,7 @@ class RollbackIn(BaseModel):
     atomic: bool = False
     confirm_devices: list[uuid.UUID] = []
     confirm_lint: bool = False
+    disable_defconf: bool | None = None
 
 
 def _policy_out(p: FirewallPolicy, assigned: int | None = None, undeployed: list[dict] | None = None) -> dict:
@@ -237,24 +240,27 @@ async def unassign(policy_id: uuid.UUID, device_id: uuid.UUID, bg: BackgroundTas
 
 
 async def _start(ctx: Ctx, bg: BackgroundTasks, p: FirewallPolicy, device_ids: list[uuid.UUID] | None, atomic: bool,
-                 confirm_devices: list[uuid.UUID] | None = None, confirm_lint: bool = False) -> PolicyDeployment:
+                 confirm_devices: list[uuid.UUID] | None = None, confirm_lint: bool = False,
+                 disable_defconf: bool | None = None) -> PolicyDeployment:
     assigns = (await ctx.db.execute(select(PolicyAssignment).where(PolicyAssignment.policy_id == p.id))).scalars().all()
     targets = [a.device_id for a in assigns if device_ids is None or a.device_id in device_ids]
     if not targets:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Keine zugewiesenen Geräte im Ziel")
     skipped: list[dict] = []
+    defconf_devices: list[str] = []
     if p.mode == "simple":
-        targets, skipped = await _simple_precheck(ctx, p, targets, set(confirm_devices or []), confirm_lint)
+        targets, skipped, defconf_devices = await _simple_precheck(ctx, p, targets, set(confirm_devices or []), confirm_lint, disable_defconf)
     tenants = {a.tenant_id for a in assigns if a.device_id in targets}
     dep = PolicyDeployment(tenant_id=tenants.pop() if len(tenants) == 1 else None, policy_id=p.id, policy_version=p.version,
-                           atomic=atomic, started_by=ctx.user.email)
+                           atomic=atomic, started_by=ctx.user.email, options={"disable_defconf": defconf_devices} if defconf_devices else None)
     ctx.db.add(dep)
     await ctx.db.flush()
     if skipped:
         dep.results = {s["device_id"]: {"name": s["name"], "ok": False, "skipped": True, "error": s["reason"]} for s in skipped}
     await ctx.audit("policy.deploy", target_type="policy", target_id=p.id,
                     details={"deployment": str(dep.id), "version": p.version, "devices": [str(t) for t in targets], "atomic": atomic,
-                             "skipped": skipped, "confirmed_devices": [str(d) for d in confirm_devices or []], "confirm_lint": confirm_lint})
+                             "skipped": skipped, "confirmed_devices": [str(d) for d in confirm_devices or []], "confirm_lint": confirm_lint,
+                             "disable_defconf_devices": defconf_devices})
     await ctx.db.commit()
     dep.skipped = skipped  # type: ignore[attr-defined]
     bg.add_task(run_deployment, dep.id, targets)
@@ -262,11 +268,13 @@ async def _start(ctx: Ctx, bg: BackgroundTasks, p: FirewallPolicy, device_ids: l
 
 
 async def _simple_precheck(ctx: Ctx, p: FirewallPolicy, targets: list[uuid.UUID], confirmed: set[uuid.UUID],
-                           confirm_lint: bool) -> tuple[list[uuid.UUID], list[dict]]:
+                           confirm_lint: bool, disable_defconf: bool | None = None) -> tuple[list[uuid.UUID], list[dict], list[str]]:
     """Einfache Policies: Lint-Fehler nur mit Bestätigung; Geräte mit manuellen Regeln hinter dem Default-Drop
-    werden ohne ausdrückliche Bestätigung übersprungen (Entscheidung 17)."""
+    werden ohne ausdrückliche Bestätigung übersprungen (Entscheidung 17). defconf-Regeln werden – Standard bei
+    Default-Drop – deaktiviert und zählen dann nicht als Hinderungsgrund. Liefert (Geräte, übersprungen, Geräte mit
+    zu deaktivierenden defconf-Regeln)."""
     from app.api.v1.firewall import catalog
-    from app.services.fw_deploy_check import check_devices, device_contexts
+    from app.services.fw_deploy_check import check_devices, device_contexts, has_default_drop
     from app.services.fw_lint import lint_spec
 
     devices = list((await ctx.db.execute(select(Device).where(Device.id.in_(targets)))).scalars())
@@ -274,24 +282,28 @@ async def _simple_precheck(ctx: Ctx, p: FirewallPolicy, targets: list[uuid.UUID]
     errors = [i for i in issues if i["level"] == "error"]
     if errors and not confirm_lint:
         raise HTTPException(status.HTTP_409_CONFLICT, {"message": "Prüfung mit Fehlern – Deploy nur nach Bestätigung", "lint": errors})
+    use_defconf = has_default_drop(p) if disable_defconf is None else (disable_defconf and has_default_drop(p))
     checks = await check_devices(p, devices)
-    keep, skipped = [], []
+    keep, skipped, defconf_devs = [], [], []
     for d in devices:
         c = checks.get(str(d.id), {})
-        if c.get("unmanaged") and d.id not in confirmed:
-            skipped.append({"device_id": str(d.id), "name": d.name, "unmanaged": c["unmanaged"],
-                            "reason": f"{len(c['unmanaged'])} manuelle Regeln würden hinter dem Default-Drop nie mehr greifen – nicht bestätigt"})
-        else:
-            keep.append(d.id)
+        blocking = list(c.get("unmanaged") or []) + ([] if use_defconf else list(c.get("defconf") or []))
+        if blocking and d.id not in confirmed:
+            skipped.append({"device_id": str(d.id), "name": d.name, "unmanaged": blocking,
+                            "reason": f"{len(blocking)} manuelle Regeln würden hinter dem Default-Drop nie mehr greifen – nicht bestätigt"})
+            continue
+        keep.append(d.id)
+        if use_defconf and c.get("defconf"):
+            defconf_devs.append(str(d.id))
     if not keep:
         raise HTTPException(status.HTTP_409_CONFLICT, {"message": "Alle Geräte übersprungen (manuelle Regeln hinter dem Default-Drop)", "skipped": skipped})
-    return keep, skipped
+    return keep, skipped, defconf_devs
 
 
 @router.post("/policies/{policy_id}/deploy", status_code=202)
 async def deploy(policy_id: uuid.UUID, data: DeployIn, bg: BackgroundTasks, ctx: Ctx = TechCtx) -> dict:
     p = await get_or_404(ctx.db, FirewallPolicy, policy_id, "Policy")
-    dep = await _start(ctx, bg, p, data.device_ids, data.atomic, data.confirm_devices, data.confirm_lint)
+    dep = await _start(ctx, bg, p, data.device_ids, data.atomic, data.confirm_devices, data.confirm_lint, data.disable_defconf)
     return {"deployment_id": str(dep.id), "status": dep.status, "skipped": getattr(dep, "skipped", [])}
 
 
@@ -312,7 +324,7 @@ async def rollback(policy_id: uuid.UUID, data: RollbackIn, bg: BackgroundTasks, 
     await ctx.audit("policy.rollback", target_type="policy", target_id=p.id, details={"to_version": data.version, "new_version": p.version})
     await ctx.db.flush()
     if data.deploy:
-        dep = await _start(ctx, bg, p, None, data.atomic, data.confirm_devices, data.confirm_lint)
+        dep = await _start(ctx, bg, p, None, data.atomic, data.confirm_devices, data.confirm_lint, data.disable_defconf)
         return {"version": p.version, "deployment_id": str(dep.id), "skipped": getattr(dep, "skipped", [])}
     await ctx.db.commit()
     return {"version": p.version, "deployment_id": None}

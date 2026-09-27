@@ -91,3 +91,21 @@ class FwRuleHit(IdMixin, TenantScoped, Base):
     bytes: Mapped[int] = mapped_column(BigInteger().with_variant(Integer(), "sqlite"), default=0)
     last_hit_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
     updated_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
+
+
+class FwDefconfDisabled(IdMixin, TenantScoped, Base):
+    """Werks-Firewallregel (Kommentar ``defconf…``), die die Plattform beim Deploy deaktiviert hat.
+
+    Nur diese Regeln werden beim Entfernen der Policy bzw. per Button wieder aktiviert. Erkennung auf dem Router über
+    ``.id`` plus Kommentar (beides muss passen).
+    """
+
+    __tablename__ = "fw_defconf_disabled"
+    __table_args__ = (UniqueConstraint("device_id", "rule_id", name="uq_fw_defconf_disabled_device_rule"),)
+
+    device_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), index=True)
+    rule_id: Mapped[str] = mapped_column(String(20))
+    chain: Mapped[str | None] = mapped_column(String(40))
+    action: Mapped[str | None] = mapped_column(String(40))
+    comment: Mapped[str] = mapped_column(String(255))
+    deployment_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("policy_deployments.id", ondelete="SET NULL"))

@@ -176,6 +176,16 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
         from app.services.zones import device_zone_config, push_zones
 
         zone_cfg = {d.id: await device_zone_config(db, d) for d in devices if any(p.mode == "simple" for _a, p in assigned[d.id])}
+        # Nachtrag Phase 14: defconf-Regeln deaktivieren (nur bestätigte Geräte) bzw. wieder aktivieren, wenn keine
+        # Policy mit Default-Drop mehr zugewiesen ist (nur die von der Plattform deaktivierten)
+        from app.models import FwDefconfDisabled
+        from app.services import fw_defconf
+        from app.services.fw_deploy_check import has_default_drop
+
+        disable_defconf = set((dep.options or {}).get("disable_defconf") or [])
+        drop_active = {d.id: any(has_default_drop(p) for _a, p in assigned[d.id]) for d in devices}
+        remembered = {d.id: [{"rule_id": x.rule_id, "comment": x.comment} for x in (await db.execute(
+            select(FwDefconfDisabled).where(FwDefconfDisabled.device_id == d.id))).scalars()] for d in devices}
 
         async def one(dev: Device) -> None:
             res: dict[str, Any] = {"name": dev.name, "ok": False}
@@ -194,6 +204,10 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
                                 res["zones"] = await push_zones(api, zone_cfg[dev.id])
                             res["stats"] = await push(api, cfg)
                             res["ok"] = True
+                            if drop_active[dev.id] and str(dev.id) in disable_defconf:
+                                res["defconf_disabled"] = await fw_defconf.disable(api)
+                            elif not drop_active[dev.id] and remembered[dev.id]:
+                                res["defconf_restored"] = await fw_defconf.enable(api, remembered[dev.id])
                         except RouterOSError as exc:
                             res["error"] = str(exc)
                             try:
@@ -219,6 +233,9 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
                 try:
                     async with connect_device(dev) as api:
                         await restore(api, snaps[dev.id])
+                        done = results[str(dev.id)].pop("defconf_disabled", None)
+                        if done:  # atomarer Rollback: soeben deaktivierte defconf-Regeln wieder aktivieren
+                            await fw_defconf.enable(api, [{"rule_id": r["id"], "comment": r["comment"]} for r in done])
                     results[str(dev.id)].update({"ok": False, "rolled_back": True, "error": "atomarer Rollback"})
                 except RouterOSError as exc:
                     results[str(dev.id)]["rollback_error"] = str(exc)
@@ -232,6 +249,20 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
             dep.status = "partial"
         else:
             dep.status = "rolled_back" if all(results[str(d.id)].get("rolled_back") for d in failed) else "failed"
+        for dev in devices:  # gemerkte defconf-Regeln fortschreiben
+            r = results.get(str(dev.id)) or {}
+            known = {x["rule_id"] for x in remembered.get(dev.id, [])}
+            for rule in r.get("defconf_disabled") or []:
+                if rule["id"] in known:
+                    continue
+                db.add(FwDefconfDisabled(tenant_id=dev.tenant_id, device_id=dev.id, rule_id=rule["id"], chain=rule.get("chain"),
+                                         action=rule.get("action"), comment=rule["comment"], deployment_id=dep.id))
+            restored = r.get("defconf_restored")
+            if restored:
+                drop = set(restored["enabled"]) | set(restored["missing"]) | set(restored["already_active"])
+                for x in (await db.execute(select(FwDefconfDisabled).where(FwDefconfDisabled.device_id == dev.id))).scalars():
+                    if x.rule_id in drop:
+                        await db.delete(x)
         await _post_policy_backups(db, [d for d in devices if results[str(d.id)]["ok"]], dep)
         dep.results = results
         dep.finished_at = utcnow()

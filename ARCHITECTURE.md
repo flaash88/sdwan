@@ -637,6 +637,29 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   Interface-Listen-Felder. Siehe LABORTEST und Selbsttest (`interface_list`, `interface_list_member`,
   `packets` in `fw_filter`).
 
+### Werks-Firewall (defconf) – Nachtrag Phase 14
+
+* Filterregeln mit Kommentar `defconf…` (MikroTik-Werkskonfiguration) meldet die Vorprüfung **gesondert**
+  (`deploy-check` → `defconf` je Gerät). Der Deploy-Dialog zeigt sie als eigene Gruppe „Werks-Firewall (defconf) –
+  wird durch die Grundregeln der Plattform abgedeckt“.
+* Option je Deploy `disable_defconf` (Standard **an** bei einfachen Policies mit Default-Drop):
+  - Nach dem erfolgreichen Push setzt die Plattform die aktiven defconf-Regeln der Chains input/forward auf
+    `disabled=yes`. Sie werden nie gelöscht und gelten nicht als Hinderungsgrund.
+  - Ist die Option aus, zählen sie wie manuelle Regeln (Gerät wird ohne Bestätigung übersprungen).
+  - Andere nicht verwaltete Regeln verhalten sich unverändert: Standard ist Überspringen.
+  - ZTP deaktiviert defconf-Regeln standardmäßig, wenn eine zugewiesene Policy Default-Drop hat.
+* **Merken und Rückgängig:** `fw_defconf_disabled` speichert je Gerät die von der Plattform deaktivierten Regeln
+  (`.id` + Kommentar).
+  - Wird dem Gerät keine Policy mit Default-Drop mehr zugewiesen, aktiviert der nächste Push genau diese Regeln
+    wieder. Das passiert beim Entfernen der Zuweisung, das ohnehin neu pusht.
+  - Alternativ per Button im Firewall-Tab (`POST /devices/{id}/firewall/defconf/restore`, Audit).
+  - Regeln, die inzwischen gelöscht oder im Kommentar verändert wurden, und Regeln, die der Kunde selbst
+    deaktiviert hatte, bleiben unberührt.
+  - Bei einem atomaren Rollback werden soeben deaktivierte Regeln sofort wieder aktiviert.
+* **Zonen-Vorschlag:** Die defconf-Interface-Lists `WAN`/`LAN` mit ihren Mitgliedern werden als Vorschlag für die
+  Zonen WAN/LAN angeboten (`GET /devices/{id}/zones/suggestions`, Button „Vorschlag übernehmen“ im Firewall-Tab).
+  Die Zone WAN folgt weiter der WAN-Konfiguration der Plattform; ihr Vorschlag dient nur zur Kontrolle.
+
 ## Phase 15 – Threat-Feeds
 
 * `threat_feeds` (global oder mandantenweit, Seeds in `app/seeds/feeds.json`: Spamhaus DROP IPv4/IPv6 im

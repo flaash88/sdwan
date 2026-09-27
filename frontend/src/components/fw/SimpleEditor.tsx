@@ -411,13 +411,15 @@ function PreviewDialog({ policyId, spec, onClose }: { policyId: string; spec: Sp
   );
 }
 
-interface CheckDevice { device_id: string; name: string; reachable: boolean | null; error?: string; unmanaged: { chain: string; action: string; comment: string; summary: string }[] }
+interface FwRule { chain: string; action: string; comment: string; summary: string }
+interface CheckDevice { device_id: string; name: string; reachable: boolean | null; error?: string; unmanaged: FwRule[]; defconf?: FwRule[] }
 
 /** Ausrollen: manuelle Regeln hinter dem Default-Drop je Gerät bestätigen, Lint-Fehler bestätigen. */
 function DeployDialog({ policyId, onClose, onDone }: { policyId: string; onClose: () => void; onDone: () => Promise<void> | void }) {
   const [chk, setChk] = useState<{ default_drop: boolean; lint: LintIssue[]; devices: CheckDevice[] } | null>(null);
   const [confirmed, setConfirmed] = useState<string[]>([]);
   const [lintOk, setLintOk] = useState(false);
+  const [defconfOff, setDefconfOff] = useState(true);
   const [result, setResult] = useState<{ skipped: { name: string; reason: string }[] } | null>(null);
   const { busy, error, run } = useAction();
   useEffect(() => { void run(async () => setChk(await api.post(`/policies/${policyId}/deploy-check`, {}))); }, [policyId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -427,7 +429,7 @@ function DeployDialog({ policyId, onClose, onDone }: { policyId: string; onClose
       footer={result ? <Button onClick={onClose}>Schließen</Button> : <>
         <Button variant="secondary" onClick={onClose}>Abbrechen</Button>
         <Button icon="upload" disabled={!chk || busy || (errors.length > 0 && !lintOk)} onClick={() => void run(async () => {
-          setResult(await api.post(`/policies/${policyId}/deploy`, { confirm_devices: confirmed, confirm_lint: lintOk }));
+          setResult(await api.post(`/policies/${policyId}/deploy`, { confirm_devices: confirmed, confirm_lint: lintOk, disable_defconf: chk?.default_drop ? defconfOff : false }));
           await onDone();
         })}>{busy ? "Starte …" : "Ausrollen"}</Button>
       </>}>
@@ -445,19 +447,28 @@ function DeployDialog({ policyId, onClose, onDone }: { policyId: string; onClose
               <div className="mt-2"><Checkbox label="Trotzdem ausrollen – Auswirkungen verstanden" checked={lintOk} onChange={setLintOk} /></div>
             </Notice>
           )}
-          {chk.devices.map((d) => (
+          {chk.default_drop && chk.devices.some((d) => d.defconf?.length) && (
+            <div className="rounded-md border border-line bg-panel2 px-3 py-2">
+              <Checkbox label="defconf-Regeln deaktivieren (disabled=yes, nicht löschen – rückgängig beim Entfernen der Policy oder per Button im Firewall-Tab)" checked={defconfOff} onChange={setDefconfOff} />
+            </div>
+          )}
+          {chk.devices.map((d) => { const blocking = [...d.unmanaged, ...(defconfOff ? [] : d.defconf ?? [])]; return (
             <div key={d.device_id} className="rounded-md border border-line px-3 py-2">
               <div className="flex items-center gap-2"><Link to={`/devices/${d.device_id}`} className="font-medium hover:underline">{d.name}</Link>
                 {d.reachable === false && <Pill tone="red">nicht erreichbar</Pill>}
-                {d.unmanaged.length === 0 ? <Pill tone="green" icon="checkCircle">bereit</Pill> : <Pill tone="orange" icon="alert">{d.unmanaged.length} manuelle Regeln</Pill>}</div>
-              {d.unmanaged.length > 0 && <>
-                <p className="mt-1 text-xs text-orange-text">Diese {d.unmanaged.length} Regeln würden hinter dem Default-Drop nie mehr greifen:</p>
-                <ul className="mt-1 max-h-32 overflow-y-auto font-mono text-[11.5px] text-fg2">{d.unmanaged.map((u, i) => <li key={i}>{u.chain} {u.action} {u.summary} {u.comment && `# ${u.comment}`}</li>)}</ul>
+                {blocking.length === 0 ? <Pill tone="green" icon="checkCircle">bereit</Pill> : <Pill tone="orange" icon="alert">{blocking.length} manuelle Regeln</Pill>}</div>
+              {(d.defconf?.length ?? 0) > 0 && <>
+                <p className="mt-1 text-xs text-fg2"><b>Werks-Firewall (defconf)</b> – wird durch die Grundregeln der Plattform abgedeckt{defconfOff ? "; wird deaktiviert" : "; bleibt aktiv, liegt aber hinter dem Default-Drop"}:</p>
+                <ul className="mt-1 max-h-24 overflow-y-auto font-mono text-[11.5px] text-fg3">{d.defconf!.map((u, i) => <li key={i}>{u.chain} {u.action} {u.summary} # {u.comment}</li>)}</ul>
+              </>}
+              {blocking.length > 0 && <>
+                <p className="mt-1 text-xs text-orange-text">Diese {blocking.length} Regeln würden hinter dem Default-Drop nie mehr greifen:</p>
+                <ul className="mt-1 max-h-32 overflow-y-auto font-mono text-[11.5px] text-fg2">{blocking.map((u, i) => <li key={i}>{u.chain} {u.action} {u.summary} {u.comment && `# ${u.comment}`}</li>)}</ul>
                 <div className="mt-2"><Checkbox label="Für dieses Gerät trotzdem ausrollen (sonst wird es übersprungen)" checked={confirmed.includes(d.device_id)}
                   onChange={(c) => setConfirmed(c ? [...confirmed, d.device_id] : confirmed.filter((x) => x !== d.device_id))} /></div>
               </>}
             </div>
-          ))}
+          ); })}
         </div>
       )}
     </Modal>

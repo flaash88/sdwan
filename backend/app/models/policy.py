@@ -67,4 +67,6 @@ class PolicyDeployment(IdMixin, Base):
     status: Mapped[str] = mapped_column(String(20), default="queued")
     started_by: Mapped[str | None] = mapped_column(String(255))
     results: Mapped[dict] = mapped_column(JSONType, default=dict)
+    # Phase 14 (Nachtrag): {"disable_defconf": [device_id, …]} – Geräte, auf denen defconf-Regeln deaktiviert werden
+    options: Mapped[dict | None] = mapped_column(JSONType, nullable=True)
     finished_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())

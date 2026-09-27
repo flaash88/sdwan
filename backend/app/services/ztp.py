@@ -302,9 +302,11 @@ async def provision_device(db: AsyncSession, device: Device) -> list[str]:
         from app.services.fw_deploy_check import check_devices, has_default_drop
 
         kept = []
+        defconf_found = False
         for p in pols:
             if has_default_drop(p):
                 chk = (await check_devices(p, [device])).get(str(device.id), {})
+                defconf_found = defconf_found or bool(chk.get("defconf"))  # Werks-Firewall: wird deaktiviert (Standard)
                 if chk.get("unmanaged") or chk.get("reachable") is False:
                     errors.append(f"Policy {p.name}: nicht zugewiesen – {len(chk.get('unmanaged') or [])} manuelle Filterregeln würden hinter "
                                   "dem Default-Drop nie mehr greifen (manuell prüfen und im Policy-Editor bestätigen)")
@@ -317,11 +319,14 @@ async def provision_device(db: AsyncSession, device: Device) -> list[str]:
                 continue
             if p.id not in existing:
                 db.add(PolicyAssignment(tenant_id=device.tenant_id, policy_id=p.id, device_id=device.id, position=100 + pos))
-        dep = PolicyDeployment(tenant_id=device.tenant_id, policy_id=None, started_by="zero-touch")
+        disable_defconf = defconf_found and any(has_default_drop(p) for p in pols)
+        dep = PolicyDeployment(tenant_id=device.tenant_id, policy_id=None, started_by="zero-touch",
+                               options={"disable_defconf": [str(device.id)]} if disable_defconf else None)
         db.add(dep)
         await db.flush()
         deployments.append(str(dep.id))
-        _log(device, "provisioning", f"{len(pols)} Policies zugewiesen, Push gestartet")
+        _log(device, "provisioning", f"{len(pols)} Policies zugewiesen, Push gestartet"
+             + (" – Werks-Firewall (defconf) wird deaktiviert, durch die Grundregeln abgedeckt" if disable_defconf else ""))
     if errors:
         device.ztp_state = "failed"
         _log(device, "failed", "; ".join(errors))

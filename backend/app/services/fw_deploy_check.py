@@ -4,6 +4,9 @@ Verwaltete Regeln werden per ``place_first`` VOR der ersten nicht verwalteten Re
 oben im Regelwerk. Enthält eine einfache Policy den Default-Drop, würden alle nicht verwalteten Regeln der
 Chains input/forward dahinter liegen und nie mehr greifen. Solche Geräte werden standardmäßig übersprungen;
 nur mit ausdrücklicher Bestätigung je Gerät wird ausgerollt.
+
+Werks-Firewallregeln (Kommentar ``defconf…``) werden gesondert gemeldet (``defconf``): Sie sind durch die Grundregeln
+abgedeckt und können beim Deploy deaktiviert werden (siehe ``services/fw_defconf.py``).
 """
 
 from __future__ import annotations
@@ -23,10 +26,12 @@ DROP_CHAINS = ("input", "forward")
 
 
 async def unmanaged_rules(api: DeviceAPI) -> list[dict[str, Any]]:
-    """Nicht verwaltete, aktive, statische Filterregeln der Chains input/forward."""
+    """Nicht verwaltete, aktive, statische Filterregeln der Chains input/forward – ohne defconf-Regeln."""
+    from app.services.fw_defconf import is_defconf
+
     out = []
     for r in await api.print("/ip/firewall/filter"):
-        if str(r.get("comment", "")).startswith("sdwan:"):
+        if str(r.get("comment", "")).startswith("sdwan:") or is_defconf(r):
             continue
         if str(r.get("dynamic", "false")).lower() in ("true", "yes") or str(r.get("disabled", "false")).lower() in ("true", "yes"):
             continue
@@ -57,17 +62,20 @@ async def device_contexts(db: AsyncSession, policy: FirewallPolicy, devices: lis
 
 
 async def check_devices(policy: FirewallPolicy, devices: list[Device]) -> dict[str, dict[str, Any]]:
-    """Je Gerät: erreichbar?, nicht verwaltete Regeln hinter dem Default-Drop."""
+    """Je Gerät: erreichbar?, nicht verwaltete Regeln und defconf-Regeln hinter dem Default-Drop."""
+    from app.services.fw_defconf import active_defconf
+
     result: dict[str, dict[str, Any]] = {}
     if not has_default_drop(policy):
-        return {str(d.id): {"name": d.name, "reachable": None, "unmanaged": []} for d in devices}
+        return {str(d.id): {"name": d.name, "reachable": None, "unmanaged": [], "defconf": []} for d in devices}
 
     async def one(d: Device) -> None:
         try:
             async with connect_device(d) as api:
-                result[str(d.id)] = {"name": d.name, "reachable": True, "unmanaged": await unmanaged_rules(api)}
+                result[str(d.id)] = {"name": d.name, "reachable": True, "unmanaged": await unmanaged_rules(api),
+                                     "defconf": await active_defconf(api)}
         except RouterOSError as exc:
-            result[str(d.id)] = {"name": d.name, "reachable": False, "error": str(exc), "unmanaged": []}
+            result[str(d.id)] = {"name": d.name, "reachable": False, "error": str(exc), "unmanaged": [], "defconf": []}
 
     await asyncio.gather(*(one(d) for d in devices))
     return result

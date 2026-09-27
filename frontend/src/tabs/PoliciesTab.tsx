@@ -76,7 +76,7 @@ export default function PoliciesTab({ device }: { device: Device }) {
                 <td className="px-3 py-1.5 font-mono text-xs">{String(r.action ?? "")}</td>
                 <td className="px-3 py-1.5 font-mono text-xs">{matchText(r) || "–"}</td>
                 <td className="max-w-xs truncate px-3 py-1.5 text-xs text-slate-600" title={String(r.comment ?? "")}>{String(r.comment ?? "")}</td>
-                <td className="px-3 py-1.5">{r.managed ? <Badge color="blue">Plattform ({String(r.managed_by)})</Badge> : <Badge>manuell</Badge>}</td>
+                <td className="px-3 py-1.5">{r.managed ? <Badge color="blue">Plattform ({String(r.managed_by)})</Badge> : String(r.comment ?? "").toLowerCase().startsWith("defconf") ? <Badge>Werk (defconf){isOff(r.disabled) ? " · aus" : ""}</Badge> : <Badge>manuell</Badge>}</td>
               </tr>
             ))}
           </Table>

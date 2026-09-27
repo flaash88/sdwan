@@ -340,6 +340,10 @@ Parameter wie Zone oder Objekt werden beim Einfügen per Auswahl gesetzt.
     auslösen können. Sprachumschaltung per `<html lang>` + CSS (ohne Inline-Styles je Element).
 26. **Live-Gäste werden nicht gespeichert** (MAC/IP nur in der Live-Ansicht); gespeichert werden nur die
     Formularfelder mit Aufbewahrungsfrist je Mandant.
+27. **Werks-Firewall (defconf)** (Nachtrag Phase 14): Regeln mit Kommentar `defconf…` sind durch die Grundregeln
+    abgedeckt. Bei Default-Drop werden sie standardmäßig deaktiviert (nie gelöscht) statt das Gerät zu überspringen;
+    die Plattform merkt sich je Gerät, was sie deaktiviert hat, und aktiviert nur das wieder. Andere manuelle Regeln
+    bleiben ein Hinderungsgrund (Entscheidung 17).
 
 ## Wiederverwendung
 - `DeviceAPI.sync_managed`, `connect_device`: `routeros/client.py`
@@ -592,3 +596,18 @@ Die Prüfschritte stehen in `docs/LABORTEST.md`, Abschnitte 10–16.
    - `walled-garden/ip dst-host` für die Plattform über HTTPS inkl. CORS
    - Voucher-Felder (`limit-uptime`, `limit-bytes-total`, `uptime`, `bytes-in/out`)
    - `ip-binding type=blocked`
+
+### Nachtrag Phase 14 – Werks-Firewall (defconf)
+- **Erledigt:**
+  - defconf-Regeln gesondert in Vorprüfung und Deploy-Dialog.
+  - Option „defconf-Regeln deaktivieren“ je Deploy (Standard an bei Default-Drop, auch bei ZTP).
+  - Merken je Gerät, automatisches Wiederaktivieren beim Entfernen der letzten Default-Drop-Policy, Button
+    „wieder aktivieren“, Schutz vor gelöschten/veränderten oder vom Kunden deaktivierten Regeln.
+  - Zonen-Vorschlag aus den defconf-Interface-Lists WAN/LAN; Kennzeichnung „Werk (defconf)“ in der Router-Ansicht.
+  - Migration 0027 (neue Tabelle `fw_defconf_disabled`, Spalte `policy_deployments.options`).
+- **Weggelassen:** Löschen von defconf-Regeln (bewusst nur deaktivieren); defconf-Regeln anderer Chains als
+  input/forward werden nicht angefasst.
+- **Im Labor zu verifizieren:**
+  - Router im Werkszustand (LABORTEST Abschnitt 10).
+  - Stabilität der `.id` von defconf-Regeln über einen Neustart.
+

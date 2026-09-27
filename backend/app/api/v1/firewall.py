@@ -14,7 +14,7 @@ from sqlalchemy import select
 from app.api.v1.common import get_or_404
 from app.db import utcnow
 from app.deps import Ctx, ReadCtx, TechCtx
-from app.models import Device, DeviceZoneMember, FirewallPolicy, FwBlock, FwObject, FwRuleHit, FwService, FwZone, PolicyVersion
+from app.models import Device, DeviceZoneMember, FirewallPolicy, FwBlock, FwDefconfDisabled, FwObject, FwRuleHit, FwService, FwZone, PolicyVersion
 from app.routeros import RouterOSError, connect_device
 from app.services.fw_compile import (
     Catalog,
@@ -388,6 +388,68 @@ async def put_device_zones(device_id: uuid.UUID, data: DeviceZonesIn, ctx: Ctx =
                     details={"members": [{"interface": i, "zone_id": str(z)} for i, z in pairs], "applied": bool(result and result["ok"])})
     await ctx.db.commit()
     return {"members": [{"interface": i, "zone_id": str(z)} for i, z in pairs], "apply": result}
+
+
+@router.get("/devices/{device_id}/zones/suggestions")
+async def zone_suggestions(device_id: uuid.UUID, ctx: Ctx = ReadCtx) -> dict[str, Any]:
+    """Vorschlag aus der Werkskonfiguration: Mitglieder der defconf-Interface-Lists WAN/LAN → Zonen WAN/LAN."""
+    from app.services.fw_defconf import zone_suggestions as read_suggestions
+
+    dev = await get_or_404(ctx.db, Device, device_id, "Device")
+    try:
+        async with connect_device(dev) as api:
+            found = await read_suggestions(api)
+    except RouterOSError as exc:
+        return {"suggestions": [], "error": str(exc)}
+    zones = [z for z in (await ctx.db.execute(select(FwZone))).scalars() if z.tenant_id in (None, dev.tenant_id)]
+    out = []
+    for f in found:
+        # eigene Zone des Mandanten vor globaler gleichen Kürzels
+        z = next((z for z in sorted(zones, key=lambda z: z.tenant_id is None) if z.slug == f["zone_slug"]), None)
+        if z is None or not f["interfaces"]:
+            continue
+        out.append({**f, "zone_id": str(z.id), "zone_name": z.name, "applicable": z.source != "wan",
+                    "note": "Zone folgt der WAN-Konfiguration der Plattform – nur zur Kontrolle" if z.source == "wan" else None})
+    return {"suggestions": out, "error": None}
+
+
+# ----------------------------------------------------------------------------- Werks-Firewall (defconf)
+@router.get("/devices/{device_id}/firewall/defconf")
+async def defconf_state(device_id: uuid.UUID, ctx: Ctx = ReadCtx) -> dict[str, Any]:
+    """Von der Plattform deaktivierte defconf-Regeln (gemerkt) und aktuell aktive defconf-Regeln (live)."""
+    from app.services.fw_defconf import active_defconf
+
+    dev = await get_or_404(ctx.db, Device, device_id, "Device")
+    rows = (await ctx.db.execute(select(FwDefconfDisabled).where(FwDefconfDisabled.device_id == dev.id))).scalars().all()
+    active, error = None, None
+    try:
+        async with connect_device(dev) as api:
+            active = await active_defconf(api)
+    except RouterOSError as exc:
+        error = str(exc)
+    return {"disabled": [{"rule_id": r.rule_id, "chain": r.chain, "action": r.action, "comment": r.comment, "disabled_at": r.created_at}
+                         for r in rows], "active": active, "error": error}
+
+
+@router.post("/devices/{device_id}/firewall/defconf/restore")
+async def defconf_restore(device_id: uuid.UUID, ctx: Ctx = TechCtx) -> dict[str, Any]:
+    """Nur die von der Plattform deaktivierten defconf-Regeln wieder aktivieren (liegen dann hinter dem Default-Drop)."""
+    from app.services.fw_defconf import enable
+
+    dev = await get_or_404(ctx.db, Device, device_id, "Device")
+    rows = (await ctx.db.execute(select(FwDefconfDisabled).where(FwDefconfDisabled.device_id == dev.id))).scalars().all()
+    if not rows:
+        return {"enabled": [], "missing": [], "already_active": []}
+    try:
+        async with connect_device(dev) as api:
+            res = await enable(api, [{"rule_id": r.rule_id, "comment": r.comment} for r in rows])
+    except RouterOSError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+    for r in rows:
+        await ctx.db.delete(r)
+    await ctx.audit("fw.defconf.restore", target_type="device", target_id=dev.id, details=res)
+    await ctx.db.commit()
+    return res
 
 
 # ----------------------------------------------------------------------------- Trefferzähler

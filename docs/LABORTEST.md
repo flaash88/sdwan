@@ -292,6 +292,21 @@ Vorbereitung: WAN eingerichtet (Schritt 4). Auf dem L009 existieren die defconf-
 - [ ] Selbsttest: Zeilen „Interface-Listen“ und „Interface-Listen-Mitglieder“ grün; bei „Firewall-Filter“
       ist `packets` vorhanden.
 
+**Router im Werkszustand (defconf)** – Nachtrag Phase 14
+- [ ] Testgerät per `/system reset-configuration` in den Werkszustand setzen, neu onboarden. Im Firewall-Tab
+      erscheint „Vorschlag aus der Werkskonfiguration“: LAN → `bridge`, WAN → `ether1` (nur Kontrolle).
+      „Vorschlag übernehmen“ und „Speichern & anwenden“.
+- [ ] Einfache Policy mit Default-Drop zuweisen und ausrollen. **Erwartet:** Der Dialog zeigt die Gruppe
+      „Werks-Firewall (defconf)“, die Option „defconf-Regeln deaktivieren“ ist an, das Gerät ist „bereit“.
+      Danach `/ip firewall filter print where comment~"defconf"`: alle Regeln `X` (disabled), keine gelöscht.
+      Internet aus dem LAN, WinBox aus der Management-Zone und über den Tunnel funktionieren.
+- [ ] Eine eigene Regel ohne defconf-Kommentar anlegen und erneut ausrollen. **Erwartet:** Gerät wird
+      übersprungen (nur diese eine Regel wird gelistet).
+- [ ] Zuweisung der Policy entfernen. **Erwartet:** Die defconf-Regeln sind wieder aktiv; eine vorher vom
+      Kunden selbst deaktivierte defconf-Regel bleibt aus. Alternativ: Button „defconf-Regeln wieder aktivieren“.
+- [ ] **Annahme prüfen:** `.id` der defconf-Regeln bleibt nach einem Neustart gleich (Wiederherstellen nach Reboot).
+      Ergebnis: ______
+
 ## 11. Threat-Feeds (Phase 15)
 
 - [ ] Threat-Feeds → „Spamhaus DROP (IPv4)“ → „Zuweisen“ an den L009 → „Jetzt laden“.

@@ -11,3 +11,8 @@ dist/
 .coverage
 ZUGANGSDATEN.txt
 dump.rdb
+
+# Plattform-Sicherung (Phase 21)
+/backups/
+deploy/rclone/rclone.conf
+deploy/rclone/id_*

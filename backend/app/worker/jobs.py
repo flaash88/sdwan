@@ -39,6 +39,11 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
     scheduler.add_job(_safe(feeds.feeds_tick), "interval", minutes=5, id="threat_feeds", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(speedtest.speedtest_tick), "cron", hour=3, minute=30, id="speedtest_weekly", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(hotspot.hotspot_tick), "interval", minutes=5, id="hotspot_tick", max_instances=1, coalesce=True)
+    from app import platform_backup
+
+    scheduler.add_job(_safe(platform_backup.backup_job), "cron", hour=s.platform_backup_hour_utc, minute=10, id="platform_backup",
+                      max_instances=1, coalesce=True)
+    scheduler.add_job(_safe(platform_backup.queue_job), "interval", minutes=1, id="platform_backup_queue", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(offboarding.purge_archives), "cron", hour=4, minute=25, id="offboarding_archives", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(hotspot.purge_registrations), "cron", hour=4, minute=20, id="guest_retention", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(wlan.rotation_tick), "cron", hour=4, minute=45, id="wlan_psk_rotation", max_instances=1, coalesce=True)

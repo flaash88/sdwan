@@ -471,6 +471,22 @@ WAN, VRRP, Syslog, WLAN, Hotspot, offene Fernzugriffs-Sitzung).
 - [ ] Zweites Gerät „Nur aus der Plattform entfernen“. **Erwartet:** Deutliche Warnung. Der Router ist danach
       unverändert (sdwan-Objekte, API-Benutzer und Tunnel bestehen weiter).
 
+## 18. Plattform-Sicherung und Wiederherstellung (Phase 21)
+
+- [ ] `age-keygen` auf einem Admin-Rechner, Public Key in `.env` (`PLATFORM_BACKUP_AGE_RECIPIENT`),
+      `docker compose up -d`. Plattform-Sicherung → „Jetzt sichern“. **Erwartet:** Status „erfolgreich“, Datei unter
+      `./backups`, Teile `db.dump`, `env`, `hub/hub.key`, `hub/wg0.conf` ohne Warnungen.
+- [ ] **Annahme prüfen:** Das Image enthält `pg_dump` 16 (PGDG) passend zum Server. Ergebnis: ______
+- [ ] Optional rclone-Ziel (S3 oder SFTP): Datei erscheint extern; Aufbewahrung löscht alte Dateien.
+      Tatsächliches Verhalten von `rclone delete --min-age`: ______
+- [ ] Falschen Recipient setzen → Status „fehlgeschlagen“, Mail „Plattform-Sicherung fehlgeschlagen“, nach
+      erfolgreicher Sicherung „Behoben“.
+- [ ] **Wiederherstellung auf frischer VM** mit DNS-Umstellung des Hub-Namens: `deploy/restore.sh`. **Erwartet:**
+      Anmeldung mit den alten Zugangsdaten, alle Router werden ohne Eingriff online. Dauer bis alle online sind:
+      ______
+- [ ] Testwiederherstellung ohne DNS-Umstellung (Abschnitt 4 der DR-Anleitung): Daten vollständig, Router-Backups
+      lesbar.
+
 ---
 
 ## Ergebnis
@@ -494,3 +510,4 @@ WAN, VRRP, Syslog, WLAN, Hotspot, offene Fernzugriffs-Sitzung).
 | 15 WLAN | ☐ ok ☐ Abweichung | |
 | 16 Gäste-Portal | ☐ ok ☐ Abweichung | |
 | 17 Offboarding | ☐ ok ☐ Abweichung | |
+| 18 Plattform-Sicherung | ☐ ok ☐ Abweichung | |

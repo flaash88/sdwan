@@ -48,6 +48,13 @@ services:
     networks: { sdwan: { ipv4_address: "${SDWAN_NET:-172.30.0}.21" } }
     depends_on:
       api: { condition: service_healthy }
+    volumes:
+      # Plattform-Sicherung (Phase 21): nur lesend .env und Hub-Schlüssel, Ziel-Verzeichnis auf dem Host
+      - ./.env:/platform/.env:ro
+      - hub-data:/platform/hub:ro
+      - ${PLATFORM_BACKUP_HOST_DIR:-./backups}:/backups
+      # optionale rclone-Konfiguration für S3/SFTP (deploy/README bzw. DISASTER-RECOVERY.md)
+      - ${RCLONE_CONFIG_DIR:-./deploy/rclone}:/root/.config/rclone:ro
 
   remote-proxy:
     <<: *backend

@@ -13,6 +13,7 @@ import Reports from "./pages/Reports";
 import Scripts, { ScriptRunPage } from "./pages/Scripts";
 import Maintenance from "./pages/Maintenance";
 import OffboardingArchive from "./pages/OffboardingArchive";
+import PlatformBackup from "./pages/PlatformBackup";
 import Wlan from "./pages/Wlan";
 import WlanPrint from "./pages/WlanPrint";
 import Hotspot from "./pages/Hotspot";
@@ -32,6 +33,7 @@ export const extraRoutes: { path: string; element: ReactNode }[] = [
   { path: "/scripts", element: <Scripts /> },
   { path: "/maintenance", element: <Maintenance /> },
   { path: "/offboarding", element: <OffboardingArchive /> },
+  { path: "/platform/backup", element: <PlatformBackup /> },
   { path: "/wlan", element: <Wlan /> },
   { path: "/hotspot", element: <Hotspot /> },
   { path: "/scripts/runs/:id", element: <ScriptRunPage /> },

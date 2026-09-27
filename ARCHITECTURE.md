@@ -914,6 +914,38 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
 * **Annahme (Labor):** Script-Syntax `remove [find where comment~"^sdwan:"]`. Der Scheduler läuft weiter, nachdem
   API-Benutzer und Tunnel entfernt wurden.
 
+## Phase 21 – Plattform-Sicherung und Disaster Recovery
+
+* **`app/platform_backup.py`** (CLI `python -m app.platform_backup run|list|restore`) läuft im **Worker**. Nur er
+  bindet `.env` und das Hub-Volume lesend sowie das Zielverzeichnis ein.
+  - Täglicher Job `PLATFORM_BACKUP_HOUR_UTC`:10.
+  - „Jetzt sichern“ in der Oberfläche legt eine Anforderung an (`status=queued`), die der Worker binnen einer Minute
+    ausführt.
+  - `deploy/backup.sh` ruft die CLI im Worker auf.
+* **Archiv** `sdwan-platform-<ts>.tar.gz.age`: `pg_dump -Fc`, `.env`, Hub `hub.key`/`wg0.conf`, optional
+  `influx backup`, `manifest.json` (Migrationsstand, Hub-Endpoint, sha256 je Teil).
+  - Es gibt keine Datei-Uploads; Hotspot-Logos und -Seiten liegen in der DB.
+  - Verschlüsselung mit `pyrage` (age) für `PLATFORM_BACKUP_AGE_RECIPIENT`. Ohne Public Key gibt es **keine**
+    Sicherung, sondern Status „nicht konfiguriert“, weil `.env` Schlüssel enthält.
+* **Ziele:** lokal (`PLATFORM_BACKUP_DIR`, Aufbewahrung `PLATFORM_BACKUP_KEEP_DAYS`), optional per rclone auf
+  S3-kompatiblen Speicher oder SFTP (`PLATFORM_BACKUP_RCLONE_REMOTE`, Konfiguration in `deploy/rclone`).
+* **Status:** `platform_backups` (ohne Mandant), Seite „Plattform-Sicherung“ (nur MSP-Admin, `SuperCtx`).
+* **Alarm `platform_backup_failed`:** eigene Tabelle `platform_alerts` (ohne Mandant, `services/platform_events.py`).
+  - Je Typ höchstens ein aktiver Alarm; Mail an alle MSP-Admins, optional `PLATFORM_WEBHOOK_URL`.
+  - Nach der nächsten erfolgreichen Sicherung behoben.
+  - Der mandantenbezogene Alarm-Mechanismus bleibt unverändert.
+* **Wiederherstellung** `deploy/restore.sh` auf einem frischen Server:
+  1. Entschlüsseln und Prüfsummen kontrollieren.
+  2. `.env` zurück.
+  3. Hub-Schlüssel ins Volume.
+  4. `pg_restore`.
+  5. Stack starten.
+
+  Gleicher Hub-Endpoint (DNS) und Hub-Schlüssel: Die Router verbinden sich ohne Eingriff wieder.
+* **Image:** `postgresql-client-16` (PGDG) und `rclone`. Anleitung inkl. Schlüsselverwahrung und
+  Testwiederherstellung: `docs/DISASTER-RECOVERY.md`.
+* **Annahmen (Labor):** PGDG-Paket im Image, rclone-Ziele, `influx backup`/`restore` im Container.
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

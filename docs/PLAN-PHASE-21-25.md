@@ -51,8 +51,7 @@ Grundsatz Allgemeinheit gilt: keine Kundendaten, Defaults nur markiert und ände
     ins Image.
 - **Status:** Tabelle `platform_backups` (nicht mandantenbezogen) mit Zeit, Größe, Zielen, sha256, Fehler.
   Seite „Plattform-Sicherung“ nur für MSP-Admins (`SuperCtx`), mit Button „Jetzt sichern“.
-- **Alarm `platform_backup_failed`:** plattformweit. Das Alert-Modell bekommt `tenant_id` nullable (additiv).
-  Ein eigener Auswertungspfad `evaluate_platform()` schreibt Alarme ohne Gerät/Mandant. Benachrichtigt werden
+- **Alarm `platform_backup_failed`:** plattformweit in einer eigenen Tabelle `platform_alerts` (Entscheidung 3). Benachrichtigt werden
   die MSP-Admins per Mail und optional `PLATFORM_WEBHOOK_URL`.
 - **`deploy/restore.sh`** auf einem frischen Server:
   1. `install.sh`-Basis.
@@ -194,7 +193,8 @@ Grundsatz Allgemeinheit gilt: keine Kundendaten, Defaults nur markiert und ände
    Grund: `.env` enthält Schlüssel.
 2. **Ablauf und Werkzeuge:** Die Sicherung läuft im Worker-Container (Volumes read-only). `backup.sh` ist nur der
    Aufruf. rclone deckt S3 und SFTP mit einem Werkzeug ab. `pyrage` statt age-Binary.
-3. **Plattform-Alarm:** Alarm `tenant_id` nullable (additiv) statt Umbau der Mandanten-Alarmlogik.
+3. **Plattform-Alarm:** eigene Tabelle `platform_alerts` statt `Alert.tenant_id` nullable. Grund: `Alert` ist
+   `TenantScoped` mit automatischem Mandanten-Filter; eine Änderung dort würde bestehendes Verhalten berühren.
 4. **2FA für MSP-Admins** Pflicht per Setting (Default an), in den Tests aus. Bestehende Sitzungen bleiben gültig;
    die Pflicht greift bei der nächsten Anmeldung.
 5. **Eigene TOTP-Implementierung** (RFC-Testvektoren) statt zusätzlicher Abhängigkeit.
@@ -243,4 +243,21 @@ Grundsatz Allgemeinheit gilt: keine Kundendaten, Defaults nur markiert und ände
 - Abschlussbericht im Plan-Dokument: Commits, Entscheidungen, Weggelassenes, vollständige Labor-Liste.
 
 ## Stand der Phasen
+
+### Stand Phase 21 – Plattform-Sicherung und Disaster Recovery
+- **Erledigt:**
+  - Sicherungsmodul mit CLI, täglichem Worker-Job und Anforderung aus der Oberfläche.
+  - age-Verschlüsselung (pyrage), lokale Aufbewahrung, optionales rclone-Ziel (S3/SFTP).
+  - Status-Seite und Plattform-Alarm mit Mail/Webhook.
+  - `deploy/backup.sh`, `deploy/restore.sh`, `docs/DISASTER-RECOVERY.md`.
+  - Test: Dump einer echten PostgreSQL-DB, Restore in eine frische DB, Zeilen und Inhalte verglichen.
+  - Migration 0030 (neue Tabellen).
+- **Weggelassen:**
+  - Automatisches Einspielen der InfluxDB-Sicherung (manueller Schritt in der Anleitung).
+  - Sicherung ohne Verschlüsselung (bewusst nicht möglich).
+- **Im Labor zu verifizieren:**
+  - `postgresql-client-16` im Image und `pg_dump` gegen den Produktivserver.
+  - rclone-Ziele und Aufbewahrung extern.
+  - `influx backup`/`restore`.
+  - Kompletter Restore auf einer frischen VM mit DNS-Umstellung (Router verbinden sich ohne Eingriff).
 

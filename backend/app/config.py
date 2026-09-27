@@ -93,6 +93,20 @@ class Settings(BaseSettings):
     ssh_port: int = 22
     firmware_reboot_timeout_s: int = 900
 
+    # --- Plattform-Sicherung (Phase 21) ---------------------------------------
+    platform_backup_hour_utc: int = 3
+    platform_backup_dir: str = "/backups"
+    platform_backup_keep_days: int = 14
+    # age-Public-Key (age1…); der Private Key gehört NICHT auf den Server. Leer = keine Sicherung
+    platform_backup_age_recipient: str = ""
+    # optionales rclone-Ziel (S3-kompatibel oder SFTP), z. B. "offsite:sdwan-backups"; leer = nur lokal
+    platform_backup_rclone_remote: str = ""
+    platform_backup_influx: bool = False
+    platform_backup_env_file: str = "/platform/.env"
+    platform_backup_hub_dir: str = "/platform/hub"
+    # Plattform-Benachrichtigungen (Sicherung, 2FA-Reset …) an MSP-Systeme; leer = aus
+    platform_webhook_url: str = ""
+
     # --- SMTP (Alerts) -------------------------------------------------------
     smtp_host: str = ""
     smtp_port: int = 587

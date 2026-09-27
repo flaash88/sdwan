@@ -1,0 +1,15 @@
+# rclone-Konfiguration für das externe Sicherungsziel (optional)
+# Beispiel S3-kompatibel:
+# [offsite]
+# type = s3
+# provider = Other
+# endpoint = https://s3.example.com
+# access_key_id = …
+# secret_access_key = …
+#
+# Beispiel SFTP:
+# [offsite]
+# type = sftp
+# host = backup.example.com
+# user = sdwan
+# key_file = /root/.config/rclone/id_ed25519

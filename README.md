@@ -50,6 +50,7 @@ Installation auf einem Server: [INSTALL.md](INSTALL.md) · Aufbau und Design-Ent
 | 19 | WLAN: Erkennung wifi/wireless (nur wifi wird konfiguriert), Profile mit PSK/Enterprise, Band, Breite, Land (Mandant, Standard AT), VLAN, Isolation, Zeitplan; Zuweisung an Geräte/Standorte/Tags lokal (virtuelle APs) oder per CAPsMAN; Status mit Clients und Kanal; Gäste-PSK-Rotation mit QR-Aushang | ✅ |
 | 20 | Gäste-Portal: Hotspot auf Interface/VLAN (AP-unabhängig), Portal-Designer mit Vorschau und DE/EN-Texten, Vorlagen Hotel/Gastronomie/Veranstaltung/Büro-Gäste, Voucher mit A4-Druck, QR und CSV, Klick- und Formular-Anmeldung, Walled Garden, Bandbreite, Live-Gäste mit Trennen/Sperren, DSGVO-Aufbewahrung | ✅ |
 | – | Offboarding: Router bereinigen (Backup, defconf zuerst, verwaltete Objekte, Dienste, Fernzugriff, zuletzt Tunnel per Router-Scheduler) oder nur aus der Plattform entfernen; Offboarding-Archiv 90 Tage | ✅ |
+| 21 | Plattform-Sicherung: täglich PostgreSQL, .env-Schlüssel und WireGuard-Hub als age-verschlüsseltes Archiv (lokal + optional S3/SFTP), Status und Alarm für MSP-Admins, Wiederherstellung auf frischem Server ohne Router-Eingriff (docs/DISASTER-RECOVERY.md) | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

@@ -51,7 +51,7 @@ def _rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
     try:
         return validate_rules(rules)
     except ComplianceError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 # ----------------------------------------------------------------------------- Regelsets
@@ -113,7 +113,7 @@ async def assign(set_id: uuid.UUID, data: TargetsIn, ctx: Ctx = TechCtx) -> dict
     tenant_id = ctx.require_tenant()
     targets = {k: [str(x) for x in v] for k, v in data.model_dump().items()}
     if not any(targets.values()):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Mindestens ein Ziel wählen")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Mindestens ein Ziel wählen")
     a = ComplianceAssignment(tenant_id=tenant_id, rule_set_id=rs.id, targets=targets)
     ctx.db.add(a)
     await ctx.db.flush()
@@ -270,7 +270,7 @@ async def config_search(ctx: Ctx = ReadCtx, q: str = Query(min_length=1, max_len
     try:
         res = await search_backups(ctx.db, q, regex, context, tenant_id=tenant)
     except ComplianceError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     await ctx.audit("config.search", details={"q": q, "regex": regex, "all_tenants": tenant is None, "hits": len(res["hits"])})
     await ctx.db.commit()
     return res

@@ -19,4 +19,9 @@ fi
 if [ "$RUN_MIGRATIONS" = "true" ]; then
   alembic upgrade head
 fi
+# AUDIT-030: Dienst ohne root. Ausnahme RUN_AS_ROOT=true (Worker: liest die root-eigene .env für die Plattform-Sicherung
+# und schreibt ins Sicherungsverzeichnis des Hosts).
+if [ "$(id -u)" = "0" ] && [ "${RUN_AS_ROOT:-false}" != "true" ] && id app >/dev/null 2>&1; then
+  exec setpriv --reuid=app --regid=app --init-groups --inh-caps=+net_bind_service --ambient-caps=+net_bind_service "$@"
+fi
 exec "$@"

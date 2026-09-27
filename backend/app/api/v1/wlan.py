@@ -59,7 +59,7 @@ def _check(data: ProfileIn, existing: WlanProfile | None) -> None:
         try:
             wl.check_passphrase(data.passphrase)
         except wl.WlanError as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     d = data.model_dump()
     d["schedule"] = data.schedule.model_dump() if data.schedule else None
     has_psk = bool(data.passphrase or (existing and existing.passphrase_enc) or (data.is_guest and data.security.endswith("-psk")))
@@ -67,7 +67,7 @@ def _check(data: ProfileIn, existing: WlanProfile | None) -> None:
     try:
         wl.validate_profile(d, has_psk, has_sec)
     except wl.WlanError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 def _apply_fields(p: WlanProfile, data: ProfileIn) -> None:
@@ -143,7 +143,7 @@ async def create_profile(data: ProfileIn, ctx: Ctx = AdminCtx) -> dict[str, Any]
 async def update_profile(profile_id: uuid.UUID, data: ProfileIn, ctx: Ctx = AdminCtx) -> dict[str, Any]:
     p = await get_or_404(ctx.db, WlanProfile, profile_id, "WLAN-Profil")
     if data.slug != p.slug:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Das Kürzel ist Teil der Router-Objektnamen und kann nicht geändert werden")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Das Kürzel ist Teil der Router-Objektnamen und kann nicht geändert werden")
     _check(data, p)
     _apply_fields(p, data)
     p.version += 1

@@ -1163,6 +1163,25 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
 * **Hub-Token** wird als Bytes verglichen (kein 500 mehr bei Nicht-ASCII). **Login** rechnet bei unbekannten Konten einen Dummy-bcrypt
   (gleiche Antwortzeit). Die Kontosperre bleibt bewusst ohne IP-Kopplung.
 
+### AP3 – SSRF und Web-Härtung
+* **`app/net_guard.py`** für ausgehende Abrufe mit Benutzer-URL (Threat-Feeds, Webhooks):
+  * erlaubt sind nur voll qualifizierte Hostnamen; jede aufgelöste Adresse muss `is_global` sein (kein privates, Docker-, Management- oder CGNAT-Netz);
+  * die Verbindung wird auf die geprüfte IP gepinnt (`Host` und `sni_hostname` bleiben der Name);
+  * Redirects gibt es höchstens 3 und jeweils neu geprüft, bei Webhooks keine.
+  * Feed-URLs werden beim Anlegen und Ändern geprüft; nicht auflösbare Namen erst beim Abruf.
+* **Sicherheits-Header** (`frontend/nginx.conf`):
+  * `nosniff`, `X-Frame-Options SAMEORIGIN`, `Referrer-Policy` und `Permissions-Policy`;
+  * HSTS nur bei `X-Forwarded-Proto: https`;
+  * CSP nur für die Oberfläche (nicht für Grafana): `script-src 'self'` plus Hash des Theme-Skripts in `index.html`. Test prüft den Hash.
+* **WebSocket:** `POST /auth/ws-ticket` liefert ein Einmal-Ticket (30 s). Die WS-URL trägt nur das Ticket, kein JWT.
+  Alle 60 s prüft der Server Benutzer, Token-Version und Mandant erneut und schließt bei Abweichung mit 4401. `?token=` ist als Übergang noch erlaubt.
+* **`/api/v1/meta`** ist öffentlich nur mit Version, Produktname und Onboarding-Mindestversion. Betriebsdaten (Simulator, Hub,
+  Management-Netz, Grafana, SMTP) liefert `/api/v1/meta/full`, nur nach Anmeldung.
+* **Container:** Das Backend-Image hat den Benutzer `app`. Der Entrypoint setzt als root die Route ins Management-Netz und
+  startet den Dienst dann per `setpriv` als `app`; einzige Fähigkeit ist `NET_BIND_SERVICE` für Syslog UDP 514. Nur der Worker
+  läuft mit `RUN_AS_ROOT=true`, weil er die root-eigene `.env` sichert. `exec`/`run --entrypoint` (CLI, Restore) laufen als root.
+* **Abhängigkeiten:** fastapi 0.141, `starlette>=1.3.1` (Advisories aus AUDIT-037), pyzipper 0.4.
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

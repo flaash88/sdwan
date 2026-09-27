@@ -254,6 +254,16 @@ async def regenerate_codes(data: ConfirmIn, request: Request, ctx: Ctx = Depends
     return {"recovery_codes": codes}
 
 
+@router.post("/ws-ticket")
+async def ws_ticket(ctx: Ctx = Depends(get_ctx)) -> dict:
+    """Einmal-Ticket (30 s) für die WebSocket-Verbindung – statt des JWT in der URL (AUDIT-011)."""
+    from app import ws_tickets
+
+    tenant = str(ctx.tenant_id) if ctx.is_superuser and ctx.tenant_id else None
+    ticket = await ws_tickets.issue(ctx.user.id, tenant, ctx.user.token_version or 0)
+    return {"ticket": ticket, "expires_in": ws_tickets.TTL_S}
+
+
 @router.get("/me")
 async def me(ctx: Ctx = Depends(get_ctx)) -> dict:
     tenants: list[Tenant]

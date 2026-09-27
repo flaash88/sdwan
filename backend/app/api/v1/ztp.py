@@ -59,7 +59,7 @@ def _validate(content: dict[str, Any]) -> dict[str, Any]:
     try:
         return validate_template(content)
     except TemplateError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 @router.get("/ztp/templates")
@@ -122,7 +122,7 @@ async def stage(data: StageIn, ctx: Ctx = TechCtx) -> list[dict]:
             try:
                 validate_set([{**i, "local_address": i.get("local_address") or item.vrrp_local_address} for i in template.content["vrrp"]])
             except VrrpError as exc:
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{item.name}: {exc}") from exc
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"{item.name}: {exc}") from exc
         out.append(await stage_device(ctx.db, tenant_id, name=item.name, serial=item.serial, site_id=site_id, tags=item.tags,
                                       template=template, ttl_days=data.ttl_days, by=ctx.user.email, vrrp_local_address=item.vrrp_local_address))
     await ctx.audit("ztp.stage", details={"count": len(out), "serials": serials, "template": str(template.id) if template else None})
@@ -168,7 +168,7 @@ async def import_preview(data: ImportIn, ctx: Ctx = TechCtx) -> dict[str, Any]:
     try:
         rows = await ztp_import.validate(ctx.db, ctx.require_tenant(), data.csv)
     except ztp_import.ImportError_ as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return {"rows": rows, "valid": sum(1 for r in rows if r["ok"]), "invalid": sum(1 for r in rows if not r["ok"])}
 
 
@@ -182,12 +182,12 @@ async def import_commit(data: ImportCommitIn, ctx: Ctx = TechCtx) -> dict[str, A
     from app.services import ztp_import
 
     if not data.confirm:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Bestätigung fehlt")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Bestätigung fehlt")
     tenant_id = ctx.require_tenant()
     try:
         rows = await ztp_import.validate(ctx.db, tenant_id, data.csv)
     except ztp_import.ImportError_ as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     created = []
     for r in rows:
         if not r["ok"]:

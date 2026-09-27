@@ -64,11 +64,11 @@ export const api = {
   postBlob: (p: string, b?: unknown) => request<Blob>("POST", p, b ?? {}, true),
 };
 
-export function wsUrl(): string {
+/** WebSocket-URL mit Einmal-Ticket (30 s gültig) – das Anmelde-Token steht nie in der URL (Zugriffslogs). */
+export async function wsUrl(): Promise<string> {
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const q = new URLSearchParams({ token: session.token ?? "" });
-  if (session.tenant) q.set("tenant", session.tenant);
-  return `${proto}://${location.host}/api/v1/ws?${q}`;
+  const { ticket } = await api.post<{ ticket: string }>("/auth/ws-ticket");
+  return `${proto}://${location.host}/api/v1/ws?${new URLSearchParams({ ticket })}`;
 }
 
 export function saveBlob(blob: Blob, filename: string) {

@@ -12,6 +12,7 @@ from sqlalchemy import select
 from app.api.v1.common import get_or_404
 from app.deps import AdminCtx, Ctx, ReadCtx, TechCtx
 from app.models import Device, FirewallPolicy, FwObject, ThreatFeed, ThreatFeedAssignment
+from app import net_guard
 from app.routeros import RouterOSError
 from app.services.feeds import refresh_feed, remove_from_device, sync_assignment
 from app.services.fw_compile import referenced, slugify
@@ -82,8 +83,17 @@ async def get_feed(feed_id: uuid.UUID, ctx: Ctx = ReadCtx) -> dict[str, Any]:
     return {**_out(f, await _assigns(ctx, f)), "sample": (f.entries or [])[:50]}
 
 
+async def _check_url(url: str) -> None:
+    """AUDIT-004: keine internen Ziele (Plattform, Docker-Netz, Management-Netz der Router)."""
+    try:
+        await net_guard.validate(url)
+    except net_guard.GuardError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Feed-URL: {exc}") from exc
+
+
 @router.post("", status_code=201)
 async def create_feed(data: FeedIn, ctx: Ctx = AdminCtx) -> dict[str, Any]:
+    await _check_url(data.url)
     slug = slugify(data.name)[:30]
     if (await ctx.db.execute(select(ThreatFeed).where(ThreatFeed.slug == slug))).first():
         raise HTTPException(status.HTTP_409_CONFLICT, f"Kürzel {slug} ist bereits vergeben – anderen Namen wählen")
@@ -102,6 +112,8 @@ async def create_feed(data: FeedIn, ctx: Ctx = AdminCtx) -> dict[str, Any]:
 async def update_feed(feed_id: uuid.UUID, data: FeedIn, ctx: Ctx = AdminCtx) -> dict[str, Any]:
     f = await get_or_404(ctx.db, ThreatFeed, feed_id, "Feed")
     _can_edit(ctx, f)
+    if not f.builtin:
+        await _check_url(data.url)
     fields = data.model_dump(exclude={"name"}) if f.builtin else data.model_dump()
     if f.builtin:  # vordefiniert: nur Betriebsparameter änderbar
         fields = {k: v for k, v in fields.items() if k in ("interval_min", "max_entries", "enabled")}

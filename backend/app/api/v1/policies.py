@@ -84,7 +84,7 @@ def _spec(spec: dict[str, Any] | None) -> dict[str, Any]:
     try:
         return normalize_spec(spec or {})
     except SpecError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 def _can_edit(ctx: Ctx, p: FirewallPolicy) -> None:
@@ -96,7 +96,7 @@ def _norm(content: dict[str, Any]) -> dict[str, Any]:
     try:
         return validate_content(content)
     except PolicyError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 @router.get("/policies")
@@ -155,9 +155,9 @@ async def update_policy(policy_id: uuid.UUID, data: PolicyPatch, ctx: Ctx = Tech
     if data.description is not None:
         p.description = data.description
     if data.content is not None and p.mode == "simple":
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Einfache Policy: Regeln über den Editor (spec) ändern oder in den Expertenmodus umwandeln")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Einfache Policy: Regeln über den Editor (spec) ändern oder in den Expertenmodus umwandeln")
     if data.spec is not None and p.mode != "simple":
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "spec gibt es nur bei einfachen Policies")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "spec gibt es nur bei einfachen Policies")
     if data.spec is not None:
         spec = _spec(data.spec)
         content = await _compile(ctx, spec, p.tenant_id)
@@ -490,7 +490,7 @@ async def convert(policy_id: uuid.UUID, data: ConvertIn, ctx: Ctx = TechCtx) -> 
         spec = expert_to_simple(p.content)
         content = await _compile(ctx, spec, p.tenant_id)
         if content != p.content:  # darf sich durch die Umwandlung nicht ändern
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Umwandlung würde die Regeln verändern – abgebrochen")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Umwandlung würde die Regeln verändern – abgebrochen")
         p.mode, p.spec = "simple", spec
         note = "In einfachen Modus umgewandelt (Regeln als Rohregeln)"
     p.version += 1

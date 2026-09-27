@@ -84,11 +84,12 @@ def parse_feed(text: str, fmt: str = "lines", json_field: str = "cidr", comment_
 
 
 async def _download(url: str) -> str:
-    import httpx
+    """Abruf mit SSRF-Schutz (``net_guard``: nur öffentliche Ziele, IP gepinnt, Redirects geprüft) und Größenlimit."""
+    from app import net_guard
 
     limit = get_settings().feed_max_download_mb * 1024 * 1024
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-        async with client.stream("GET", url, headers={"User-Agent": "MikroTik-Fleet-Management/threat-feed"}) as r:
+    try:
+        async with net_guard.stream("GET", url, headers={"User-Agent": "MikroTik-Fleet-Management/threat-feed"}) as r:
             r.raise_for_status()
             chunks, size = [], 0
             async for chunk in r.aiter_bytes():
@@ -96,6 +97,8 @@ async def _download(url: str) -> str:
                 if size > limit:
                     raise FeedError(f"Download größer als {get_settings().feed_max_download_mb} MB")
                 chunks.append(chunk)
+    except net_guard.GuardError as exc:
+        raise FeedError(str(exc)) from exc
     return b"".join(chunks).decode("utf-8", errors="replace")
 
 

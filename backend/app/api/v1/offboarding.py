@@ -34,7 +34,7 @@ async def offboard(device_id: uuid.UUID, data: OffboardIn, ctx: Ctx = AdminCtx) 
     """Admin/MSP-Admin; Bestätigung durch den exakten Gerätenamen. Bei Fehler vor Schritt 6 bleibt das Gerät bestehen."""
     dev = await get_or_404(ctx.db, Device, device_id, "Device")
     if data.confirm_name != dev.name:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Bestätigung: Gerätename stimmt nicht überein")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Bestätigung: Gerätename stimmt nicht überein")
     try:
         res = await ob.offboard(ctx.db, dev, data.mode, ctx.user.email, keep_local_access=data.keep_local_access)
     except ob.OffboardError as exc:

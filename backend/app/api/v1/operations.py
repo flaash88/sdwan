@@ -47,7 +47,7 @@ def _w_out(w: MaintenanceWindow, active: bool) -> dict[str, Any]:
 
 async def _check_scope(ctx: Ctx, data: WindowIn) -> None:
     if data.site_id and data.device_id:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Entweder Standort oder Gerät (oder keines = ganzer Mandant)")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Entweder Standort oder Gerät (oder keines = ganzer Mandant)")
     if data.site_id:
         await get_or_404(ctx.db, Site, data.site_id, "Standort")
     if data.device_id:
@@ -55,7 +55,7 @@ async def _check_scope(ctx: Ctx, data: WindowIn) -> None:
     try:
         validate(data.kind, data.start_at, data.weekdays, data.start_time, data.duration_min)
     except MaintenanceError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 @router.get("/maintenance-windows")
@@ -208,7 +208,7 @@ async def put_syslog(device_id: uuid.UUID, data: SyslogIn, ctx: Ctx = TechCtx) -
     try:
         topics = sl.validate_topics(data.topics)
     except ValueError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     cfg = (await ctx.db.execute(select(DeviceSyslog).where(DeviceSyslog.device_id == dev.id))).scalar_one_or_none()
     if cfg is None:
         cfg = DeviceSyslog(tenant_id=dev.tenant_id, device_id=dev.id)

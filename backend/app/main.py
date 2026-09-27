@@ -11,6 +11,7 @@ from app.api.v1.router import api_router
 from app.bootstrap import ensure_bootstrap_admin
 from app.config import get_settings
 from app.db import TenantIsolationError, create_all
+from app.deps import Ctx, ReadCtx
 from app.proxy import TrustedProxyMiddleware
 from app.routeros.schema import TRUST_ANCHORS_MIN_VERSION
 from app.secrets_check import InsecureSecretsError
@@ -60,16 +61,24 @@ def create_app() -> FastAPI:
 
     @app.get("/api/v1/meta", tags=["health"])
     async def meta() -> dict:
+        """Öffentlich (Login-Seite, Titel): nur Produktname, Version, Mindestversion fürs Onboarding (AUDIT-025)."""
         return {
             "version": app.version,
+            "product_name": s.product_name,
+            "product_short": s.product_short,
+            "onboarding_min_routeros": TRUST_ANCHORS_MIN_VERSION,
+        }
+
+    @app.get("/api/v1/meta/full", tags=["health"])
+    async def meta_full(_ctx: Ctx = ReadCtx) -> dict:
+        """Nach der Anmeldung: Betriebsdaten für die Oberfläche (Simulator-Hinweis, Grafana, Hub, Management-Netz)."""
+        return {
+            **(await meta()),
             "simulator": s.routeros_backend == "simulator",
             "grafana_url": s.grafana_public_url,
             "hub_endpoint": f"{s.wg_hub_endpoint}:{s.wg_hub_port}",
             "management_network": s.wg_network,
             "smtp_configured": bool(s.smtp_host),
-            "product_name": s.product_name,
-            "product_short": s.product_short,
-            "onboarding_min_routeros": TRUST_ANCHORS_MIN_VERSION,
         }
 
     app.include_router(api_router)

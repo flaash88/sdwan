@@ -37,7 +37,7 @@ def _validate(data: AdvisoryIn) -> dict[str, Any]:
     try:
         adv.validate(d)
     except adv.AdvisoryError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return d
 
 

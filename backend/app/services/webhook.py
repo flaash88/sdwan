@@ -13,14 +13,14 @@ Workflow-URLs eine Signatur enthalten.
 
 from __future__ import annotations
 
-import asyncio
 import ipaddress
 import logging
-import socket
 from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
+
+from app import net_guard
 
 log = logging.getLogger(__name__)
 FORMATS = ("generic", "teams")
@@ -36,7 +36,8 @@ class WebhookError(ValueError):
 
 
 def _bad_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified
+    """Nicht öffentlich = gesperrt (inkl. CGNAT 100.64/10, Dokumentationsnetze; AUDIT-012)."""
+    return not net_guard.is_public(ip)
 
 
 def validate_url(url: str) -> str:
@@ -45,23 +46,11 @@ def validate_url(url: str) -> str:
         raise WebhookError("Webhook-URL muss mit https:// beginnen")
     if u.username or u.password:
         raise WebhookError("Keine Zugangsdaten in der Webhook-URL")
-    host = u.hostname.lower()
-    if host == "localhost" or host.endswith((".localhost", ".local", ".internal")):
-        raise WebhookError("Webhook-Ziel darf nicht intern sein")
     try:
-        if _bad_ip(ipaddress.ip_address(host)):
-            raise WebhookError("Webhook-Ziel darf nicht im privaten Netz liegen")
-    except ValueError as exc:
-        if isinstance(exc, WebhookError):
-            raise
+        net_guard.check_url(url, ("https",))  # intern/privat/CGNAT, Dienstnamen ohne Punkt (AUDIT-012)
+    except net_guard.GuardError as exc:
+        raise WebhookError(f"Webhook-Ziel: {exc}") from exc
     return url.strip()
-
-
-async def _check_resolved(host: str) -> None:
-    infos = await asyncio.get_running_loop().getaddrinfo(host, 443, type=socket.SOCK_STREAM)
-    for info in infos:
-        if _bad_ip(ipaddress.ip_address(info[4][0])):
-            raise WebhookError(f"{host} löst auf eine interne Adresse auf")
 
 
 def mask(url: str | None) -> str | None:
@@ -91,15 +80,15 @@ def build_payload(fmt: str, *, title: str, text: str, severity: str, resolved: b
 async def send(url: str, payload: dict[str, Any]) -> bool:
     try:
         validate_url(url)
-        if transport is None:
-            await _check_resolved(urlsplit(url).hostname or "")
-        async with httpx.AsyncClient(transport=transport, timeout=10, follow_redirects=False) as client:
-            r = await client.post(url, json=payload, headers={"User-Agent": "sdwan-alerts"})
-        sent.append({"url": url, "payload": payload, "status": r.status_code})
-        if r.status_code >= 300:
-            log.warning("Webhook %s antwortet %s", mask(url), r.status_code)
+        # Verbindung an die geprüfte Adresse gepinnt (kein DNS-Rebinding, AUDIT-012); keine Redirects
+        async with net_guard.stream("POST", url, schemes=("https",), max_redirects=0, timeout=10, json=payload,
+                                    headers={"User-Agent": "sdwan-alerts"}, transport=transport) as r:
+            status = r.status_code
+        sent.append({"url": url, "payload": payload, "status": status})
+        if status >= 300:
+            log.warning("Webhook %s antwortet %s", mask(url), status)
             return False
         return True
-    except (httpx.HTTPError, OSError, WebhookError) as exc:
+    except (httpx.HTTPError, OSError, WebhookError, net_guard.GuardError) as exc:
         log.warning("Webhook %s fehlgeschlagen: %s", mask(url), exc)
         return False

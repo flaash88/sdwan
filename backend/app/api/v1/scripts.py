@@ -66,7 +66,7 @@ def _validate(text: str) -> list[str]:
     try:
         return validate_content(text)
     except ScriptError as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 @router.get("/scripts")
@@ -141,7 +141,7 @@ async def _targets(ctx: Ctx, data: TargetsIn, script: Script) -> list[Device]:
     tenant = ctx.tenant_id if ctx.tenant_id else (script.tenant_id if script.tenant_id else None)
     devs = await resolve_targets(ctx.db, data.model_dump(), tenant)
     if not devs:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Keine Geräte im Ziel")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Keine Geräte im Ziel")
     return devs
 
 
@@ -191,7 +191,7 @@ async def start_run(data: RunIn, ctx: Ctx = TechCtx) -> dict[str, Any]:
         try:
             rendered[d.id] = await render_for(ctx.db, s.content, d)
         except ScriptError as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{d.name}: {exc}") from exc
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"{d.name}: {exc}") from exc
     tenants = {d.tenant_id for d in devices}
     run = ScriptRun(tenant_id=tenants.pop() if len(tenants) == 1 else None, script_id=s.id, script_name=s.name, script_version=s.version,
                     category=s.category, content=s.content, targets={k: [str(x) for x in v] for k, v in data.model_dump(include={"device_ids", "site_ids", "tags"}).items()},

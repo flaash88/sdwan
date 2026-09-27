@@ -49,6 +49,10 @@ services:
   worker:
     <<: *backend
     command: ["python", "-m", "app.worker"]
+    # Plattform-Sicherung liest die root-eigene .env (0600) und schreibt ins Host-Verzeichnis – daher als root (AUDIT-030)
+    environment:
+      <<: *backend-env
+      RUN_AS_ROOT: "true"
     networks: { sdwan: { ipv4_address: "${SDWAN_NET:-172.30.0}.21" } }
     depends_on:
       api: { condition: service_healthy }

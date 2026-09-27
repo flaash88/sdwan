@@ -26,7 +26,7 @@ router = APIRouter(tags=["hotspot"])
 
 
 def _err(exc: Exception) -> HTTPException:
-    return HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
+    return HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc))
 
 
 # ----------------------------------------------------------------------------- Portale
@@ -205,7 +205,7 @@ async def create_vprofile(data: VProfileIn, ctx: Ctx = AdminCtx) -> dict[str, An
 async def update_vprofile(profile_id: uuid.UUID, data: VProfileIn, ctx: Ctx = AdminCtx) -> dict[str, Any]:
     p = await get_or_404(ctx.db, VoucherProfile, profile_id, "Voucher-Profil")
     if data.slug != p.slug:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Kürzel kann nicht geändert werden")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Kürzel kann nicht geändert werden")
     try:
         hs.check_rate(data.rate_limit)
     except hs.HotspotError as exc:
@@ -299,7 +299,7 @@ async def create_instance(data: InstanceIn, ctx: Ctx = AdminCtx) -> dict[str, An
 async def update_instance(instance_id: uuid.UUID, data: InstanceIn, ctx: Ctx = AdminCtx) -> dict[str, Any]:
     i = await get_or_404(ctx.db, HotspotInstance, instance_id, "Hotspot")
     if data.slug != i.slug or data.device_id != i.device_id:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Kürzel und Gerät können nicht geändert werden")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Kürzel und Gerät können nicht geändert werden")
     _check_inst(data)
     await get_or_404(ctx.db, HotspotPortal, data.portal_id, "Portal")
     for k, v in data.model_dump().items():
@@ -366,7 +366,7 @@ class GuestAction(BaseModel):
 async def disconnect(instance_id: uuid.UUID, data: GuestAction, ctx: Ctx = TechCtx) -> dict[str, Any]:
     i = await get_or_404(ctx.db, HotspotInstance, instance_id, "Hotspot")
     if not data.active_id:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "active_id fehlt")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "active_id fehlt")
     try:
         async with await _live(ctx, i) as api:
             await api.remove("/ip/hotspot/active", data.active_id)
@@ -385,7 +385,7 @@ async def block(instance_id: uuid.UUID, data: GuestAction, ctx: Ctx = TechCtx) -
     if data.user and not data.user.startswith("T-"):
         v = (await ctx.db.execute(select(Voucher).where(Voucher.instance_id == i.id, Voucher.code == data.user))).scalar_one_or_none()
     if v is None and not data.mac:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Weder Voucher noch MAC-Adresse")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Weder Voucher noch MAC-Adresse")
     try:
         async with await _live(ctx, i) as api:
             if v is not None:

@@ -664,6 +664,22 @@ Voraussetzung: Router im Werkszustand (defconf) onboarden; Notebook am LAN, zwei
 - [ ] Als Nur-Lesen-Benutzer ein Backup öffnen.
       **Erwartet:** Passwörter und Schlüssel sind maskiert (`***`), es gibt keinen Download-Button.
 
+## 25. Audit-Behebung AP3: Web-Härtung, WebSocket, SSRF, Container
+
+- [ ] Browser-Entwicklertools → Netzwerk, Antwort-Header der Oberfläche prüfen.
+      **Erwartet:** `Content-Security-Policy`, `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`; über HTTPS
+      zusätzlich `Strict-Transport-Security`. In der Konsole keine CSP-Meldungen, auch nicht auf den Seiten Hotspot-Designer,
+      WLAN-Aushang und Voucher-Druck.
+- [ ] Grafana-Link bzw. -Einbettung funktioniert weiter (Grafana bekommt keine CSP der Oberfläche).
+- [ ] Netzwerk → WS: Die URL enthält `ticket=…` und kein JWT. Live-Updates (Gerät offline/online) kommen an.
+      Passwort des angemeldeten Benutzers von einem zweiten Admin ändern lassen → WS wird innerhalb von 60 s geschlossen.
+- [ ] `curl https://<domain>/api/v1/meta` → nur Version und Produktname, kein Management-Netz.
+- [ ] Threat-Feed mit URL `http://10.100.0.1/` bzw. `http://api:8000/` anlegen → abgelehnt. Ein öffentlicher Feed
+      (z. B. Spamhaus DROP) wird weiter geladen.
+- [ ] `docker compose exec api id -u` zeigt 0 (exec läuft als root), aber `docker compose top api` zeigt uvicorn als
+      Benutzer `app` (bzw. UID 10001). Syslog empfängt weiter auf UDP 514 (LABORTEST 14). Plattform-Sicherung
+      „Jetzt sichern“ funktioniert (Worker läuft als root).
+
 ---
 
 ## Ergebnis
@@ -694,3 +710,4 @@ Voraussetzung: Router im Werkszustand (defconf) onboarden; Notebook am LAN, zwei
 | 22 Nachbarn/Flows/Inventar/Import | ☐ ok ☐ Abweichung | IPFIX: |
 | 23 Audit AP1 (Zertifikate, ftp) | ☐ ok ☐ Abweichung | Mindestversion: |
 | 24 Audit AP2 (Proxy, Geheimnisse) | ☐ ok ☐ Abweichung | |
+| 25 Audit AP3 (Header, WS, SSRF, Container) | ☐ ok ☐ Abweichung | |

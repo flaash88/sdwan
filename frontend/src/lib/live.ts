@@ -8,9 +8,23 @@ let socket: WebSocket | null = null;
 let connected = false;
 const statusListeners = new Set<(c: boolean) => void>();
 
-function connect() {
+let connecting = false;
+
+async function connect() {
+  if (socket || connecting) return;
+  connecting = true;
+  let url: string;
+  try {
+    url = await wsUrl();
+  } catch {
+    connecting = false;
+    if (listeners.size > 0) setTimeout(() => void connect(), 5000); // nicht angemeldet/offline: später erneut
+    return;
+  } finally {
+    connecting = false;
+  }
   if (socket) return;
-  socket = new WebSocket(wsUrl());
+  socket = new WebSocket(url);
   socket.onopen = () => {
     connected = true;
     statusListeners.forEach((l) => l(true));
@@ -27,7 +41,7 @@ function connect() {
     socket = null;
     connected = false;
     statusListeners.forEach((l) => l(false));
-    if (listeners.size > 0) setTimeout(connect, 3000);
+    if (listeners.size > 0) setTimeout(() => void connect(), 3000);
   };
 }
 
@@ -43,7 +57,7 @@ export function useLive(handler: Listener, types?: string[]) {
       if (!types || types.includes(e.type)) ref.current(e);
     };
     listeners.add(l);
-    connect();
+    void connect();
     return () => {
       listeners.delete(l);
     };

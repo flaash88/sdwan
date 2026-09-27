@@ -71,9 +71,9 @@ def check_scope(spec: dict[str, Any], cat: Catalog, policy_tenant: uuid.UUID | N
         for i in ids:
             item = pool.get(i)
             if item is None:
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Nicht gefunden oder nicht sichtbar: {kind} {i}")
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Nicht gefunden oder nicht sichtbar: {kind} {i}")
             if item["tenant_id"] and (policy_tenant is None or item["tenant_id"] != str(policy_tenant)):
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"{item['name']} gehört einem Mandanten – in globalen Policies nicht nutzbar")
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"{item['name']} gehört einem Mandanten – in globalen Policies nicht nutzbar")
 
 
 # ----------------------------------------------------------------------------- Katalog
@@ -137,7 +137,7 @@ async def _validated(ctx: Ctx, kind: str, data: ItemIn, own_id: uuid.UUID | None
                     raise SpecError("Parameter: key (a-z_) und type zone|object|service")
             f.update(params=data.params, rules=data.rules, nat=data.nat)
     except (SpecError, ValueError) as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     return f
 
 
@@ -260,7 +260,7 @@ def compile_and_validate(spec: dict[str, Any], cat: Catalog) -> dict[str, Any]:
     try:
         return validate_content(compile_spec(spec, cat))
     except (SpecError, PolicyError) as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
 
 
 # ----------------------------------------------------------------------------- Bausteine einfügen
@@ -288,7 +288,7 @@ async def expand_block(block_id: uuid.UUID, data: ExpandIn, ctx: Ctx = ReadCtx) 
         if v in (None, "", []) and p.get("default"):
             v = p["default"]
         if v in (None, "", []) and not p.get("optional"):
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Parameter „{p.get('label', p['key'])}“ fehlt")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Parameter „{p.get('label', p['key'])}“ fehlt")
         params[p["key"]] = v
 
     def resolve(v: Any) -> Any:
@@ -307,7 +307,7 @@ async def expand_block(block_id: uuid.UUID, data: ExpandIn, ctx: Ctx = ReadCtx) 
             kind, slug = m.groups()
             found = seed_keys.get(kind, {}).get(slug) or by_slug[kind].get(slug)
             if not found:
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Baustein verweist auf {v}, nicht vorhanden")
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Baustein verweist auf {v}, nicht vorhanden")
             return found
         return v
 
@@ -372,14 +372,14 @@ async def put_device_zones(device_id: uuid.UUID, data: DeviceZonesIn, ctx: Ctx =
     pairs = []
     for m in data.members:
         if not _IFACE.match(m.interface):
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Ungültiges Interface {m.interface!r}")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Ungültiges Interface {m.interface!r}")
         if m.interface in seen:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Interface {m.interface} ist mehrfach zugeordnet")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Interface {m.interface} ist mehrfach zugeordnet")
         z = await ctx.db.get(FwZone, m.zone_id)
         if z is None or (z.tenant_id is not None and z.tenant_id != dev.tenant_id):
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Zone nicht gefunden")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Zone nicht gefunden")
         if z.source == "wan":
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Zone {z.name} folgt der WAN-Konfiguration und wird nicht zugeordnet")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Zone {z.name} folgt der WAN-Konfiguration und wird nicht zugeordnet")
         seen.add(m.interface)
         pairs.append((m.interface, m.zone_id))
     await set_device_zones(ctx.db, dev, pairs)

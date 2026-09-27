@@ -149,7 +149,7 @@ async def test_034_hub_token_non_ascii_is_401_not_500(client):
 
 
 # ============================================================================= SSRF
-@xf("AUDIT-004")
+# AUDIT-004: behoben (AP3)
 async def test_004_threat_feed_url_to_internal_address_rejected(client, msp):
     _t, h = await _admin(client, msp)
     for url in ("http://127.0.0.1:8000/healthz", "http://api:8000/api/v1/internal/hub/peers", "http://10.100.0.2/", "http://169.254.169.254/"):
@@ -157,7 +157,7 @@ async def test_004_threat_feed_url_to_internal_address_rejected(client, msp):
         assert r.status_code == 422, (url, r.status_code)
 
 
-@xf("AUDIT-012")
+# AUDIT-012: behoben (AP3)
 def test_012_webhook_blocks_cgnat_and_non_global():
     from app.services.webhook import _bad_ip
 
@@ -354,7 +354,7 @@ def test_032_maintenance_window_duration_is_real_time_across_dst():
 
 
 # ============================================================================= Betrieb / Frontend / Abhängigkeiten
-@xf("AUDIT-010")
+# AUDIT-010: behoben (AP3)
 def test_010_frontend_sends_security_headers():
     conf = (ROOT / "frontend" / "nginx.conf").read_text()
     for h in ("X-Frame-Options", "Content-Security-Policy", "X-Content-Type-Options"):
@@ -368,7 +368,7 @@ def test_035_openapi_docs_reachable_via_frontend():
     assert "location /docs" in conf or "location = /docs" in conf
 
 
-@xf("AUDIT-037")
+# AUDIT-037: behoben (AP3)
 def test_037_starlette_without_known_vulnerabilities():
     import starlette
 
@@ -376,9 +376,27 @@ def test_037_starlette_without_known_vulnerabilities():
     assert ver >= (0, 49, 1), starlette.__version__
 
 
-@xf("AUDIT-030")
+# AUDIT-030: behoben (AP3) – kein USER im Image (die Route ins Management-Netz braucht root/NET_ADMIN beim Start),
+# stattdessen gibt der Entrypoint die Rechte per setpriv an "app" ab; nur der Worker bleibt root (RUN_AS_ROOT).
 def test_030_backend_container_not_root():
-    assert "\nUSER " in (ROOT / "backend" / "Dockerfile").read_text()
+    import os
+    import re
+    import shutil
+
+    docker = (ROOT / "backend" / "Dockerfile").read_text()
+    entry = (ROOT / "backend" / "docker-entrypoint.sh").read_text()
+    compose = (ROOT / "docker-compose.yml").read_text()
+    assert "useradd --system --uid 10001" in docker
+    line = next(ln.strip() for ln in entry.splitlines() if ln.strip().startswith("exec setpriv"))
+    assert "--reuid=app" in line and "--ambient-caps=+net_bind_service" in line
+    assert compose.count('RUN_AS_ROOT: "true"') == 1  # nur der Worker
+    # setpriv-Aufruf funktional prüfen (als root: auf "nobody" umschalten, Port 514 binden, root-Dateien gesperrt)
+    if os.geteuid() == 0 and shutil.which("setpriv"):
+        cmd = re.sub(r"--reuid=app --regid=app", "--reuid=nobody --regid=nogroup", line.removeprefix("exec ").replace('"$@"', ""))
+        code = ("import os,socket;s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.bind(('127.0.0.1',0));"
+                "print(os.getuid())")
+        out = subprocess.run(cmd.split() + ["python3", "-c", code], capture_output=True, text=True, timeout=20)
+        assert out.returncode == 0 and out.stdout.strip() != "0", out.stderr
 
 
 async def test_info_login_helper_available(client, msp):  # Rauchtest für die Hilfsfunktionen dieses Moduls

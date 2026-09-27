@@ -123,7 +123,7 @@ async def test_platform_alert_hub_no_peers(client, msp, hub):
 ENTRYPOINT = pathlib.Path(__file__).resolve().parents[1] / "docker-entrypoint.sh"
 
 
-def _run_entrypoint(tmp_path, wg_present: bool) -> tuple[str, str]:
+def _run_entrypoint(tmp_path, wg_present: bool, extra_env: dict[str, str] | None = None) -> tuple[str, str]:
     import os
     import subprocess
 
@@ -133,8 +133,10 @@ def _run_entrypoint(tmp_path, wg_present: bool) -> tuple[str, str]:
     (bindir / "ip").write_text(f'#!/bin/sh\necho "$@" >> {log}\n'
                                f'if [ "$1" = "link" ]; then exit {0 if wg_present else 1}; fi\nexit 0\n')
     (bindir / "ip").chmod(0o755)
-    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "HUB_INTERNAL_IP": "172.30.0.10", "WG_NETWORK": "10.100.0.0/16",
-           "RUN_MIGRATIONS": "false"}
+    env = {**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "ROUTE_VIA_HUB": "172.30.0.10", "ROUTE_WG_NETWORK": "10.100.0.0/16",
+           "WG_NETWORK": "10.100.0.0/16", "RUN_MIGRATIONS": "false", **(extra_env or {})}
+    if log.exists():
+        log.unlink()
     res = subprocess.run(["sh", str(ENTRYPOINT), "true"], env=env, capture_output=True, text=True, check=True)
     return res.stdout, log.read_text() if log.exists() else ""
 
@@ -146,21 +148,41 @@ def test_entrypoint_skips_route_in_hub_namespace(tmp_path):
     assert "route replace 10.100.0.0/16 via 172.30.0.10" in calls and "route 10.100.0.0/16 via 172.30.0.10" in out
 
 
-def test_compose_syslog_flows_without_route_env_and_net_admin():
+def _interpolate(value: object, env: dict[str, str]) -> str:
+    """Compose-Interpolation für ``${VAR}`` und ``${VAR:-default}`` (wie docker compose mit .env)."""
+    import re
+
+    return re.sub(r"\$\{(\w+)(?::-([^}]*))?\}", lambda m: env.get(m.group(1)) or (m.group(2) or ""), str(value))
+
+
+def _compose_env(service: str, dotenv: dict[str, str]) -> dict[str, str]:
     import yaml
 
     d = yaml.safe_load((pathlib.Path(__file__).resolve().parents[2] / "docker-compose.yml").read_text())
+    return {k: _interpolate(v, dotenv) for k, v in d["services"][service]["environment"].items()}
+
+
+def test_compose_syslog_flows_keep_wg_network_without_route_and_net_admin(tmp_path):
+    import yaml
+
+    d = yaml.safe_load((pathlib.Path(__file__).resolve().parents[2] / "docker-compose.yml").read_text())
+    dotenv = {"WG_NETWORK": "10.200.0.0/16", "SDWAN_NET": "172.31.0"}  # abweichend in .env
     for name in ("syslog", "flows"):
         svc = d["services"][name]
         assert svc["network_mode"] == "service:wireguard-hub" and svc["cap_add"] == []
-        assert svc["environment"]["HUB_INTERNAL_IP"] == "" and svc["environment"]["WG_NETWORK"] == ""
+        env = _compose_env(name, dotenv)
+        assert env["WG_NETWORK"] == "10.200.0.0/16"  # App bekommt den echten Wert aus .env
+        assert env["ROUTE_VIA_HUB"] == "" and env["ROUTE_WG_NETWORK"] == "" and "HUB_INTERNAL_IP" not in env
+    api_env = _compose_env("api", dotenv)
     assert d["services"]["api"]["cap_add"] == ["NET_ADMIN"]  # api/worker brauchen die Route weiterhin
+    assert api_env["ROUTE_WG_NETWORK"] == "10.200.0.0/16" and api_env["ROUTE_VIA_HUB"] == "172.31.0.10"
 
 
-def test_empty_wg_network_falls_back_to_default():
-    from app.config import Settings
-
-    assert str(Settings(wg_network="").wg_net) == "10.100.0.0/16"
+def test_entrypoint_syslog_flows_env_sets_no_route_even_without_wg0(tmp_path):
+    """Mit der syslog/flows-Umgebung (Route-Variablen leer, WG_NETWORK gesetzt) nie eine Route – auch ohne wg0-Prüfung."""
+    env = _compose_env("syslog", {"WG_NETWORK": "10.200.0.0/16"})
+    out, calls = _run_entrypoint(tmp_path, wg_present=False, extra_env={k: env[k] for k in ("ROUTE_VIA_HUB", "ROUTE_WG_NETWORK", "WG_NETWORK")})
+    assert calls == "" and "route" not in out
 
 
 class FakeRoutes:

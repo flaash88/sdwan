@@ -88,8 +88,8 @@ eigenen Abschnitt.
   Peer-Anzahl im Interface ≠ API-Liste oder die Route ins WG-Netz nicht über `dev wg0` läuft. Der Hub startet erst,
   wenn die API healthy ist.
 * **Route im Hub-Namespace:** syslog und flows laufen mit `network_mode: service:wireguard-hub`. Sie bekommen deshalb
-  kein `NET_ADMIN` und leere `HUB_INTERNAL_IP`/`WG_NETWORK` (die App nutzt dann den Standard für `wg_network`); der
-  Backend-Entrypoint setzt die Route `WG_NETWORK via HUB_INTERNAL_IP` nur, wenn im eigenen Namespace kein `wg0`
+  kein `NET_ADMIN` und leere `ROUTE_VIA_HUB`/`ROUTE_WG_NETWORK`; `WG_NETWORK` behält für die App den echten Wert
+  aus `.env`. Der Backend-Entrypoint setzt die Route `ROUTE_WG_NETWORK via ROUTE_VIA_HUB` nur, wenn im eigenen Namespace kein `wg0`
   existiert. Der Hub-Agent prüft bei jedem Sync, dass die Route über `dev wg0` läuft, und korrigiert sie sonst
   (`ip route replace <netz> dev wg0 src <hub-ip>`, Warnung im Log). `update.sh` pingt am Ende alle Tunnel-IPs vom
   Hub aus an und gibt die Anzahl erreichbarer Geräte aus.

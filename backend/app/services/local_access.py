@@ -111,9 +111,42 @@ def _networks_of(addresses: list[dict[str, Any]], ifaces: set[str]) -> list[str]
     return sorted(set(out))
 
 
-def validate_manual(networks: list[str], wan_nets: list[str]) -> list[str]:
-    """Manuell erlaubte Netze: gültige CIDR, kein 0.0.0.0/0, keine Überschneidung mit WAN-Netzen."""
-    out = []
+RFC1918 = tuple(ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
+WAN_RULE_COMMENT = f"{COMMENT}:wan"
+
+
+class WanConfirmRequired(LocalAccessError):
+    """Manuelles Netz überschneidet sich mit einem privaten WAN-Netz – nur mit ausdrücklicher Bestätigung erlaubt."""
+
+    def __init__(self, items: list[dict[str, str]]) -> None:
+        self.items = items
+        super().__init__("Netz überschneidet sich mit einem WAN-Netz: " + ", ".join(f"{i['network']} ↔ {i['wan_network']}" for i in items))
+
+
+def is_rfc1918(net: ipaddress.IPv4Network | ipaddress.IPv6Network) -> bool:
+    return net.version == 4 and any(net.subnet_of(r) for r in RFC1918)  # type: ignore[arg-type]
+
+
+def wan_networks(addresses: list[dict[str, Any]], wan: set[str]) -> list[tuple[str, str]]:
+    """(Netz, Interface) aller Adressen auf WAN-Interfaces."""
+    out = set()
+    for a in addresses:
+        if a.get("interface") in wan and _norm(a.get("disabled", "false")) != "true" and a.get("address"):
+            try:
+                out.add((str(ipaddress.ip_interface(str(a["address"])).network), str(a["interface"])))
+            except ValueError:
+                continue
+    return sorted(out)
+
+
+def validate_manual(networks: list[str], wan_nets: list[str] | list[tuple[str, str]],
+                    allowed_wan: set[str] | None = None) -> tuple[list[str], list[dict[str, str]]]:
+    """Manuell erlaubte Netze: gültige CIDR, kein 0.0.0.0/0. Überschneidung mit einem WAN-Netz ist nur erlaubt, wenn
+    das Netz vollständig in RFC1918 liegt UND ausdrücklich bestätigt ist (``allowed_wan``) – sonst Fehler bzw.
+    ``WanConfirmRequired``. Rückgabe: (Netze, Ausnahmen [{network, interface, wan_network}])."""
+    pairs = [(w, "") if isinstance(w, str) else w for w in wan_nets]
+    allowed = {str(ipaddress.ip_network(a, strict=False)) for a in allowed_wan or set()}
+    out, exceptions, confirm = [], [], []
     for n in networks:
         try:
             net = ipaddress.ip_network(str(n).strip(), strict=False)
@@ -121,11 +154,37 @@ def validate_manual(networks: list[str], wan_nets: list[str]) -> list[str]:
             raise LocalAccessError(f"Ungültiges Netz: {n}") from exc
         if net.prefixlen == 0:
             raise LocalAccessError("0.0.0.0/0 ist nicht erlaubt")
-        for w in wan_nets:
-            if net.overlaps(ipaddress.ip_network(w, strict=False)):
-                raise LocalAccessError(f"{net} überschneidet sich mit dem WAN-Netz {w}")
+        for w, iface in pairs:
+            if not net.overlaps(ipaddress.ip_network(w, strict=False)):
+                continue
+            if not is_rfc1918(net):
+                raise LocalAccessError(f"{net} überschneidet sich mit dem WAN-Netz {w} und ist kein privates Netz (RFC1918) – nicht erlaubt")
+            item = {"network": str(net), "interface": iface, "wan_network": w}
+            (exceptions if str(net) in allowed else confirm).append(item)
         out.append(str(net))
-    return sorted(set(out))
+    if confirm:
+        raise WanConfirmRequired(confirm)
+    return sorted(set(out)), exceptions
+
+
+async def _sync_wan_rules(api: DeviceAPI, exceptions: list[dict[str, str]]) -> None:
+    """Je Ausnahme eine Input-Regel nur für genau dieses Quellnetz auf genau diesem WAN-Interface (WinBox/SSH),
+    ganz oben in der Filter-Tabelle (vor Default-Drop). Nicht mehr gewünschte Regeln werden entfernt."""
+    from app.services.fw_compile import LOCAL_ACCESS_PORTS
+
+    want = {f"{WAN_RULE_COMMENT}:{e['network']}@{e['interface']}": e for e in exceptions if e.get("interface")}
+    rows = await api.print("/ip/firewall/filter")
+    have = {str(r.get("comment")): r for r in rows if str(r.get("comment", "")).startswith(WAN_RULE_COMMENT)}
+    for c, r in have.items():
+        if c not in want:
+            await api.remove("/ip/firewall/filter", r[".id"])
+    for c, e in want.items():
+        if c in have:
+            continue
+        first = next((r[".id"] for r in await api.print("/ip/firewall/filter") if r.get("dynamic") not in (True, "true")), None)
+        await api.add("/ip/firewall/filter", chain="input", action="accept", protocol="tcp", **{"dst-port": LOCAL_ACCESS_PORTS},
+                      **{"in-interface": e["interface"], "src-address": e["network"], "comment": c},
+                      **({"place-before": first} if first else {}))
 
 
 def sp_plan(network: str) -> dict[str, str]:
@@ -156,7 +215,7 @@ async def apply(db: AsyncSession, la: LocalAccess, device: Device, rotate_passwo
     async with connect_device(device) as api:
         addrs = await api.print("/ip/address")
         wan = await wan_interfaces(db, device, api)
-        wan_nets = _networks_of(addrs, wan)
+        wan_nets = wan_networks(addrs, wan)
         ifaces = [i for i in await local_interfaces(db, device, api) if i not in wan]
         sp = dict(la.service_port or {})
         if sp.get("enabled"):
@@ -164,8 +223,11 @@ async def apply(db: AsyncSession, la: LocalAccess, device: Device, rotate_passwo
                 raise LocalAccessError(f"Service-Port {sp['interface']} ist ein WAN-Interface")
             ifaces = sorted(set(ifaces) | {sp["interface"]})
         networks = _networks_of(addrs, set(ifaces))
+        exceptions: list[dict[str, str]] = []
         if la.manual_networks:
-            manual = validate_manual(la.manual_networks, wan_nets)
+            confirmed = {e["network"]: e for e in la.wan_exceptions or []}
+            manual, exceptions = validate_manual(la.manual_networks, wan_nets, set(confirmed))
+            exceptions = [{**confirmed.get(e["network"], {}), **e} for e in exceptions]
             networks = sorted(set(networks) | set(manual))
             for a in addrs:  # Interfaces, deren Adresse in einem manuellen Netz liegt, gehören ebenfalls in die Liste
                 try:
@@ -187,6 +249,8 @@ async def apply(db: AsyncSession, la: LocalAccess, device: Device, rotate_passwo
         restrict = ts["local_admin_address_restrict"]
         # Reihenfolge: Liste (+Mitglieder) → Gruppe → Benutzer → MAC-WinBox → ggf. Dienst-Adressen
         await _set_one(api, "/interface/list", {"name": LOCAL_ACCESS_LIST}, {"comment": COMMENT})
+        await _sync_wan_rules(api, exceptions)
+        la.wan_exceptions = exceptions or None
         have = {str(m.get("interface")): m for m in await api.print("/interface/list/member") if m.get("list") == LOCAL_ACCESS_LIST}
         for i in ifaces:
             if i not in have:
@@ -297,7 +361,7 @@ async def disable(db: AsyncSession, la: LocalAccess, device: Device) -> None:
             la.mac_winbox_before = None
         if la.services_before:
             await _restore_services(api, la)
-        for path in ("/user", "/interface/list/member", "/user/group"):
+        for path in ("/user", "/interface/list/member", "/user/group", "/ip/firewall/filter"):
             for r in await api.print(path):
                 if str(r.get("comment", "")).startswith(COMMENT):
                     await api.remove(path, r[".id"])
@@ -468,7 +532,7 @@ def out(la: LocalAccess | None) -> dict[str, Any] | None:
             "viewed_at": la.viewed_at, "rotate_due_at": la.rotate_due_at, "networks": la.networks or [], "interfaces": la.interfaces or [],
             "manual_networks": la.manual_networks or [], "service_port": {k: v for k, v in (la.service_port or {}).items() if k != "bridge_before"},
             "applied_at": la.applied_at, "missing_policies": la.missing_policies or [],
-            "restricted": bool(la.missing_policies), "full_group_command": local_group_command() if la.missing_policies else None}
+            "restricted": bool(la.missing_policies), "wan_exceptions": la.wan_exceptions or [], "full_group_command": local_group_command() if la.missing_policies else None}
 
 
 _ = json  # (für Typprüfer)
@@ -497,7 +561,7 @@ async def offboard_step(api: DeviceAPI, la: LocalAccess | None, keep: bool) -> d
             await _restore_services(api, la)
         return {"local_access": "entfernt"}
     n = 0
-    for path in ("/user", "/user/group", "/interface/list", "/interface/list/member", "/ip/address", "/ip/pool", "/ip/dhcp-server",
+    for path in ("/user", "/user/group", "/interface/list", "/interface/list/member", "/ip/firewall/filter", "/ip/address", "/ip/pool", "/ip/dhcp-server",
                  "/ip/dhcp-server/network"):
         for r in await api.print(path):
             if str(r.get("comment", "")).startswith(COMMENT):

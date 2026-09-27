@@ -566,6 +566,12 @@ Voraussetzung: Router im Werkszustand (defconf) onboarden; Notebook am LAN, zwei
 - [ ] Service-Port (z. B. ether5) einrichten → Port nicht mehr in der Bridge, Notebook an ether5 bekommt per DHCP
       eine Adresse aus 192.168.254.0/29, WinBox auf 192.168.254.1 klappt. Service-Port wieder aus → Port zurück in
       der Bridge (**ANNAHME:** DHCP-Server-/Bridge-Port-Felder).
+- [ ] **Privates WAN-Netz (Doppel-NAT):** Router mit WAN-Adresse aus 192.168.x.0/24 hinter einem anderen Router.
+      „Netze / Service-Port“ → dieses Netz eintragen → Warnung mit „Trotzdem erlauben – dieses WAN-Netz ist ein privates
+      internes Netz“; ohne Haken kein Speichern. Mit Haken: `/ip firewall filter print where comment~"sdwan:local:wan"`
+      → genau eine Regel mit `in-interface=<WAN>` und `src-address=<Netz>`, ganz oben. WinBox/SSH aus diesem Netz
+      klappt, aus einem anderen Netz am WAN nicht; öffentliches Netz lässt sich nicht freigeben. Gerätedetail zeigt
+      „Vor-Ort-Zugang aus WAN-Netz … erlaubt“, Compliance „Warnung“, Audit `local_access.wan_exception`.
 - [ ] Router ohne Zonen und ohne defconf-Liste LAN: Status „nicht angelegt“ mit Grund in Gerätedetail und
       Geräteliste; Compliance „Vor-Ort-Zugang vorhanden“ schlägt fehl. Netz manuell angeben → angelegt.
 - [ ] Rotation: neues Passwort funktioniert, altes nicht mehr. Tunnel kurz trennen, Rotation auslösen → Fehler,

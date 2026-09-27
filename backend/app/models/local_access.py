@@ -38,6 +38,8 @@ class LocalAccess(IdMixin, TenantScoped, Base):
     applied_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
     # Policies aus LOCAL_POLICIES_FULL, die der Gruppe fehlen (nachträglich über den API-Benutzer angelegt)
     missing_policies: Mapped[list | None] = mapped_column(JSONType)
+    # Bestätigte Ausnahmen „privates WAN-Netz“: [{network, interface, wan_network, confirmed_by, confirmed_at}]
+    wan_exceptions: Mapped[list | None] = mapped_column(JSONType)
 
 
 class ApiToken(IdMixin, Base):

@@ -379,3 +379,59 @@ async def test_pair_script_full_group_and_later_creation_is_intersection(client,
     await client.post("/api/v1/compliance/evaluate", json={"device_ids": [dev2["id"]]}, headers=h)
     rows = {x["rule_id"]: x for res in (await client.get(f"/api/v1/devices/{dev2['id']}/compliance", headers=h)).json() for x in res["results"]}
     assert rows["local-admin"]["status"] == "ok"
+
+
+async def test_private_wan_network_exception(client, msp, hub):
+    """Doppel-NAT/VRRP-Backup: WAN-Netz ist privat → nur mit Bestätigung, Regel nur für Quellnetz + Interface."""
+    t, h, dev, rt = await _device(client, msp)
+    rt._insert("/ip/address", {"address": "192.168.1.10/24", "network": "192.168.1.0", "interface": "ether1", "dynamic": "false"})
+    await _default_drop(client, h, dev)
+    url = f"/api/v1/devices/{dev['id']}/local-access"
+    # ohne Bestätigung: 409 mit den zu bestätigenden Netzen, nichts angelegt
+    r = await client.post(url, json={"manual_networks": ["192.168.1.0/24"]}, headers=h)
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["confirm_wan"] == [{"network": "192.168.1.0/24", "interface": "ether1", "wan_network": "192.168.1.0/24"}]
+    assert not any(str(x.get("comment", "")).startswith("sdwan:local:wan") for x in rt.tables["/ip/firewall/filter"])
+    # öffentliche Netze und 0.0.0.0/0 bleiben verboten – auch mit „Bestätigung“
+    for bad in ("203.0.113.0/24", "0.0.0.0/0"):
+        r = await client.post(url, json={"manual_networks": [bad], "allow_wan_networks": [bad]}, headers=h)
+        assert r.status_code == 422, bad
+    # nur teilweise privat (größer als 192.168/16) → kein RFC1918 → verboten
+    r = await client.post(url, json={"manual_networks": ["192.0.0.0/8"], "allow_wan_networks": ["192.0.0.0/8"]}, headers=h)
+    assert r.status_code == 422
+    # mit Bestätigung erlaubt
+    r = await client.post(url, json={"manual_networks": ["192.168.1.0/24"], "allow_wan_networks": ["192.168.1.0/24"]}, headers=h)
+    assert r.status_code == 200 and r.json()["status"] == "active", r.text
+    (ex,) = r.json()["wan_exceptions"]
+    assert ex["network"] == "192.168.1.0/24" and ex["interface"] == "ether1" and ex["confirmed_by"]
+    assert "192.168.1.0/24" in _user(rt)["address"] and "ether1" not in _members(rt, LOCAL_ACCESS_LIST)
+    rules = [x for x in rt.tables["/ip/firewall/filter"] if str(x.get("comment", "")).startswith("sdwan:local:wan")]
+    assert len(rules) == 1 and rules[0]["in-interface"] == "ether1" and rules[0]["src-address"] == "192.168.1.0/24"
+    assert rules[0]["dst-port"] == "22,8291" and rt.tables["/ip/firewall/filter"][0] is rules[0]  # ganz oben, vor Default-Drop
+    # Firewall: nur genau dieses Quellnetz auf genau diesem Interface
+    assert verdict(rt, "ether1", "tcp", 8291, src="192.168.1.50") == "accept"
+    assert verdict(rt, "ether1", "tcp", 22, src="192.168.2.50") == "drop"
+    assert verdict(rt, "ether1", "tcp", 8291, src="198.51.100.9") == "drop"
+    assert verdict(rt, "ether4", "tcp", 8291, src="192.168.1.50") == "drop"  # anderes, nicht lokales Interface
+    # erneuter Abgleich: keine doppelte Regel; Policy-Neuausrollung lässt die Ausnahme oben
+    await client.post(url, json={}, headers=h)
+    pol = next(p for p in (await client.get("/api/v1/policies", headers=h)).json() if p["name"] == "FW")
+    await client.post(f"/api/v1/policies/{pol['id']}/deploy", json={}, headers=h)
+    rules = [x for x in rt.tables["/ip/firewall/filter"] if str(x.get("comment", "")).startswith("sdwan:local:wan")]
+    assert len(rules) == 1 and verdict(rt, "ether1", "tcp", 8291, src="192.168.1.50") == "accept"
+    # Audit und Compliance-Warnung
+    audit = (await client.get("/api/v1/audit", params={"action": "local_access.wan_exception"}, headers=h)).json()
+    items = audit["items"] if isinstance(audit, dict) else audit
+    assert [a["details"]["network"] for a in items if a["action"] == "local_access.wan_exception"] == ["192.168.1.0/24"]
+    base = next(x for x in (await client.get("/api/v1/compliance/rule-sets", headers=h)).json() if x["name"] == "MSP-Baseline")
+    await client.post(f"/api/v1/compliance/rule-sets/{base['id']}/assign", json={"device_ids": [dev["id"]]}, headers=h)
+    await client.post("/api/v1/compliance/evaluate", json={"device_ids": [dev["id"]]}, headers=h)
+    rows = {x["rule_id"]: x for res in (await client.get(f"/api/v1/devices/{dev['id']}/compliance", headers=h)).json() for x in res["results"]}
+    assert rows["local-admin"]["status"] == "warn" and "WAN-Netz erlaubt" in rows["local-admin"]["detail"]
+    # manuelles Netz entfernen → Ausnahme und Regel weg; Entfernen des Zugangs räumt ebenfalls auf
+    r = await client.post(url, json={"manual_networks": []}, headers=h)
+    assert r.json()["wan_exceptions"] == []
+    assert not any(str(x.get("comment", "")).startswith("sdwan:local:wan") for x in rt.tables["/ip/firewall/filter"])
+    await client.post(url, json={"manual_networks": ["192.168.1.0/24"], "allow_wan_networks": ["192.168.1.0/24"]}, headers=h)
+    await client.delete(url, headers=h)
+    assert not any(str(x.get("comment", "")).startswith("sdwan:local:wan") for x in rt.tables["/ip/firewall/filter"])

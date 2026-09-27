@@ -42,7 +42,8 @@ export default function LocalAccess() {
                 <tr key={r.device_id}>
                   <td className="px-3 py-2"><RowCheck label={`${r.device} auswählen`} checked={sel.has(r.device_id)} onChange={(v) => { const n = new Set(sel); if (v) n.add(r.device_id); else n.delete(r.device_id); setSel(n); }} /></td>
                   <td className="px-3 py-2 font-medium"><Link to={`/devices/${r.device_id}`} className="text-blue-text hover:underline">{r.device}</Link></td>
-                  <td className="px-3 py-2"><Pill tone={tone}>{label}</Pill>{r.access?.status === "active" && r.access.restricted && <div className="mt-1"><Pill tone="orange" title={`fehlt: ${r.access.missing_policies.join(", ")}`}>eingeschränkt</Pill></div>}</td>
+                  <td className="px-3 py-2"><Pill tone={tone}>{label}</Pill>{r.access?.status === "active" && r.access.restricted && <div className="mt-1"><Pill tone="orange" title={`fehlt: ${r.access.missing_policies.join(", ")}`}>eingeschränkt</Pill></div>}
+                    {r.access?.status === "active" && r.access.wan_exceptions?.length > 0 && <div className="mt-1"><Pill tone="orange" title={r.access.wan_exceptions.map((e) => `${e.network} auf ${e.interface}`).join(", ")}>aus WAN-Netz erlaubt</Pill></div>}</td>
                   <td className="px-3 py-2 font-mono text-xs">{r.access?.username ?? "–"}</td>
                   <td className="px-3 py-2 font-mono text-xs">{r.access?.networks.join(", ") || "–"}</td>
                   <td className="px-3 py-2 text-fg2">{fmtDate(r.access?.password_set_at)}</td>

@@ -104,6 +104,9 @@ class ServicePortIn(BaseModel):
 class AccessIn(BaseModel):
     manual_networks: list[str] | None = None
     service_port: ServicePortIn | None = None
+    # Ausdrücklich bestätigte Netze, die sich mit einem privaten (RFC1918) WAN-Netz überschneiden
+    # (Doppel-NAT, VRRP-Backup mit WAN = lokales Netz). Öffentliche Netze bleiben immer verboten.
+    allow_wan_networks: list[str] = []
 
 
 async def _online(dev: Device) -> None:
@@ -111,16 +114,26 @@ async def _online(dev: Device) -> None:
         raise HTTPException(409, "Gerät ist nicht erreichbar")
 
 
-async def _configure(ctx: Ctx, dev: Device, data: AccessIn) -> LocalAccess:
+async def _configure(ctx: Ctx, dev: Device, data: AccessIn) -> tuple[LocalAccess, list[dict[str, str]]]:
+    """Rückgabe: (Datensatz, neu bestätigte WAN-Ausnahmen)."""
     la = await la_svc.ensure_record(ctx.db, dev)
+    new_exc: list[dict[str, str]] = []
     if data.manual_networks is not None:
+        before = {e["network"]: e for e in la.wan_exceptions or []}
         try:
             async with connect_device(dev) as api:
                 wan = await la_svc.wan_interfaces(ctx.db, dev, api)
-                wan_nets = la_svc._networks_of(await api.print("/ip/address"), wan)
-            la.manual_networks = la_svc.validate_manual(data.manual_networks, wan_nets)
-        except la_svc.LocalAccessError as exc:
-            raise HTTPException(422, str(exc)) from exc
+                wan_nets = la_svc.wan_networks(await api.print("/ip/address"), wan)
+            manual, exc = la_svc.validate_manual(data.manual_networks, wan_nets, set(before) | set(data.allow_wan_networks))
+        except la_svc.WanConfirmRequired as e:
+            raise HTTPException(409, {"message": "Netz überschneidet sich mit einem privaten WAN-Netz – nur mit ausdrücklicher Bestätigung",
+                                      "confirm_wan": e.items}) from e
+        except la_svc.LocalAccessError as e:
+            raise HTTPException(422, str(e)) from e
+        now = utcnow().isoformat()
+        la.manual_networks = manual
+        la.wan_exceptions = [before.get(x["network"]) or {**x, "confirmed_by": ctx.user.email, "confirmed_at": now} for x in exc] or None
+        new_exc = [x for x in la.wan_exceptions or [] if x["network"] not in before]
     if data.service_port is not None:
         sp = data.service_port
         if sp.enabled:
@@ -136,7 +149,7 @@ async def _configure(ctx: Ctx, dev: Device, data: AccessIn) -> LocalAccess:
                 await la_svc.remove_service_port(api, la)
         la.service_port = {**(la.service_port or {}), **sp.model_dump()}
     la.enabled = True
-    return la
+    return la, new_exc
 
 
 @router.post("/devices/{device_id}/local-access")
@@ -145,10 +158,13 @@ async def create_access(device_id: uuid.UUID, data: AccessIn, ctx: Ctx = AdminCt
     dev = await get_or_404(ctx.db, Device, device_id, "Device")
     await _online(dev)
     try:
-        la = await _configure(ctx, dev, data)
+        la, new_exc = await _configure(ctx, dev, data)
         res = await la_svc.apply_safe(ctx.db, la, dev)
     except RouterOSError as exc:
         raise HTTPException(502, str(exc)) from exc
+    for e in new_exc:
+        await ctx.audit("local_access.wan_exception", target_type="device", target_id=dev.id,
+                        details={"network": e["network"], "interface": e["interface"], "wan_network": e["wan_network"]})
     await ctx.audit("local_access.apply", target_type="device", target_id=dev.id, success=res["status"] == "active",
                     details={"status": res["status"], "reason": res.get("reason"), "networks": la.networks,
                              "manual_networks": la.manual_networks, "service_port": la_svc.out(la)["service_port"]})

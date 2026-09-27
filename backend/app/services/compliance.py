@@ -156,9 +156,14 @@ def evaluate_rule(rule: dict[str, Any], text: str | None, live: dict[str, Any] |
         users = [u for u in (live or {}).get("users", []) if u.get("name") == la["username"]]
         if live is not None and not users:
             return "fail", f"Benutzer {la['username']} fehlt auf dem Router"
+        warns = []
         if la.get("missing_policies"):
             # Warnung, kein Fehler: Zugang vorhanden, aber ohne volle lokale Rechte (nachträglich über die API angelegt)
-            return "warn", f"eingeschränkt – es fehlt {', '.join(la['missing_policies'])}; vollständig per Onboarding oder Terminal-Befehl"[:300]
+            warns.append(f"eingeschränkt – es fehlt {', '.join(la['missing_policies'])}; vollständig per Onboarding oder Terminal-Befehl")
+        if la.get("wan_exceptions"):
+            warns.append("Vor-Ort-Zugang aus WAN-Netz erlaubt: " + ", ".join(f"{e['network']} auf {e['interface']}" for e in la["wan_exceptions"]))
+        if warns:
+            return "warn", " · ".join(warns)[:300]
         return "ok", f"{la['username']} · {', '.join(la['networks'])}"[:300]
     if t in TEXT_TYPES:
         if text is None:

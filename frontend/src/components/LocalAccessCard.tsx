@@ -2,7 +2,8 @@ import { useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { fmtDate } from "../lib/format";
-import { LA_STATUS, type LocalAccess } from "../lib/localAccess";
+import { ApiError } from "../lib/api";
+import { LA_STATUS, type LocalAccess, type WanException } from "../lib/localAccess";
 import type { Device } from "../lib/types";
 import { useFetch } from "../lib/useFetch";
 import { Button, Card, Checkbox, CodeBlock, ErrorBox, Input, Modal, Notice, Pill, Textarea, useAction } from "./ui";
@@ -24,6 +25,12 @@ export default function LocalAccessCard({ device }: { device: Device }) {
       {la?.status === "not_created" && <div className="mb-3"><Notice tone="orange" icon="alert" title="Nicht angelegt">{la.reason} {admin && "Über „Netze / Service-Port“ erlaubte Netze manuell angeben."}</Notice></div>}
       {la?.status === "error" && <div className="mb-3"><Notice tone="red" icon="alert" title="Fehler">{la.reason}</Notice></div>}
       {la?.status === "active" && la.reason && <div className="mb-3"><Notice tone="orange" icon="alert">{la.reason}</Notice></div>}
+      {la?.status === "active" && la.wan_exceptions?.map((e) => (
+        <div key={e.network} className="mb-3"><Notice tone="orange" icon="alert" title={`Vor-Ort-Zugang aus WAN-Netz ${e.network} erlaubt`}>
+          Ausnahme für ein privates WAN-Netz auf <span className="font-mono">{e.interface}</span> (nur dieses Quellnetz, nur WinBox/SSH)
+          {e.confirmed_by && <> · bestätigt von {e.confirmed_by}{e.confirmed_at && ` am ${fmtDate(e.confirmed_at)}`}</>}. Entfernen: Netz in „Netze / Service-Port“ löschen.
+        </Notice></div>
+      ))}
       {la?.status === "active" && la.restricted && (
         <div className="mb-3"><Notice tone="orange" icon="alert" title={`Vor-Ort-Zugang eingeschränkt: fehlt ${la.missing_policies.join("/")} – vollständig nur per Onboarding oder mit Terminal-Befehl`}>
           Der Zugang wurde nachträglich über den API-Benutzer angelegt; dieser darf keine Gruppe mit mehr Rechten anlegen, als er selbst hat
@@ -63,18 +70,48 @@ export default function LocalAccessCard({ device }: { device: Device }) {
 function EditDialog({ device, la, onClose, onDone }: { device: Device; la: LocalAccess | null; onClose: () => void; onDone: () => void }) {
   const [nets, setNets] = useState((la?.manual_networks ?? []).join("\n"));
   const [sp, setSp] = useState({ enabled: !!la?.service_port?.enabled, interface: la?.service_port?.interface ?? "", network: la?.service_port?.network ?? "192.168.254.0/29" });
-  const { busy, error, run } = useAction();
+  const { busy, error, run, setError } = useAction();
+  // Netze, die sich mit einem privaten WAN-Netz überschneiden: nur mit ausdrücklicher Bestätigung je Netz
+  const [confirm, setConfirm] = useState<WanException[]>([]);
+  const [allowed, setAllowed] = useState<string[]>([]);
+  const save = () => run(async () => {
+    try {
+      await api.post(`/devices/${device.id}/local-access`, { manual_networks: nets.split(/[\s,]+/).filter(Boolean), service_port: sp, allow_wan_networks: allowed });
+      onDone();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        try {
+          const d = JSON.parse(e.message) as { message: string; confirm_wan?: WanException[] };
+          if (d.confirm_wan) { setConfirm(d.confirm_wan); setError(null); return; }
+        } catch { /* kein strukturierter Hinweis */ }
+      }
+      throw e;
+    }
+  });
+  const open = confirm.filter((c) => !allowed.includes(c.network));
   return (
     <Modal open onClose={onClose} title="Vor-Ort-Zugang: Netze und Service-Port" size="lg"
       footer={<><Button variant="secondary" onClick={onClose}>Abbrechen</Button>
-        <Button disabled={busy} onClick={() => void run(async () => {
-          await api.post(`/devices/${device.id}/local-access`, { manual_networks: nets.split(/[\s,]+/).filter(Boolean), service_port: sp });
-          onDone();
-        })}>{busy ? "Übernehme …" : "Speichern und anlegen"}</Button></>}>
+        <Button disabled={busy || open.length > 0} onClick={() => void save()}>{busy ? "Übernehme …" : "Speichern und anlegen"}</Button></>}>
       <ErrorBox error={error} />
       <div className="flex flex-col gap-4">
+        {confirm.length > 0 && (
+          <Notice tone="red" icon="alert" title="Netz überschneidet sich mit einem WAN-Netz">
+            <p>Normalerweise ist Vor-Ort-Zugang aus dem WAN nie erlaubt. Nur wenn dieses WAN-Netz ein <b>privates internes Netz</b> ist
+              (z. B. MikroTik hinter einem anderen Router/Doppel-NAT oder VRRP-Backup, bei dem das WAN gleichzeitig das lokale Netz ist), darf es
+              ausnahmsweise freigegeben werden. Die Firewall-Ausnahme gilt dann nur für genau dieses Quellnetz auf genau diesem Interface.
+              Die Freigabe wird im Audit-Log vermerkt und im Gerätedetail sowie in der Compliance als Warnung angezeigt.</p>
+            <div className="mt-2 flex flex-col gap-1.5">
+              {confirm.map((c) => (
+                <Checkbox key={c.network} checked={allowed.includes(c.network)}
+                  onChange={(v) => setAllowed(v ? [...allowed, c.network] : allowed.filter((x) => x !== c.network))}
+                  label={<>Trotzdem erlauben – dieses WAN-Netz ist ein privates internes Netz: <span className="font-mono">{c.network}</span> auf <span className="font-mono">{c.interface}</span> (WAN-Netz <span className="font-mono">{c.wan_network}</span>)</>} />
+              ))}
+            </div>
+          </Notice>
+        )}
         <Textarea label="Zusätzlich erlaubte Netze (CIDR, je Zeile)" rows={3} value={nets} onChange={(e) => setNets(e.target.value)} className="font-mono"
-          hint="Nur nötig, wenn keine lokalen Netze ermittelt werden (Zonen Management/LAN oder defconf-Liste LAN). Nicht erlaubt: 0.0.0.0/0 und Netze der WAN-Interfaces." />
+          hint="Nur nötig, wenn keine lokalen Netze ermittelt werden (Zonen Management/LAN oder defconf-Liste LAN). Nicht erlaubt: 0.0.0.0/0 und öffentliche Netze; private (RFC1918) WAN-Netze nur mit ausdrücklicher Bestätigung." />
         <div className="rounded-md border border-line p-3">
           <Checkbox label="Service-Port einrichten (optional)" checked={sp.enabled} onChange={(v) => setSp({ ...sp, enabled: v })} />
           <p className="mt-1 text-xs text-fg3">Der gewählte Ethernet-Port wird aus der Bridge genommen und bekommt ein eigenes kleines Netz mit DHCP – dort angeschlossene Notebooks erreichen den Router per WinBox/SSH, auch wenn das LAN gestört ist. Standard-Netz ist ein änderbarer Vorschlag.</p>

@@ -6,7 +6,9 @@ export interface LocalAccess {
   username: string; has_password: boolean; password_set_at: string | null; viewed_at: string | null; rotate_due_at: string | null;
   networks: string[]; interfaces: string[]; manual_networks: string[]; service_port: { enabled?: boolean; interface?: string; network?: string }; applied_at: string | null;
   missing_policies: string[]; restricted: boolean; full_group_command: string | null;
+  wan_exceptions: WanException[];
 }
+export interface WanException { network: string; interface: string; wan_network: string; confirmed_by?: string; confirmed_at?: string }
 export interface LocalAccessRow { device_id: string; device: string; device_status: string; access: LocalAccess | null }
 
 export const LA_STATUS: Record<string, [string, Tone]> = {

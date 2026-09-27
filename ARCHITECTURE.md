@@ -1045,6 +1045,14 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   sind WAN-Interfaces (WAN-Konfiguration, Listen `sdwan-wan`/`WAN`, DHCP-Clients). Netze aus `/ip/address` dieser
   Interfaces, plus manuell angegebene Netze (keine 0.0.0.0/0, keine Überschneidung mit WAN-Netzen) und das
   Service-Port-Netz. Gibt es keine: Status `not_created` mit Grund, es wird nichts angelegt.
+* **Ausnahme privates WAN-Netz** (Doppel-NAT, VRRP-Backup mit WAN = lokales Netz): Ein manuelles Netz, das sich mit
+  einem WAN-Netz überschneidet, ist nur erlaubt, wenn es vollständig in RFC1918 liegt (10/8, 172.16/12, 192.168/16)
+  und je Netz ausdrücklich bestätigt wird (`allow_wan_networks`, sonst 409 mit `confirm_wan`). Öffentliche Netze und
+  0.0.0.0/0 bleiben verboten. Gespeichert in `wan_exceptions` (Netz, Interface, WAN-Netz, bestätigt von/am), Audit
+  `local_access.wan_exception`. Firewall: eine Regel je Ausnahme `chain=input action=accept protocol=tcp
+  dst-port=22,8291 in-interface=<WAN> src-address=<Netz>` (Kommentar `sdwan:local:wan:…`), ganz oben in der
+  Filter-Tabelle; das WAN-Interface kommt nie in `sdwan-local-access` (keine MAC-WinBox, keine Zonen-Freigabe).
+  Gerätedetail: Hinweis „Vor-Ort-Zugang aus WAN-Netz X erlaubt“; Compliance `local_admin_present`: Warnung.
 * **Adressbeschränkung** (Mandanten-Einstellung, Default an): `address=` = lokale Netze. Aus: `address=` leer,
   dafür `/ip service` winbox/ssh auf lokale Netze + Hub-IP (Vorzustand gemerkt, beim Deaktivieren zurück).
 * **Firewall:** Grundregeln `base:local-access` (tcp 22,8291) und `base:local-access-dhcp` (udp 67) aus

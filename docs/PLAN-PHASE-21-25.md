@@ -276,6 +276,10 @@ Grundsatz Allgemeinheit gilt: keine Kundendaten, Defaults nur markiert und ände
     ausgelagert, Verhalten unverändert). Beim Anlegen wird erneut geprüft; nur gültige Zeilen werden angelegt,
     und nur mit `confirm=true`. Zusätzlich zur bisherigen Prüfung: Gerätename darf im Mandanten nicht doppelt sein
     (nur beim Import, damit bestehendes Verhalten unverändert bleibt). Modell aus der CSV wird als Erwartung gespeichert.
+28. **Ausnahme privates WAN-Netz für den Vor-Ort-Zugang** (Nachtrag nach Hardware-Test): nur RFC1918-Netze, je Netz
+    ausdrücklich bestätigt, Audit, sichtbare Markierung, Compliance-Warnung. Die Firewall-Freigabe ist auf Quellnetz +
+    Interface beschränkt (eigene Regel ganz oben), nicht auf die WAN-Zone; das WAN-Interface wird nie Mitglied von
+    `sdwan-local-access`. Öffentliche Netze und 0.0.0.0/0 bleiben ohne Ausnahme verboten.
 
 ## Verifikation
 - Je Phase eine neue Testdatei: `test_phase21_platform_backup.py` … `test_phase25_*.py`.

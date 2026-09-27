@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # Öffentlich erreichbare Basis-URL der Control-Plane (für Onboarding-Scripts)
     public_url: str = "http://localhost:8000"
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"])
+    # Reverse-Proxys, deren X-Forwarded-For/-Proto übernommen wird (IPs/CIDR, kommagetrennt; leer = keinem vertrauen).
+    # Compose: Default = feste Adresse des Frontend-nginx; mit Caddy/nginx auf dem Host zusätzlich das Docker-Gateway.
+    trusted_proxies: str = ""
 
     # --- Sicherheit ----------------------------------------------------------
     secret_key: str = "change-me-please-change-me-please-32b"

@@ -61,6 +61,9 @@ class User(IdMixin, Base):
     recovery_codes: Mapped[list] = mapped_column(JSONType, default=list)  # sha256 der unverbrauchten Codes
     failed_logins: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     locked_until: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
+    # AUDIT-029: Version der Anmelde-Tokens (JWT-Claim "tv"). Erhöht bei Passwortänderung, Deaktivierung, Rollenwechsel und
+    # 2FA-Reset – ältere Tokens sind dann ungültig.
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class Site(IdMixin, TenantScoped, Base):

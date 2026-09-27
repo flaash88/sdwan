@@ -23,6 +23,8 @@ x-backend: &backend
     GRAFANA_PUBLIC_URL: ${GRAFANA_PUBLIC_URL:-http://localhost:8080/grafana}
     REMOTE_PROXY_PORT_RANGE: ${REMOTE_PROXY_PORT_RANGE:-40000-40019}
     REMOTE_PROXY_HOST: ${REMOTE_PROXY_HOST:-localhost}
+    # AUDIT-003: X-Forwarded-For nur vom Frontend-nginx (feste Adresse .30); Host-Proxy: Gateway .1 ergänzen (install.sh)
+    TRUSTED_PROXIES: ${TRUSTED_PROXIES:-${SDWAN_NET:-172.30.0}.30}
   depends_on:
     postgres: { condition: service_healthy }
     redis: { condition: service_healthy }
@@ -130,7 +132,8 @@ services:
     build: ./frontend
     restart: unless-stopped
     ports: ["${FRONTEND_BIND:-0.0.0.0}:${FRONTEND_PORT:-8080}:80"]
-    networks: [sdwan]
+    # feste Adresse: die API vertraut X-Forwarded-For nur von hier (TRUSTED_PROXIES)
+    networks: { sdwan: { ipv4_address: "${SDWAN_NET:-172.30.0}.30" } }
     depends_on: [api]
 
   postgres:

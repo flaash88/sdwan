@@ -165,6 +165,13 @@ setenv API_PORT "$API_PORT"
 setenv SDWAN_NET "$SDWAN_NET"
 # Remote-Access-Proxy: Listener existieren nur während aktiver Sessions und prüfen die Quell-IP selbst.
 setenv REMOTE_PROXY_BIND "$([ "$REMOTE_ACCESS" = yes ] && echo 0.0.0.0 || echo 127.0.0.1)"
+# X-Forwarded-For nur von bekannten Proxys (AUDIT-003): Frontend-nginx (feste Adresse .30) und – mit Caddy/nginx auf dem
+# Host – das Docker-Gateway (.1), über das der Host-Proxy ankommt. Eigener Proxy (Modus none): Adresse ergänzen.
+if [ "$PROXY" = "caddy" ] || [ "$PROXY" = "nginx" ]; then
+  setenv TRUSTED_PROXIES "${SDWAN_NET}.30,${SDWAN_NET}.1"
+else
+  setenv TRUSTED_PROXIES "${SDWAN_NET}.30"
+fi
 chmod 600 .env
 c_ok ".env: Frontend ${FRONTEND_BIND}:${FRONTEND_PORT}, WireGuard ${WG_PORT}/udp, Docker-Netz ${SDWAN_NET}.0/24, Proxy=$PROXY"
 
@@ -256,6 +263,7 @@ fi
 
 # ----------------------------------------------------------------------------- 10. Start
 c_info "Images bauen und Stack starten (erster Build dauert einige Minuten) …"
+deploy/check-secrets.sh .env || die "Standard-Geheimnisse in .env – siehe Meldungen oben (AUDIT-006)"
 docker compose pull -q postgres redis influxdb grafana >/dev/null 2>&1 || true
 docker compose up -d --build --remove-orphans
 c_info "Warte auf API …"

@@ -104,11 +104,14 @@ async def _user_from_token(token: str, db: AsyncSession, request: Request | None
         if payload.get("typ") != "access":
             raise ValueError("wrong token type")
         user_id = uuid.UUID(payload["sub"])
-    except (jwt.PyJWTError, ValueError, KeyError) as exc:
+        version = int(payload.get("tv", 0))  # Tokens von vor AUDIT-029 ohne Claim = Version 0
+    except (jwt.PyJWTError, ValueError, KeyError, TypeError) as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Ungültiges Token") from exc
     user = await db.get(User, user_id)
     if user is None or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Benutzer inaktiv oder unbekannt")
+    if version != (user.token_version or 0):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Anmeldung abgelaufen (Passwort oder Rechte geändert) – bitte neu anmelden")
     return user
 
 

@@ -19,7 +19,8 @@ router = APIRouter(prefix="/internal/hub", tags=["internal"])
 
 
 async def hub_auth(x_hub_token: str = Header(default="")) -> None:
-    if not hmac.compare_digest(x_hub_token, get_settings().hub_token):
+    # Bytes vergleichen: compare_digest wirft bei Nicht-ASCII-str einen TypeError (→ 500, AUDIT-034)
+    if not hmac.compare_digest(x_hub_token.encode("utf-8", "surrogateescape"), get_settings().hub_token.encode()):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid hub token")
 
 

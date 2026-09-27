@@ -13,6 +13,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.config import get_settings
 from app.db import create_all
+from app.secrets_check import enforce as enforce_secrets
 from app.worker.jobs import register_jobs
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -22,6 +23,7 @@ logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
 
 async def main() -> None:
     s = get_settings()
+    enforce_secrets(s)  # AUDIT-006: kein Start mit Standard-Geheimnissen in Produktion
     if s.db_auto_create:
         await create_all()
     scheduler = AsyncIOScheduler(timezone="UTC")

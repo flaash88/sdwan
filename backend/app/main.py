@@ -11,7 +11,10 @@ from app.api.v1.router import api_router
 from app.bootstrap import ensure_bootstrap_admin
 from app.config import get_settings
 from app.db import TenantIsolationError, create_all
+from app.proxy import TrustedProxyMiddleware
 from app.routeros.schema import TRUST_ANCHORS_MIN_VERSION
+from app.secrets_check import InsecureSecretsError
+from app.secrets_check import enforce as enforce_secrets
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -19,8 +22,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     s = get_settings()
-    if s.environment == "production" and (s.secret_key.startswith("change-me") or s.hub_token.startswith("change-me")):
-        logging.getLogger("app").error("SECRET_KEY/HUB_TOKEN sind Standardwerte – bitte in .env ersetzen!")
+    try:
+        enforce_secrets(s)  # AUDIT-006: Produktion startet nicht mit Standard-Geheimnissen
+    except InsecureSecretsError as exc:
+        logging.getLogger("app").critical(str(exc))
+        raise
     if s.db_auto_create:
         await create_all()
     await ensure_bootstrap_admin()
@@ -40,6 +46,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # AUDIT-003: X-Forwarded-For nur von konfigurierten Proxys (äußerste Schicht, vor CORS)
+    app.add_middleware(TrustedProxyMiddleware, trusted=s.trusted_proxies)
 
     @app.exception_handler(TenantIsolationError)
     async def _iso(_req: Request, exc: TenantIsolationError) -> JSONResponse:

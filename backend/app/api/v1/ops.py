@@ -13,12 +13,19 @@ from sqlalchemy import func, select
 from app.api.v1.common import get_or_404
 from app.db import utcnow
 from app.deps import Ctx, ReadCtx, TechCtx
-from app.models import ConfigBackup, Device, FirmwareJob, FirmwareJobItem, PairingStatus
+from app.models import ROLE_RANK, ConfigBackup, Device, FirmwareJob, FirmwareJobItem, PairingStatus, Role
 from app.routeros import RouterOSError
 from app.services.backup import BackupError, make_diff, take_backup
+from app.services.compliance import mask_secrets
 from app.services.firmware import CHANNELS, FINAL, check_updates, plan_batches
 
 router = APIRouter(tags=["backups", "firmware"])
+
+
+def _sees_secrets(ctx: Ctx) -> bool:
+    """Geheimnisse im Export (Passphrasen, PSKs, Passwörter) erst ab Techniker; Nur-Lesen und read-Tokens sehen
+    maskiert (AUDIT-009)."""
+    return ROLE_RANK[ctx.role] >= ROLE_RANK[Role.technician]
 
 
 def _b_out(b: ConfigBackup, with_content: bool = False) -> dict:
@@ -53,7 +60,12 @@ async def create_backup(device_id: uuid.UUID, ctx: Ctx = TechCtx, note: str | No
 
 @router.get("/backups/{backup_id}")
 async def get_backup(backup_id: uuid.UUID, ctx: Ctx = ReadCtx) -> dict:
-    return _b_out(await get_or_404(ctx.db, ConfigBackup, backup_id, "Backup"), with_content=True)
+    out = _b_out(await get_or_404(ctx.db, ConfigBackup, backup_id, "Backup"), with_content=True)
+    if not _sees_secrets(ctx):
+        out["content"] = mask_secrets(out["content"])
+        out["diff"] = [mask_secrets(ln) for ln in out["diff"]]
+        out["masked"] = True
+    return out
 
 
 @router.get("/backups/{backup_id}/diff")
@@ -66,11 +78,14 @@ async def diff_backup(backup_id: uuid.UUID, ctx: Ctx = ReadCtx, against: uuid.UU
     if other.device_id != b.device_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Backups verschiedener Geräte")
     old, new = (other, b) if other.created_at <= b.created_at else (b, other)
+    if not _sees_secrets(ctx):
+        return {"from": str(old.id), "to": str(new.id), "masked": True,
+                **make_diff(mask_secrets(old.content), mask_secrets(new.content), context)}
     return {"from": str(old.id), "to": str(new.id), **make_diff(old.content, new.content, context)}
 
 
 @router.get("/backups/{backup_id}/download", response_class=PlainTextResponse)
-async def download_backup(backup_id: uuid.UUID, ctx: Ctx = ReadCtx) -> PlainTextResponse:
+async def download_backup(backup_id: uuid.UUID, ctx: Ctx = TechCtx) -> PlainTextResponse:  # vollständig nur ab Techniker
     b = await get_or_404(ctx.db, ConfigBackup, backup_id, "Backup")
     dev = await ctx.db.get(Device, b.device_id)
     name = f"{dev.name if dev else b.device_id}-{b.created_at:%Y%m%d-%H%M}.rsc"

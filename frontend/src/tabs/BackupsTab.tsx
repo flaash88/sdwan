@@ -80,7 +80,7 @@ export default function BackupsTab({ device }: { device: Device }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [list.data]);
   const diff = useFetch<Diff>(b && a && a !== b && view === "diff" ? `/backups/${b}/diff?against=${a}&context=3` : null);
-  const full = useFetch<{ content: string }>(b && view === "content" ? `/backups/${b}` : null);
+  const full = useFetch<{ content: string; masked?: boolean }>(b && view === "content" ? `/backups/${b}` : null);
   const byId = (id: string | null) => items.find((x) => x.id === id);
   const left = byId(diff.data?.from ?? a), right = byId(diff.data?.to ?? b);
   const rows = useMemo(() => sideBySide(diff.data?.lines ?? []), [diff.data]);
@@ -114,7 +114,7 @@ export default function BackupsTab({ device }: { device: Device }) {
                   <Checksum value={x.sha256} />
                   <span className="text-fg2">{fmtBytes(x.size)}</span>
                   <span className="text-xs">{x.previous_id ? <><span className="text-green-text">+{x.added}</span> / <span className="text-red-text">−{x.removed}</span></> : <span className="text-fg3">erster Stand</span>}</span>
-                  <span className="flex justify-end"><IconButton icon="download" label={`Stand ${fmtFull(x.created_at)} als .rsc herunterladen`} onClick={() => void download(`/backups/${x.id}/download`, `${device.name}-${x.created_at.slice(0, 16).replace(/[:T]/g, "-")}.rsc`)} /></span>
+                  <span className="flex justify-end">{can("technician") && <IconButton icon="download" label={`Stand ${fmtFull(x.created_at)} als .rsc herunterladen`} onClick={() => void download(`/backups/${x.id}/download`, `${device.name}-${x.created_at.slice(0, 16).replace(/[:T]/g, "-")}.rsc`)} />}</span>
                 </div>
               ))}
             </div>
@@ -128,7 +128,10 @@ export default function BackupsTab({ device }: { device: Device }) {
             <Segment label="Ansicht" value={view} onChange={setView} options={[{ value: "diff", label: "Vergleich A ↔ B" }, { value: "content", label: "Vollständiger Stand B" }]} />
           </div>
           {view === "content" ? (
-            full.data ? <pre className="m-0 max-h-[36rem] overflow-auto bg-code p-4 font-mono text-xs leading-[1.6]">{full.data.content}</pre> : <Loading rows={4} />
+            full.data ? <>
+              {full.data.masked && <p className="m-0 border-b border-line px-4 py-2 text-xs text-fg2">Passwörter und Schlüssel sind maskiert (***) – vollständig ab Rolle Techniker.</p>}
+              <pre className="m-0 max-h-[36rem] overflow-auto bg-code p-4 font-mono text-xs leading-[1.6]">{full.data.content}</pre>
+            </> : <Loading rows={4} />
           ) : !a || a === b ? <EmptyState compact title="Zwei unterschiedliche Stände als A und B wählen" /> : !diff.data ? <Loading rows={4} /> : (
             <>
               <div className="grid grid-cols-2 border-b border-line">

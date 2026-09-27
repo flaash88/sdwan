@@ -18,11 +18,12 @@ from app.db import get_db, utcnow
 from app.deps import Ctx, bearer, get_ctx
 from app.models import Tenant, User
 from app.schemas import LoginIn, TenantOut, TokenOut, UserOut
-from app.security import create_access_token, decode_token, decrypt_secret, encrypt_secret, verify_password
+from app.security import create_access_token, decode_token, decrypt_secret, encrypt_secret, hash_password, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 MFA_TTL = dt.timedelta(minutes=5)
+_DUMMY_HASH = hash_password("dummy-password-for-timing")  # nur für den Zeitausgleich bei unbekannten Konten
 SETUP_TTL = dt.timedelta(minutes=15)
 
 
@@ -92,7 +93,7 @@ async def _success(db: AsyncSession, user: User, ip: str | None, method: str) ->
     user.failed_logins = 0
     await audit(db, "auth.login", user=user, tenant_id=user.tenant_id, ip=ip, details={"method": method})
     await db.commit()
-    return TokenOut(access_token=create_access_token(user.id), user=UserOut.model_validate(user))
+    return TokenOut(access_token=create_access_token(user.id, {"tv": user.token_version or 0}), user=UserOut.model_validate(user))
 
 
 def _check_code(user: User, code: str) -> str | None:
@@ -120,7 +121,9 @@ async def login(data: LoginIn, request: Request, db: AsyncSession = Depends(get_
         await audit(db, "auth.login_blocked", user=user, tenant_id=user.tenant_id, ip=ip, success=False)
         await db.commit()
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Konto nach zu vielen Fehlversuchen vorübergehend gesperrt")
-    if user is None or not user.is_active or not verify_password(data.password, user.password_hash):
+    # Unbekanntes Konto: trotzdem bcrypt rechnen, damit die Antwortzeit keine Konten verrät (AUDIT-024)
+    ok = verify_password(data.password, user.password_hash if user is not None else _DUMMY_HASH)
+    if user is None or not user.is_active or not ok:
         await _fail(db, user if user and user.is_active else None, ip, "auth.login_failed", data.email)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "E-Mail oder Passwort falsch")
     if user.totp_enabled:

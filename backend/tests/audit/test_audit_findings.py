@@ -77,23 +77,26 @@ def test_027_ztp_identity_pattern_no_format_attribute_access():
 
 
 # ============================================================================= Anmeldung / Transport
-@xf("AUDIT-003")
-async def test_003_login_ip_limit_not_bypassable_via_x_forwarded_for(msp):
-    """uvicorn läuft mit --forwarded-allow-ips "*" und nginx hängt XFF an → linke (fremde) Adresse zählt."""
+# AUDIT-003: behoben (AP2) – X-Forwarded-For nur von TRUSTED_PROXIES, uvicorn ohne Proxy-Header
+async def test_003_login_ip_limit_not_bypassable_via_x_forwarded_for(msp, monkeypatch):
+    """Anfragen kommen über den vertrauenswürdigen Frontend-nginx (172.30.0.30), der Client setzt gefälschte XFF-Einträge
+    davor; nginx hängt die echte Adresse an. Das Limit muss für die echte Adresse greifen."""
     import httpx
-    from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-    from app.main import app
+    from app.main import create_app
 
-    wrapped = ProxyHeadersMiddleware(app, trusted_hosts="*")  # wie Dockerfile: --proxy-headers --forwarded-allow-ips "*"
+    monkeypatch.setattr(get_settings(), "trusted_proxies", "172.30.0.30")
+    app = create_app()
     limit = get_settings().login_ip_limit
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=wrapped), base_url="http://test") as c:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app, client=("172.30.0.30", 5555)), base_url="http://test") as c:
         codes = []
         for i in range(limit + 10):
             r = await c.post("/api/v1/auth/login", json={"email": f"spray{i}@example.com", "password": "falsch-123"},
                              headers={"X-Forwarded-For": f"10.0.{i // 250}.{i % 250 + 1}, 203.0.113.9"})
             codes.append(r.status_code)
     assert 429 in codes, "IP-Limit greift nicht, weil X-Forwarded-For vom Client übernommen wird"
+    cmd = (ROOT / "backend" / "Dockerfile").read_text()
+    assert '"--forwarded-allow-ips", "*"' not in cmd and "--no-proxy-headers" in cmd
 
 
 # AUDIT-005: behoben (AP1)
@@ -107,7 +110,7 @@ def test_005_onboarding_fetch_checks_certificate():
     assert all("check-certificate=yes" in t for t in texts)
 
 
-@xf("AUDIT-006")
+# AUDIT-006: behoben (AP2)
 async def test_006_production_refuses_default_secrets(monkeypatch):
     from app.main import create_app, lifespan
 
@@ -128,7 +131,7 @@ async def test_007_ztp_token_bound_to_serial_even_without_serial_in_request(clie
     assert r.text.startswith(":error"), "Pairing ohne Seriennummer trotz seriengebundenem ZTP-Token erfolgreich"
 
 
-@xf("AUDIT-029")
+# AUDIT-029: behoben (AP2)
 async def test_029_password_change_invalidates_existing_tokens(client, msp):
     t = await make_tenant(client, msp)
     h = await make_tenant_admin(client, msp, t["id"])
@@ -139,7 +142,7 @@ async def test_029_password_change_invalidates_existing_tokens(client, msp):
     assert (await client.get("/api/v1/auth/me", headers=tech)).status_code == 401  # alter JWT (12 h) bleibt gültig
 
 
-@xf("AUDIT-034")
+# AUDIT-034: behoben (AP2)
 async def test_034_hub_token_non_ascii_is_401_not_500(client):
     r = await client.get("/api/v1/internal/hub/peers", headers={"X-Hub-Token": "tökén".encode("latin-1")})
     assert r.status_code == 401
@@ -170,7 +173,7 @@ def test_008_redos_alternation_rejected():
         check_regex(r"(\w|\w)*!")
 
 
-@xf("AUDIT-009")
+# AUDIT-009: behoben (AP2)
 async def test_009_backup_content_masked_for_readonly(client, msp, hub):
     from app.db import system_session
     from app.models import ConfigBackup

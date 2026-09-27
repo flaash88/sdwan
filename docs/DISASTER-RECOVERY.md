@@ -97,3 +97,28 @@ docker compose exec api python -m app.cli reset-2fa <email>   # Zwei-Faktor zur�
 docker compose exec api python -m app.cli unlock <email>      # Sperre nach Fehlversuchen aufheben
 ```
 Beide schreiben einen Audit-Eintrag und melden sich über den Plattform-Webhook.
+
+
+## Geheimnisse ersetzen (Standardwerte, AUDIT-006/023)
+
+In Produktion starten API und Worker nicht, solange `SECRET_KEY`, `HUB_TOKEN`, `BOOTSTRAP_ADMIN_PASSWORD` oder
+`INFLUX_TOKEN` Standardwerte haben oder zu kurz sind. `deploy/update.sh` prüft die `.env` mit `deploy/check-secrets.sh`
+vor jedem Neubau und bricht ab, ohne Container neu zu starten; die laufende Plattform bleibt in Betrieb. Geprüft werden
+zusätzlich `GRAFANA_ADMIN_PASSWORD` und `INFLUX_ADMIN_PASSWORD`.
+
+**Reihenfolge beim Ersetzen:**
+
+1. **Datenschlüssel sichern.** Nur nötig, wenn `ENCRYPTION_KEY` in der `.env` leer ist. Der Schlüssel für verschlüsselte
+   DB-Werte (Geräte-API-Passwörter, PSKs, Webhook-URLs, Vor-Ort-Passwörter) wird sonst aus `SECRET_KEY` abgeleitet:
+   `echo "ENCRYPTION_KEY=$(docker compose run --rm --no-deps -T api python -m app.cli encryption-key)" >> .env`
+2. **`SECRET_KEY` neu erzeugen:** `openssl rand -hex 32`. Alle Anmeldungen werden ungültig, und die Benutzer melden sich neu an.
+3. **`HUB_TOKEN` neu erzeugen:** `openssl rand -hex 24`. API und Hub lesen denselben Wert aus der `.env`.
+4. **`BOOTSTRAP_ADMIN_PASSWORD`:** Der Wert wird nur beim ersten Start genutzt. Das Passwort des Admins ändert man in der
+   Oberfläche; in der `.env` genügt ein zufälliger Wert.
+5. **Grafana und Influx:** Diese Dienste übernehmen die Werte nur bei der Ersteinrichtung. Bei bestehenden Daten zusätzlich
+   im Dienst ändern:
+   `docker compose exec grafana grafana cli admin reset-admin-password '<neu>'`
+   bzw. `docker compose exec influxdb influx user password -n admin -p '<neu>'`.
+   Für ein neues `INFLUX_TOKEN` zuerst `influx auth create --all-access --org sdwan` ausführen und das Ergebnis in die
+   `.env` eintragen.
+6. **Aktualisieren:** `deploy/check-secrets.sh .env` muss grün sein, dann `deploy/update.sh`.

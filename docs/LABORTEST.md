@@ -649,6 +649,21 @@ Voraussetzung: Router im Werkszustand (defconf) onboarden; Notebook am LAN, zwei
       **Ergebnis:** ☐ Router erlaubt Abgleich ☐ Router lehnt ab, Einzeiler nötig
 - [ ] **Compliance:** Die MSP-Baseline enthält „Dienst ftp deaktiviert“ (`/ip service print where name=ftp` → disabled).
 
+## 24. Audit-Behebung AP2: Proxy-Adresse, Geheimnisse, Token-Version
+
+- [ ] Plattform hinter Caddy bzw. nginx auf dem Host: Mit falschem Passwort anmelden und Audit-Log öffnen.
+      **Erwartet:** Unter IP steht die öffentliche Adresse des Test-PCs, nicht `172.30.0.x`.
+- [ ] Anfrage mit gefälschtem Header senden:
+      `curl -H "X-Forwarded-For: 1.2.3.4" -d '{"email":"x@y.z","password":"falsch-123"}' -H 'Content-Type: application/json' https://<domain>/api/v1/auth/login`
+      **Erwartet:** Im Audit steht die echte Adresse, nicht 1.2.3.4.
+- [ ] Nach 30 Fehlversuchen vom Test-PC kommt 429; ein anderer PC kann sich weiter anmelden.
+- [ ] In der `.env` testweise `GRAFANA_ADMIN_PASSWORD=admin` setzen und `deploy/update.sh` ausführen.
+      **Erwartet:** Abbruch mit Hinweis; die Container laufen unverändert weiter (`docker compose ps`, Uptime unverändert).
+- [ ] Als Admin das Passwort eines angemeldeten Technikers ändern.
+      **Erwartet:** Die Technikersitzung im zweiten Browser endet beim nächsten Klick (Anmeldung erforderlich).
+- [ ] Als Nur-Lesen-Benutzer ein Backup öffnen.
+      **Erwartet:** Passwörter und Schlüssel sind maskiert (`***`), es gibt keinen Download-Button.
+
 ---
 
 ## Ergebnis
@@ -678,3 +693,4 @@ Voraussetzung: Router im Werkszustand (defconf) onboarden; Notebook am LAN, zwei
 | 21 Vor-Ort-Zugang/API-Tokens | ☐ ok ☐ Abweichung | MAC-WinBox mit Adressbeschränkung: ☐ ok ☐ abgelehnt · Konsolen-Login: ☐ ok ☐ abgelehnt |
 | 22 Nachbarn/Flows/Inventar/Import | ☐ ok ☐ Abweichung | IPFIX: |
 | 23 Audit AP1 (Zertifikate, ftp) | ☐ ok ☐ Abweichung | Mindestversion: |
+| 24 Audit AP2 (Proxy, Geheimnisse) | ☐ ok ☐ Abweichung | |

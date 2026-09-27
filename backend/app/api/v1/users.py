@@ -66,6 +66,8 @@ async def update_user(user_id: uuid.UUID, data: UserUpdate, ctx: Ctx = AdminCtx)
     if pw:
         user.password_hash = hash_password(pw)
         changed["password"] = "***"
+    if pw or {"role", "is_active", "is_superuser", "tenant_id"} & set(changed):
+        user.token_version = (user.token_version or 0) + 1  # AUDIT-029: bestehende Anmeldungen ungültig
     await ctx.audit("user.update", tenant_id=user.tenant_id, target_type="user", target_id=user.id, details=changed)
     await ctx.db.commit()
     return user

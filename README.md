@@ -76,12 +76,16 @@ Mandant anlegen → Standort anlegen → Gerät anlegen → „Pairing simuliere
 ## Produktivbetrieb mit echten Routern
 
 1. `.env`: `ROUTEROS_BACKEND=api`, `PUBLIC_URL=https://sdwan.example.com`, `WG_HUB_ENDPOINT=vpn.example.com`.
-2. HTTPS-Reverse-Proxy (Caddy, Traefik, Nginx Proxy Manager) vor Port `8080` setzen.
+2. HTTPS-Reverse-Proxy (Caddy, Traefik, Nginx Proxy Manager) vor Port `8080` setzen. Dessen Adresse, wie sie im
+   Docker-Netz ankommt, zusätzlich in `TRUSTED_PROXIES` eintragen. Nur dann zählen Login-Limit und Audit die echte
+   Client-Adresse; `install.sh` erledigt das für Caddy/nginx auf dem Host. Alle `change-me`-Werte ersetzen, sonst
+   startet die Plattform in Produktion nicht (`deploy/check-secrets.sh .env`).
 3. UDP-Port `51820` (WireGuard) am Server/Firewall freigeben.
-4. Im Dashboard ein Gerät anlegen und den angezeigten Befehl im RouterOS-Terminal ausführen:
+4. Im Dashboard ein Gerät anlegen und den angezeigten Befehl im RouterOS-Terminal ausführen (RouterOS ≥ 7.19, weil der
+   Download mit Zertifikatsprüfung läuft):
 
    ```
-   /tool fetch url="https://sdwan.example.com/api/v1/onboard/<token>.rsc" dst-path=sdwan-onboard.rsc; :delay 2s; /import file-name=sdwan-onboard.rsc
+   :do { … builtin-trust-anchors … } on-error={ :error "…" }; :do { /tool fetch url="https://sdwan.example.com/api/v1/onboard/<token>.rsc" dst-path=sdwan-onboard.rsc check-certificate=yes } on-error={ … }; :delay 2s; /import file-name=sdwan-onboard.rsc
    ```
 
 **Proxmox-LXC:** Für den Hub entweder das WireGuard-Kernelmodul auf dem Host laden (`modprobe wireguard`)

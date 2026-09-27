@@ -5,6 +5,25 @@ cd "$(dirname "$0")/.."
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 git pull --ff-only origin "$BRANCH"
 
+# Vor jedem Neubau/Neustart: Standard-Geheimnisse? Dann abbrechen und NICHTS neu starten – die laufende Plattform bleibt
+# in Betrieb (ein Neustart mit Standardwerten würde ohnehin verweigert, AUDIT-006/023).
+if ! deploy/check-secrets.sh .env; then
+  echo "Update abgebrochen – keine Container neu gebaut oder gestartet. Nach dem Ersetzen erneut: deploy/update.sh" >&2
+  exit 1
+fi
+
+# AUDIT-003: bestehende Installationen ohne TRUSTED_PROXIES – Frontend-nginx (.30) und bei Caddy/nginx auf dem Host
+# zusätzlich das Docker-Gateway (.1) eintragen, sonst zählt das Login-Limit alle Nutzer als eine Adresse.
+if [ -f .env ] && ! grep -qE "^TRUSTED_PROXIES=" .env; then
+  NET=$(grep -E "^SDWAN_NET=" .env | tail -n1 | cut -d= -f2-); NET=${NET:-172.30.0}
+  if { [ -f /etc/caddy/Caddyfile ] && systemctl is-active --quiet caddy 2>/dev/null; } || [ -f /etc/nginx/sites-enabled/sdwan.conf ]; then
+    echo "TRUSTED_PROXIES=${NET}.30,${NET}.1" >> .env
+  else
+    echo "TRUSTED_PROXIES=${NET}.30" >> .env
+  fi
+  echo "TRUSTED_PROXIES in .env ergänzt: $(grep -E '^TRUSTED_PROXIES=' .env | cut -d= -f2-) (eigener Proxy davor? Adresse ergänzen)"
+fi
+
 hub_id() { docker compose ps -q wireguard-hub 2>/dev/null || true; }
 HUB_BEFORE=$(hub_id)
 docker compose up -d --build --remove-orphans

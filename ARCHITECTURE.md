@@ -1148,6 +1148,21 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   * Der Selbsttest meldet orange, wenn das Gerät Hotspot nutzt und `ftp` fehlt.
   * Die MSP-Baseline prüft „Dienst ftp deaktiviert“.
 
+### AP2 – Anmeldung und Geheimnisse
+* **Client-Adresse** (`app/proxy.py`): `TrustedProxyMiddleware` wertet `X-Forwarded-For`/`-Proto` nur aus, wenn die Gegenstelle
+  in `TRUSTED_PROXIES` steht (Compose-Default: Frontend-nginx mit fester Adresse `<SDWAN_NET>.30`; mit Caddy/nginx auf dem
+  Host zusätzlich das Gateway `.1`). Die Liste wird von rechts gelesen, vertrauenswürdige Hops werden übersprungen, und die von
+  Clients geschriebenen Einträge links zählen nie. Uvicorn läuft mit `--no-proxy-headers`.
+* **Standard-Geheimnisse** (`app/secrets_check.py`): In Produktion verweigern API und Worker den Start. Betroffen sind
+  `SECRET_KEY`, `HUB_TOKEN`, `BOOTSTRAP_ADMIN_PASSWORD` und `INFLUX_TOKEN`, wenn Influx aktiv ist. Die Fehlermeldung nennt Variable und Befehl.
+  `deploy/check-secrets.sh` prüft zusätzlich die Grafana-/Influx-Admin-Passwörter. update.sh bricht davor ab, ohne etwas neu zu starten.
+  `python -m app.cli encryption-key` sichert den Datenschlüssel vor dem Tausch von `SECRET_KEY`.
+* **Backups:** Unterhalb der Rolle Techniker (auch `read`-Tokens) sind Inhalt und Diff maskiert (`mask_secrets`); Download erst ab Techniker.
+* **Token-Version** (Migration 0037): `users.token_version` wird als JWT-Claim `tv` mitgegeben. Passwortänderung, Rollen-, Aktiv-,
+  Superuser- oder Mandantenwechsel und 2FA-Reset erhöhen die Version. Ältere Tokens bekommen dann 401.
+* **Hub-Token** wird als Bytes verglichen (kein 500 mehr bei Nicht-ASCII). **Login** rechnet bei unbekannten Konten einen Dummy-bcrypt
+  (gleiche Antwortzeit). Die Kontosperre bleibt bewusst ohne IP-Kopplung.
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

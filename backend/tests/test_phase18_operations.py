@@ -124,9 +124,9 @@ async def test_syslog_config_store_query_and_retention(client, msp, hub):
     rt = get_router(dev["tunnel_ip"])
     r = await client.put(f"/api/v1/devices/{dev['id']}/syslog", json={"enabled": True, "topics": ["critical", "error", "warning", "firewall"]}, headers=h)
     assert r.status_code == 200 and r.json()["last_error"] is None
-    (act,) = [a for a in rt.tables["/system/logging/action"] if a["name"] == "sdwan-syslog"]
+    (act,) = [a for a in rt.tables["/system/logging/action"] if a["name"] == "sdwansyslog"]
     assert act["target"] == "remote" and act["remote"] == "10.100.0.1" and act["src-address"] == dev["tunnel_ip"]
-    assert sorted(x["topics"] for x in rt.tables["/system/logging"] if x.get("action") == "sdwan-syslog") == ["critical", "error", "firewall", "warning"]
+    assert sorted(x["topics"] for x in rt.tables["/system/logging"] if x.get("action") == "sdwansyslog") == ["critical", "error", "firewall", "warning"]
     assert len([x for x in rt.tables["/system/logging"] if x.get("action") == "memory"]) == 4  # Standardregeln unberührt
     # Empfang
     async with system_session() as db:
@@ -149,6 +149,65 @@ async def test_syslog_config_store_query_and_retention(client, msp, hub):
     assert await purge_old() == 1
     # Abschalten entfernt nur die eigenen Einträge
     await client.put(f"/api/v1/devices/{dev['id']}/syslog", json={"enabled": False}, headers=h)
-    assert not [a for a in rt.tables["/system/logging/action"] if a["name"] == "sdwan-syslog"]
-    assert not [x for x in rt.tables["/system/logging"] if x.get("action") == "sdwan-syslog"]
+    assert not [a for a in rt.tables["/system/logging/action"] if a["name"] == "sdwansyslog"]
+    assert not [x for x in rt.tables["/system/logging"] if x.get("action") == "sdwansyslog"]
     assert len(rt.tables["/system/logging/action"]) == 4
+
+
+async def test_syslog_action_name_rule_and_legacy_migration(client, msp, hub):
+    """Hardware-Fund: RouterOS lehnt Aktionsnamen mit '-' ab. Simulator bildet die Regel nach; alte Aktion wird migriert."""
+    from app.routeros import RouterOSError
+
+    h, dev = await _setup(client, msp)
+    rt = get_router(dev["tunnel_ip"])
+    try:  # Fehler reproduziert (früherer Name)
+        rt.call("/system/logging/action/add", {"name": "sdwan-syslog", "target": "remote", "remote": "10.100.0.1"})
+        raise AssertionError("Simulator hätte ablehnen müssen")
+    except RouterOSError as exc:
+        assert "action name can contain only letters and numbers" in str(exc)
+    # alter Zustand (z. B. aus einer früheren Version): Aktion mit altem Namen + Regel; dazu eine fremde gleichnamige Aktion?
+    rt._insert("/system/logging/action", {"name": "sdwan-syslog", "target": "remote", "remote": "10.100.0.1", "remote-port": "514"})
+    rt._insert("/system/logging", {"topics": "error", "action": "sdwan-syslog"})
+    rt._insert("/system/logging/action", {"name": "kundensyslog", "target": "remote", "remote": "192.0.2.50"})
+    r = await client.put(f"/api/v1/devices/{dev['id']}/syslog", json={"enabled": True, "topics": ["error"]}, headers=h)
+    assert r.status_code == 200 and r.json()["last_error"] is None, r.text
+    names = [a["name"] for a in rt.tables["/system/logging/action"]]
+    assert "sdwan-syslog" not in names and "sdwansyslog" in names and "kundensyslog" in names
+    assert not [x for x in rt.tables["/system/logging"] if x.get("action") == "sdwan-syslog"]
+    (act,) = [a for a in rt.tables["/system/logging/action"] if a["name"] == "sdwansyslog"]
+    assert act.get("comment") == "sdwan:syslog"  # Simulator akzeptiert comment (ANNAHME Labor)
+    # gleichnamige Aktion, die NICHT von der Plattform stammt (anderes Ziel), bleibt unangetastet
+    await client.put(f"/api/v1/devices/{dev['id']}/syslog", json={"enabled": False}, headers=h)
+    rt._insert("/system/logging/action", {"name": "sdwan-syslog", "target": "remote", "remote": "192.0.2.99"})
+    await client.put(f"/api/v1/devices/{dev['id']}/syslog", json={"enabled": True, "topics": ["error"]}, headers=h)
+    assert any(a["name"] == "sdwan-syslog" and a["remote"] == "192.0.2.99" for a in rt.tables["/system/logging/action"])
+
+
+async def test_syslog_action_without_comment_field(client, msp, hub, monkeypatch):
+    """ANNAHME: kennt RouterOS kein comment an Logging-Aktionen, wird ohne angelegt."""
+    from app.routeros import RouterOSError
+
+    h, dev = await _setup(client, msp)
+    rt = get_router(dev["tunnel_ip"])
+    orig = rt.call
+
+    def call(cmd, params):
+        if cmd == "/system/logging/action/add" and "comment" in params:
+            raise RouterOSError("failure: unknown parameter comment")
+        return orig(cmd, params)
+
+    rt.call = call
+    r = await client.put(f"/api/v1/devices/{dev['id']}/syslog", json={"enabled": True, "topics": ["error"]}, headers=h)
+    assert r.json()["last_error"] is None
+    (act,) = [a for a in rt.tables["/system/logging/action"] if a["name"] == "sdwansyslog"]
+    assert "comment" not in act
+
+
+def test_routeros_safe_name():
+    from app.routeros.naming import is_valid, routeros_safe_name
+
+    assert routeros_safe_name("sdwansyslog", "logging_action") == "sdwansyslog"
+    assert routeros_safe_name("sdwan-syslog", "logging_action") == "sdwansyslog"
+    assert routeros_safe_name("sdwan-wifi-büro gast", "generic") == "sdwan-wifi-buero-gast"
+    for valid in ("sdwan-zone-lan", "sdwan-r-ab12cd-src", "sdwan-hs-lobby", "sdwan-wan1", "sdwan-local-access"):
+        assert routeros_safe_name(valid) == valid and is_valid(valid)  # bestehende Namen bleiben unverändert

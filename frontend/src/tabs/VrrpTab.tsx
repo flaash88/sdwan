@@ -79,7 +79,7 @@ function RoleCard({ v, device, wan, simulator, editable, onChanged }: { v: VrrpI
         {state === "backup" && <>{since} Das Hauptsystem hält die virtuelle IP <span className="font-mono text-xs">{vip32(v.vip)}</span>; dieser Router steht mit Priorität {v.priority} bereit.</>}
         {state === "unknown" && !offline && "Der Status wird mit der nächsten Abfrage gelesen."}
       </div>
-      <ErrorBox error={error} />
+      <ErrorBox error={error} deviceId={device.id} />
       <div className="mt-auto flex flex-wrap gap-2">
         {master && <Button variant="secondary" icon="bell" onClick={() => nav("/alerts")}>Zugehöriger Alarm</Button>}
         {editable && simulator && v.id && !offline && v.enabled && (
@@ -129,7 +129,7 @@ function PeerCard({ v, device, editable, onChanged }: { v: VrrpInstance; device:
     <Card title="Gegenstelle" subtitle={v.peer_description ?? undefined}
       actions={editable && v.id && <Button size="sm" variant="secondary" icon={busy ? "loader" : "activity"} disabled={busy || offline}
         onClick={() => void run(async () => { await api.post(`/devices/${device.id}/vrrp/${v.id}/ping`); onChanged(); })}>{busy ? "Prüfe …" : "Peer prüfen"}</Button>}>
-      <ErrorBox error={error} />
+      <ErrorBox error={error} deviceId={device.id} />
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <span className="font-mono text-[13px] font-medium">{v.peer_address}</span>
         {st}
@@ -212,12 +212,12 @@ export default function VrrpTab({ device }: { device: Device }) {
   const [editing, setEditing] = useState(false);
   useLive((e) => { if ((e.data as { device_id?: string }).device_id === device.id) { void vrrp.reload(); void events.reload(); } }, ["vrrp.state", "vrrp.peer", "wan.link"]);
   const editable = can("technician");
-  if (!vrrp.data) return vrrp.error ? <ErrorBox error={vrrp.error} /> : <Loading rows={4} />;
+  if (!vrrp.data) return vrrp.error ? <ErrorBox error={vrrp.error} deviceId={device.id} /> : <Loading rows={4} />;
   const slots = wan.data?.links ?? [];
   const reload = () => { void vrrp.reload(); void events.reload(); };
   return (
     <>
-      <ErrorBox error={vrrp.data.last_error} />
+      <ErrorBox error={vrrp.data.last_error} deviceId={device.id} />
       {vrrp.data.instances.length === 0 && !editing && (
         <Card><EmptyState icon="shield" title="Kein VRRP konfiguriert"
           text="Mit VRRP springt dieser Router als Backup ein, wenn das Hauptsystem (z. B. eine FortiGate) ausfällt – optional mit Umschalten auf eine Backup-Leitung."
@@ -256,7 +256,7 @@ function VrrpEditor({ device, initial, slots, onSaved, onClose }: { device: Devi
   return (
     <div ref={ref}>
       <Card title="VRRP-Konfiguration" subtitle="Speichern überträgt die Instanzen auf den Router" actions={<Button size="sm" variant="ghost" icon="x" onClick={onClose}>Schließen</Button>}>
-        <ErrorBox error={error} />
+        <ErrorBox error={error} deviceId={device.id} />
         <div className="space-y-3">
           {draft.map((v, i) => (
             <fieldset key={i} className="rounded-lg border border-line p-4">

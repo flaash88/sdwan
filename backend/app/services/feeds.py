@@ -24,6 +24,7 @@ from app.db import system_session, utcnow
 from app.models import Device, DeviceStatus, PairingStatus, ThreatFeed, ThreatFeedAssignment
 from app.routeros import RouterOSError, connect_device
 from app.routeros.client import DeviceAPI
+from app.routeros.naming import routeros_safe_name
 
 log = logging.getLogger(__name__)
 PATH_V4 = "/ip/firewall/address-list"
@@ -36,7 +37,7 @@ class FeedError(Exception):
 
 
 def list_name(slug: str) -> str:
-    return f"sdwan-feed-{slug}"
+    return routeros_safe_name(f"sdwan-feed-{slug}")
 
 
 def validate_net(value: str) -> str | None:

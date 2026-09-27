@@ -144,7 +144,7 @@ export default function WanTab({ device }: { device: Device }) {
   useLive((e) => { if ((e.data as { device_id?: string }).device_id === device.id) { void wan.reload(); void routes.reload(); } }, ["wan.link", "vrrp.state"]);
   useEffect(() => { if (editing) editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [editing]);
   const w = wan.data;
-  if (!w) return wan.error ? <ErrorBox error={wan.error} /> : <Loading rows={4} />;
+  if (!w) return wan.error ? <ErrorBox error={wan.error} deviceId={device.id} /> : <Loading rows={4} />;
   const editable = can("technician");
   const reload = () => { void wan.reload(); void routes.reload(); };
   const linkName = (slot: number | null) => w.links.find((l) => l.slot === slot)?.name;
@@ -153,7 +153,7 @@ export default function WanTab({ device }: { device: Device }) {
 
   return (
     <>
-      <ErrorBox error={w.last_error} />
+      <ErrorBox error={w.last_error} deviceId={device.id} />
       <div className="flex flex-wrap items-center gap-x-[18px] gap-y-2 rounded-lg border border-line bg-panel px-3.5 py-2.5 text-fg2">
         <span><span className="text-fg3">Modus:</span> <span className="font-medium text-fg">{MODE_LABEL[w.mode] ?? w.mode}</span></span>
         {w.links.length > 0 && <span><span className="text-fg3">Prüfziele:</span> <span className="font-mono text-xs text-fg">{w.links.map((l) => l.check_target).join(", ")}</span></span>}
@@ -216,7 +216,7 @@ function WanEditor({ device, cfg, onSaved, onClose }: { device: Device; cfg: Wan
   const setLink = (i: number, patch: Partial<WanLink>) => setDraft({ ...draft, links: draft.links.map((l, j) => (j === i ? { ...l, ...patch } : l)) });
   return (
     <Card title="WAN-Konfiguration" subtitle="Änderungen werden beim Speichern auf den Router übertragen" actions={<Button size="sm" variant="ghost" icon="x" onClick={onClose}>Schließen</Button>}>
-      <ErrorBox error={error} />
+      <ErrorBox error={error} deviceId={device.id} />
       <div className="mb-4 grid gap-4 md:grid-cols-3">
         <Select label="Modus" value={draft.mode} onChange={(e) => setDraft({ ...draft, mode: e.target.value })}>
           <option value="failover">Failover (nach Priorität)</option>

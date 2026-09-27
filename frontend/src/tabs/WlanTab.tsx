@@ -18,12 +18,12 @@ export default function WlanTab({ device }: { device: Device }) {
   const { can } = useAuth();
   const data = useFetch<Data>(`/devices/${device.id}/wlan`);
   const { busy, error, run } = useAction();
-  if (!data.data) return data.error ? <ErrorBox error={data.error} /> : <Loading rows={4} />;
+  if (!data.data) return data.error ? <ErrorBox error={data.error} deviceId={device.id} /> : <Loading rows={4} />;
   const d = data.data;
   const w = d.live ?? d.facts;
   return (
     <div className="flex flex-col gap-4">
-      <ErrorBox error={error ?? d.live_error} />
+      <ErrorBox error={error ?? d.live_error} deviceId={device.id} />
       {w?.driver === "wireless" && <Notice tone="orange" icon="alert" title="Treiber „wireless“ – nur Anzeige">Dieses Gerät nutzt das ältere WLAN-Paket. Die Plattform zeigt Status und Clients, konfiguriert aber nur den wifi-Treiber.</Notice>}
       <Card title="Radios" subtitle={w ? `Treiber ${w.driver}${w.capsman ? " · CAPsMAN-Controller" : ""}${w.cap ? " · CAP (von CAPsMAN verwaltet)" : ""}${d.live ? "" : " · Stand der letzten Abfrage"}` : undefined}
         actions={can("technician") && w?.driver === "wifi" && <Button size="sm" variant="secondary" icon="upload" disabled={busy} onClick={() => void run(async () => { await api.post(`/devices/${device.id}/wlan/apply`); await data.reload(); })}>Profile abgleichen</Button>}>

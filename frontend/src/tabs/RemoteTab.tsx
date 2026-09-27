@@ -94,7 +94,7 @@ function OpenDialog({ device, protocol, onClose, onOpened }: { device: Device; p
           onOpened();
         })}>{busy ? "Öffne …" : "Sitzung starten"}</Button>
       </>}>
-      <ErrorBox error={error} />
+      <ErrorBox error={error} deviceId={device.id} />
       {created ? (
         <div className="flex flex-col gap-3">
           <Notice tone="green" title="Zugang aktiv">Läuft ab in <Countdown until={created.expires_at} /> · Zugriff nur von <span className="font-mono">{created.allowed_cidr}</span></Notice>
@@ -137,7 +137,7 @@ export default function RemoteTab({ device }: { device: Device }) {
           </div>
         ))}
       </div>
-      <ErrorBox error={error} />
+      <ErrorBox error={error} deviceId={device.id} />
       <Card flush title="Sitzungen" subtitle={`${active.length} aktiv · werden im Audit-Log protokolliert`}>
         {!list.data ? <Loading rows={2} /> : list.data.length === 0 ? <EmptyState compact title="Noch keine Sitzungen" /> : (
           <div className="overflow-x-auto">

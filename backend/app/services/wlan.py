@@ -38,6 +38,7 @@ from app.routeros import RouterOSError, connect_device
 from app.routeros.client import DeviceAPI, _norm
 from app.security import decrypt_secret, encrypt_secret
 from app.services.targets import resolve_targets
+from app.routeros.naming import routeros_safe_name
 
 log = logging.getLogger(__name__)
 
@@ -138,7 +139,7 @@ def country_for(p: WlanProfile, tenant: Tenant | None) -> str:
 
 
 def base(p: WlanProfile) -> str:
-    return f"{PREFIX}{p.slug}"
+    return routeros_safe_name(f"{PREFIX}{p.slug}")
 
 
 # ----------------------------------------------------------------------------- Erkennung

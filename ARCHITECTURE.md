@@ -770,6 +770,13 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
 
 ## Phase 18 – Wartungsfenster, Speedtest, Syslog
 
+* **Namen auf Routern** (`app/routeros/naming.py`): Logging-Aktionen nur `[A-Za-z0-9]` (auf Hardware bestätigt, daher
+  `sdwansyslog`; eine alte Aktion `sdwan-syslog` mit Ziel Hub-IP wird beim nächsten Abgleich samt Regeln entfernt).
+  Alle übrigen erzeugten Namen laufen über `routeros_safe_name()` (ANNAHME `[A-Za-z0-9._-]`, gültige Namen bleiben
+  unverändert, keine Kürzung). Der Simulator lehnt ungültige Namen je Menü wie RouterOS ab. Fehler von RouterOS
+  (`/pfad/add: …`, `failure: …`) zeigt die Oberfläche mit „Router hat Konfiguration abgelehnt – bitte melden“ und einem
+  Link zum Selbsttest.
+
 * **Wartungsfenster** (`maintenance_windows`, `services/maintenance.py`, Seite „Wartungsfenster“):
   - Gilt für den ganzen Mandanten, einen Standort oder ein Gerät; einmalig (Beginn + Dauer) oder wöchentlich
     (Wochentage, Uhrzeit, Dauer) in der Zeitzone des Mandanten, auch über Mitternacht.
@@ -792,8 +799,8 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   - Annahme (Labor): Antwortfelder `rx-total-average`/`tx-total-average`, Richtungen `receive`/`transmit`.
 * **Zentrales Syslog** (`device_syslog`, `syslog_messages`, `services/syslog.py`, Tab „Log“):
   - Opt-in je Gerät (Standard aus). Beim Aktivieren legt die Plattform `/system logging action`
-    `sdwan-syslog` (target=remote, remote=Hub-Tunnel-IP, Port `SYSLOG_PORT`, src-address=Tunnel-IP) und je
-    gewähltem Topic eine Regel `/system logging` mit `action=sdwan-syslog` an. Erkannt werden die verwalteten
+    `sdwansyslog` (target=remote, remote=Hub-Tunnel-IP, Port `SYSLOG_PORT`, src-address=Tunnel-IP) und je
+    gewähltem Topic eine Regel `/system logging` mit `action=sdwansyslog` an. Erkannt werden die verwalteten
     Einträge über den Aktionsnamen (Annahme: Aktionen/Regeln haben kein Kommentarfeld). Andere Aktionen und
     Regeln bleiben unangetastet.
   - Empfänger `app/syslog_receiver.py` als eigener Container `syslog` im Netz-Namespace des Hubs

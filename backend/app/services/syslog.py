@@ -2,9 +2,13 @@
 
 Router senden per ``/system logging action`` (target=remote) über den Management-Tunnel an die Hub-Adresse; der
 Empfänger (``app/syslog_receiver.py``, eigener Container im Netz-Namespace des Hubs) ordnet die Quell-IP der
-Tunnel-IP eines Geräts zu. Opt-in je Gerät; die Plattform verwaltet nur die Aktion ``sdwan-syslog`` und die
-Logging-Regeln mit ``action=sdwan-syslog`` (ANNAHME Labor: Aktionen/Regeln haben kein Kommentarfeld – Erkennung über
-Namen/Aktion). Aufbewahrung je Mandant (``tenant.settings.syslog_retention_days``, Standard 30 Tage).
+Tunnel-IP eines Geräts zu. Opt-in je Gerät; die Plattform verwaltet nur die Aktion ``sdwansyslog`` und die
+Logging-Regeln mit ``action=sdwansyslog``. Erkennung über Namen/Aktion, weil Aktionen/Regeln ggf. kein Kommentarfeld
+haben (ANNAHME Labor; die Plattform versucht ``comment=sdwan:syslog`` und legt die Aktion ohne an, falls RouterOS das
+Feld ablehnt). Aktionsnamen: nur Buchstaben und Ziffern (auf Hardware bestätigt) – der frühere Name ``sdwan-syslog``
+wurde abgelehnt; eine vorhandene Aktion mit altem Namen wird beim nächsten Abgleich entfernt (nur wenn sie von der
+Plattform stammt: target=remote zur Hub-IP). Aufbewahrung je Mandant (``tenant.settings.syslog_retention_days``,
+Standard 30 Tage).
 """
 
 from __future__ import annotations
@@ -19,9 +23,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.db import system_session, utcnow
 from app.models import Device, DeviceSyslog, SyslogMessage, Tenant
+from app.routeros import RouterOSError
 from app.routeros.client import DeviceAPI
+from app.routeros.naming import routeros_safe_name
 
-ACTION = "sdwan-syslog"
+ACTION = routeros_safe_name("sdwansyslog", "logging_action")
+LEGACY_ACTIONS = ("sdwan-syslog",)  # frühere Namen (von RouterOS abgelehnt bzw. evtl. auf älteren Geräten vorhanden)
+COMMENT = "sdwan:syslog"
 DEFAULT_TOPICS = ["critical", "error", "warning", "info"]
 ALLOWED_TOPICS = {"critical", "error", "warning", "info", "debug", "system", "firewall", "dhcp", "wireless", "wifi", "interface",
                   "account", "script", "ipsec", "l2tp", "pppoe", "ppp", "ovpn", "wireguard", "vrrp", "hotspot", "dns", "route",
@@ -69,8 +77,37 @@ def desired(device: Device, topics: list[str]) -> dict[str, Any]:
     }
 
 
+def is_managed_action(a: dict[str, Any]) -> bool:
+    """Aktion der Plattform: aktueller Name, oder alter Name mit target=remote zur Hub-IP (nie fremde Aktionen)."""
+    if a.get("name") == ACTION:
+        return True
+    return a.get("name") in LEGACY_ACTIONS and a.get("target") == "remote" and str(a.get("remote", "")) == get_settings().wg_hub_ip
+
+
+async def _migrate_legacy(api: DeviceAPI, stats: dict[str, int]) -> None:
+    legacy = [a for a in await api.print("/system/logging/action") if a.get("name") in LEGACY_ACTIONS and is_managed_action(a)]
+    names = {a["name"] for a in legacy}
+    for r in await api.print("/system/logging"):
+        if r.get("action") in names:  # Regeln zuerst – RouterOS löscht keine referenzierte Aktion
+            await api.remove("/system/logging", r[".id"])
+            stats["rules_removed"] += 1
+    for a in legacy:
+        await api.remove("/system/logging/action", a[".id"])
+        stats["legacy_removed"] = stats.get("legacy_removed", 0) + 1
+
+
+async def _add_action(api: DeviceAPI, attrs: dict[str, Any]) -> None:
+    try:
+        await api.add("/system/logging/action", **attrs, comment=COMMENT)
+    except RouterOSError as exc:
+        if "comment" not in str(exc).lower() and "unknown parameter" not in str(exc).lower():
+            raise
+        await api.add("/system/logging/action", **attrs)  # ANNAHME: Aktionen ohne Kommentarfeld
+
+
 async def apply(api: DeviceAPI, device: Device, enabled: bool, topics: list[str]) -> dict[str, int]:
     stats = {"rules_added": 0, "rules_removed": 0}
+    await _migrate_legacy(api, stats)
     rules = [r for r in await api.print("/system/logging") if r.get("action") == ACTION]
     actions = [a for a in await api.print("/system/logging/action") if a.get("name") == ACTION]
     if not enabled:
@@ -87,7 +124,7 @@ async def apply(api: DeviceAPI, device: Device, enabled: bool, topics: list[str]
         if diff:
             await api.set("/system/logging/action", a[".id"], **diff)
     else:
-        await api.add("/system/logging/action", **want["action"])
+        await _add_action(api, want["action"])
     have = {str(r.get("topics")): r for r in rules}
     for t in topics:
         if t not in have:

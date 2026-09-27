@@ -38,6 +38,9 @@ from app.models import ConfigBackup, Device, DeviceStatus, LocalAccess, Offboard
 from app.routeros import RouterOSError, connect_device
 from app.routeros.client import DeviceAPI, _norm
 from app.routeros.schema import API_GROUP, REMOTE_GROUP
+from app.services.syslog import ACTION as SYSLOG_ACTION
+from app.services.syslog import LEGACY_ACTIONS as SYSLOG_LEGACY
+from app.services.syslog import is_managed_action as is_managed_syslog
 
 log = logging.getLogger(__name__)
 
@@ -93,8 +96,8 @@ STEP3: list[tuple[str, str, Any]] = [
     ("/interface/wifi/datapath", "WLAN-Datapath", _managed_name("sdwan-wifi-")),
     ("/interface/wifi/security", "WLAN-Sicherheit", _managed_name("sdwan-wifi-")),
     ("/radius", "RADIUS (WLAN)", _managed_comment),
-    ("/system/logging", "Syslog-Regeln", lambda r: r.get("action") == "sdwan-syslog"),
-    ("/system/logging/action", "Syslog-Aktion", lambda r: _n(r) == "sdwan-syslog"),
+    ("/system/logging", "Syslog-Regeln", lambda r: r.get("action") in (SYSLOG_ACTION, *SYSLOG_LEGACY)),
+    ("/system/logging/action", "Syslog-Aktion", lambda r: _n(r) == SYSLOG_ACTION or (_n(r) in SYSLOG_LEGACY and is_managed_syslog(r))),
     ("/system/scheduler", "Scheduler", lambda r: (_managed_comment(r) or _managed_name("sdwan-")(r)) and _n(r) != FINAL_SCHEDULER),
     ("/system/script", "Scripts", lambda r: _managed_comment(r) or _managed_name("sdwan-")(r)),
     ("/ip/address", "Adressen (VRRP, Mesh)", _managed_comment),

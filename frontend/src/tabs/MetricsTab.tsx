@@ -124,7 +124,7 @@ export default function MetricsTab({ device }: { device: Device }) {
         {markers.length > 0 && <span className="flex items-center gap-1.5 text-xs text-orange-text"><span className="w-3.5 border-t-[1.5px] border-dashed border-orange" />Backup-Betrieb (Failover/VRRP-Master)</span>}
         {me?.user.is_superuser && <Button size="sm" variant="secondary" icon="external" onClick={() => void api.get<{ url: string }>(`/devices/${device.id}/metrics/grafana`).then((r) => window.open(r.url, "_blank", "noopener"))}>Grafana</Button>}
       </div>
-      <ErrorBox error={sys.error ?? ifc.error} />
+      <ErrorBox error={sys.error ?? ifc.error} deviceId={device.id} />
       <Card title="Durchsatz" subtitle={`Mbit/s · ${wanIfaces.size ? "alle WAN-Leitungen" : "alle Interfaces"}`}>
         <LineChart series={thr} height={190} yMin={0} format={mbps} markers={markers} range={xr} />
       </Card>

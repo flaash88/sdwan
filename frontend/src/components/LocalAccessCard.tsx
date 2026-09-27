@@ -21,7 +21,7 @@ export default function LocalAccessCard({ device }: { device: Device }) {
   return (
     <Card title="Vor-Ort-Zugang" subtitle="Lokaler Notfall-Benutzer – nur aus LAN/Management bzw. Service-Port, nie aus dem WAN"
       actions={<Pill tone={la?.status === "active" && la.restricted ? "orange" : tone}>{la?.status === "active" && la.restricted ? "aktiv · eingeschränkt" : label}</Pill>}>
-      <ErrorBox error={error ?? q.error} />
+      <ErrorBox error={error ?? q.error} deviceId={device.id} />
       {la?.status === "not_created" && <div className="mb-3"><Notice tone="orange" icon="alert" title="Nicht angelegt">{la.reason} {admin && "Über „Netze / Service-Port“ erlaubte Netze manuell angeben."}</Notice></div>}
       {la?.status === "error" && <div className="mb-3"><Notice tone="red" icon="alert" title="Fehler">{la.reason}</Notice></div>}
       {la?.status === "active" && la.reason && <div className="mb-3"><Notice tone="orange" icon="alert">{la.reason}</Notice></div>}
@@ -93,7 +93,7 @@ function EditDialog({ device, la, onClose, onDone }: { device: Device; la: Local
     <Modal open onClose={onClose} title="Vor-Ort-Zugang: Netze und Service-Port" size="lg"
       footer={<><Button variant="secondary" onClick={onClose}>Abbrechen</Button>
         <Button disabled={busy || open.length > 0} onClick={() => void save()}>{busy ? "Übernehme …" : "Speichern und anlegen"}</Button></>}>
-      <ErrorBox error={error} />
+      <ErrorBox error={error} deviceId={device.id} />
       <div className="flex flex-col gap-4">
         {confirm.length > 0 && (
           <Notice tone="red" icon="alert" title="Netz überschneidet sich mit einem WAN-Netz">
@@ -133,7 +133,7 @@ function RevealDialog({ device, onClose }: { device: Device; onClose: () => void
     <Modal open onClose={onClose} title={`Vor-Ort-Passwort – ${device.name}`}
       footer={res ? <Button onClick={onClose}>Schließen</Button> : <><Button variant="secondary" onClick={onClose}>Abbrechen</Button>
         <Button disabled={busy || reason.trim().length < 5} onClick={() => void run(async () => setRes(await api.post(`/devices/${device.id}/local-access/reveal`, { reason })))}>Anzeigen</Button></>}>
-      <ErrorBox error={error} />
+      <ErrorBox error={error} deviceId={device.id} />
       {res ? (
         <div className="flex flex-col gap-3">
           <div className="text-sm">Benutzer <span className="font-mono">{res.username}</span> · nur aus {res.networks.join(", ")}</div>

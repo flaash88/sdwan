@@ -24,6 +24,7 @@ from app.routeros import RouterOSError, connect_device
 from app.routeros.client import DeviceAPI
 from app.routeros.schema import REMOTE_GROUP, REMOTE_POLICIES
 from app.security import generate_password
+from app.routeros.naming import routeros_safe_name
 
 log = logging.getLogger(__name__)
 
@@ -124,7 +125,7 @@ async def open_session(db: AsyncSession, device: Device, user: Any, protocol: st
             sess.service_restore = dict(inherited) if inherited else before
             if protocol in ("ssh", "winbox", "webfig"):
                 await _ensure_remote_group(api)
-                username = f"sdwan-rs-{sess.id.hex[:8]}"
+                username = routeros_safe_name(f"sdwan-rs-{sess.id.hex[:8]}")
                 password = generate_password(20)
                 await api.add("/user", name=username, group=REMOTE_GROUP, password=password,
                                address=f"{get_settings().wg_hub_ip}/32", comment=f"sdwan:remote:{sess.id}")

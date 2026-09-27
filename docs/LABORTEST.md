@@ -132,6 +132,22 @@ Die Tunnel-Adresse des Hubs ist die erste Adresse aus `WG_NETWORK` (Standard `10
 - [ ] **Nach Schritt 4 und 5 den Selbsttest wiederholen.** Erst dann sind Netwatch, Routen und VRRP
       befüllt. **Erwartet:** VRRP und Netwatch grün, oder orange mit einem notierten Feldnamen.
 
+## 3a. Namensregeln von RouterOS (ANNAHME)
+
+Die Plattform erzeugt Namen nur aus `sdwan-` + Slug (`[a-z0-9-]`); Logging-Aktionen nur Buchstaben/Ziffern
+(`sdwansyslog`, auf Hardware bestätigt). Für alle anderen Menüs ist angenommen, dass `-`, `_`, `.` erlaubt sind
+(Simulator lehnt andere Zeichen ab, `app/routeros/naming.py`). Nach dem Durchlauf der übrigen Schritte prüfen, dass
+RouterOS diese Namen angenommen hat (keine Fehlermeldung „Router hat Konfiguration abgelehnt“):
+
+- [ ] Interface-Listen `sdwan-zone-…`, `sdwan-local-access`; Address-Lists `sdwan-obj-…`, `sdwan-feed-…`, `sdwan-r-…`.
+- [ ] Scheduler/Scripts `sdwan-…` (z. B. `sdwan-revert-api-group`, `sdwan-wifi-…-on`, `sdwan-offboard`).
+- [ ] Benutzergruppen `sdwan-api`, `sdwan-remote`, `sdwan-local`; Benutzer `sdwan-rs-…`.
+- [ ] WireGuard `sdwan-mgmt`, `sdwan-mesh`; VRRP-Interfaces; Routing-Tabellen `sdwan-wan1…`.
+- [ ] WLAN `sdwan-wifi-…` (Konfiguration, Kanal, Datapath, Security); Hotspot `sdwan-hs-…` (Server, Profile,
+      html-directory), IP-Pool/DHCP-Server `sdwan-local-sp`.
+- [ ] Traffic-Flow-Ziel (kein Name; nur `comment=sdwan:flow`).
+      Abweichungen (Menü, Name, Fehlertext): ______________________
+
 ## 4. WAN-Failover (FortiGate + 5G)
 
 Einrichtung: Tab „WAN“, Modus Failover. WAN1 = ether2, Gateway `192.168.110.2`, also die echte
@@ -401,10 +417,13 @@ Vorbereitung: WAN eingerichtet (Schritt 4). Auf dem L009 existieren die defconf-
 
 **Syslog**
 - [ ] Tab „Log“ → Einstellungen → Topics `system`, `critical` aktivieren. Auf dem Router prüfen:
-      `/system logging action print` → `sdwan-syslog` mit `target=remote`, `remote=<Hub-Tunnel-IP>`,
-      `remote-port=514`, `src-address=<Tunnel-IP>`; `/system logging print` → Regeln mit `action=sdwan-syslog`.
-- [ ] **Annahme prüfen:** Aktionen und Regeln haben kein `comment`-Feld (Erkennung über den Namen).
-      Ergebnis: ______
+      `/system logging action print` → `sdwansyslog` (nur Buchstaben/Ziffern – `sdwan-syslog` lehnt RouterOS ab:
+      „action name can contain only letters and numbers“) mit `target=remote`, `remote=<Hub-Tunnel-IP>`,
+      `remote-port=514`, `src-address=<Tunnel-IP>`; `/system logging print` → Regeln mit `action=sdwansyslog`.
+- [ ] **Annahme prüfen:** Kennt `/system logging action` ein `comment`-Feld? Die Plattform versucht `comment=sdwan:syslog`
+      und legt die Aktion sonst ohne an. Ergebnis: ☐ comment vorhanden ☐ ohne comment angelegt
+- [ ] Migration: Gerät mit alter Aktion `sdwan-syslog` (falls von einer früheren Version vorhanden) → Syslog erneut
+      übernehmen → alte Aktion und ihre Regeln entfernt, `sdwansyslog` angelegt.
 - [ ] Container `syslog` läuft und empfängt: WinBox-Login am Router → Meldung erscheint im Tab „Log“ mit
       Schweregrad und Topics. Format der empfangenen Rohzeile (für den Parser): ______
 - [ ] VRRP-Verlauf → Symbol „Log um diesen Zeitpunkt“ → Log zeigt ±15 min um den Übergang.

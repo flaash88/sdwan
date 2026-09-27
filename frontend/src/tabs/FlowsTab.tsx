@@ -24,7 +24,7 @@ export default function FlowsTab({ device }: { device: Device }) {
     <div className="flex flex-col gap-4">
       <Card title="Top-Verbraucher" subtitle="IPFIX der WAN-Interfaces an die Plattform, gespeichert als 5-Minuten-Summen"
         actions={s && <Pill tone={s.status === "active" ? "green" : s.status === "error" ? "red" : "gray"}>{s.status === "active" ? `aktiv · ${s.interfaces.join(", ")}` : s.status === "error" ? "Fehler" : "aus"}</Pill>}>
-        <ErrorBox error={error ?? st.error ?? s?.error} />
+        <ErrorBox error={error ?? st.error ?? s?.error} deviceId={device.id} />
         <Notice tone="blue" icon="info" title="Datenschutz">Es werden nur Summen je 5 Minuten gespeichert: interne Adresse, Gegenstelle, Bytes und Pakete je WAN – keine Ports,
           keine Inhalte, keine Einzelverbindungen. Aufbewahrung {s?.retention_days ?? 7} Tage. Die Auswertung kann Rückschlüsse auf das Verhalten einzelner Personen zulassen –
           vor dem Einschalten Rechtsgrundlage und Information der Betroffenen klären.</Notice>

@@ -34,6 +34,7 @@ from app.models import Device, WanLink
 from app.routeros import RouterOSError, connect_device
 from app.routeros.client import DeviceAPI
 from app.routeros.util import parse_ms
+from app.routeros.naming import routeros_safe_name
 
 log = logging.getLogger(__name__)
 
@@ -134,7 +135,7 @@ def build_config(device: Device, links: list[WanLink]) -> dict[str, list[dict[st
         total = sum(max(lk.weight, 1) for lk in active)
         mangle: list[dict[str, Any]] = []
         for lk in active:
-            mark = f"sdwan-wan{lk.slot}"
+            mark = routeros_safe_name(f"sdwan-wan{lk.slot}")
             cfg["/routing/table"].append({"name": mark, "fib": "yes", "comment": f"sdwan:wan:table:{lk.slot}"})
             # Tabelle <mark>: eigener WAN zuerst, danach die anderen als Fallback
             others = [o for o in active if o is not lk]
@@ -147,7 +148,7 @@ def build_config(device: Device, links: list[WanLink]) -> dict[str, list[dict[st
                            "action": "mark-connection", "new-connection-mark": mark, "passthrough": "yes", "comment": f"sdwan:wan:in:{lk.slot}"})
         slot_idx = 0
         for lk in active:
-            mark = f"sdwan-wan{lk.slot}"
+            mark = routeros_safe_name(f"sdwan-wan{lk.slot}")
             for _ in range(max(lk.weight, 1)):
                 mangle.append({
                     "chain": "prerouting", "in-interface-list": "!sdwan-wan", "connection-mark": "no-mark", "connection-state": "new",
@@ -157,7 +158,7 @@ def build_config(device: Device, links: list[WanLink]) -> dict[str, list[dict[st
                 })
                 slot_idx += 1
         for lk in active:
-            mark = f"sdwan-wan{lk.slot}"
+            mark = routeros_safe_name(f"sdwan-wan{lk.slot}")
             mangle.append({"chain": "prerouting", "in-interface-list": "!sdwan-wan", "connection-mark": mark, "dst-address-list": "!sdwan-private",
                            "action": "mark-routing", "new-routing-mark": mark, "passthrough": "no", "comment": f"sdwan:wan:route:{lk.slot}"})
             mangle.append({"chain": "output", "connection-mark": mark, "dst-address-list": "!sdwan-private",

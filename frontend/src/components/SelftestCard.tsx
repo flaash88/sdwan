@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { fmtFull } from "../lib/format";
@@ -112,6 +112,10 @@ export default function SelftestCard({ device }: { device: Device }) {
   const [filter, setFilter] = useState<"issues" | "all">("issues");
   const { busy, error, run } = useAction();
   const [restrictOpen, setRestrictOpen] = useState(false);
+  // Sprung aus „Router hat Konfiguration abgelehnt“ (Link …#selftest): nach dem Laden hierher scrollen
+  useEffect(() => {
+    if (location.hash === "#selftest" && last.data !== undefined) document.getElementById("selftest")?.scrollIntoView({ block: "start" });
+  }, [last.data]);
   const [restrict, setRestrict] = useState<RestrictResult | null>(null);
   const t = last.data;
   const rights = t?.checks.find((c) => c.key === "rights");

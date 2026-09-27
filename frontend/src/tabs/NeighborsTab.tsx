@@ -11,7 +11,7 @@ export default function NeighborsTab({ device }: { device: Device }) {
   const q = useFetch<Neighbor[]>(`/devices/${device.id}/neighbors`);
   return (
     <Card title="Nachbarn" subtitle={`per Discovery (MNDP/CDP/LLDP) · Stand ${fmtDate(q.data?.[0]?.seen_at)}`} flush>
-      <ErrorBox error={q.error} />
+      <ErrorBox error={q.error} deviceId={device.id} />
       {!q.data ? <Loading rows={3} /> : (
         <Table head={["Interface", "Identity", "Gerät/Plattform", "Version", "MAC", "Adresse"]} empty={q.data.length === 0} emptyText="Keine Nachbarn sichtbar">
           {q.data.map((n, i) => (

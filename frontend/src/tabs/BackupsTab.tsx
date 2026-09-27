@@ -87,7 +87,7 @@ export default function BackupsTab({ device }: { device: Device }) {
 
   return (
     <>
-      <ErrorBox error={error ?? list.error} />
+      <ErrorBox error={error ?? list.error} deviceId={device.id} />
       <Card flush title="Konfig-Stände" subtitle={`${items.length} gespeichert · täglich (nur bei Änderungen), manuell, vor Firmware-Updates und nach Policy-Push`}
         actions={<>
           <span className="hidden text-xs text-fg3 md:inline">A und B zum Vergleich wählen</span>

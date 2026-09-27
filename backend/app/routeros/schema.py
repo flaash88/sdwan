@@ -90,7 +90,7 @@ PATH_SPECS: tuple[PathSpec, ...] = (
     PathSpec("ntp_client", "NTP-Client", "/system/ntp/client/print", fields=("enabled",), optional=("mode", "servers", "status"),
              used_by="Compliance (NTP aktiv)", must_have_rows=True),
     PathSpec("logging_action", "Logging-Aktionen", "/system/logging/action/print", fields=("name", "target"),
-             optional=("remote", "remote-port", "src-address"), used_by="Syslog (Aktion sdwan-syslog)", must_have_rows=True),
+             optional=("remote", "remote-port", "src-address"), used_by="Syslog (Aktion sdwansyslog)", must_have_rows=True),
     PathSpec("logging", "Logging-Regeln", "/system/logging/print", fields=("topics", "action"), optional=("prefix", "disabled"),
              used_by="Syslog", must_have_rows=True),
     # --- WLAN (Phase 19). ANNAHME (Labor): Pfade/Felder des wifi-Pakets; fehlt das Paket, entfällt nur die WLAN-Verwaltung

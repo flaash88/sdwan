@@ -225,6 +225,11 @@ class SimRouter:
         return handler(params)
 
     def _table_op(self, path: str, action: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+        from app.routeros.naming import SIM_NAME_RULES, is_valid
+
+        rule = SIM_NAME_RULES.get(path)
+        if rule and action in ("add", "set") and rule[0] in params and not is_valid(str(params[rule[0]]), rule[1]):
+            raise RouterOSError(f"failure: {rule[2]}")
         if path == "/user/group" and action in ("add", "set") and "policy" in params:
             self._check_group_rights(str(params["policy"]))
             if self.drop_policies:

@@ -359,9 +359,23 @@ export function Notice({ tone = "blue", icon, title, children }: { tone?: Tone; 
   );
 }
 
-export function ErrorBox({ error }: { error: string | null | undefined }) {
+/** Router hat einen Konfigurationsbefehl abgelehnt (RouterOS-Fehlertext mit Menüpfad, z. B. ``/system/logging/action/add: …``). */
+export function isRouterRejection(error: string): boolean {
+  return /(^|\s)\/[a-z0-9\/-]+\/(add|set|remove|enable|disable):\s/i.test(error) || /failure:/i.test(error);
+}
+
+/** Fehlertext; bei abgelehnter Router-Konfiguration mit Hinweis „bitte melden“ und Link zum Selbsttest des Geräts. */
+export function ErrorBox({ error, deviceId }: { error: string | null | undefined; deviceId?: string }) {
   if (!error) return null;
-  return <div className="mb-4"><Notice tone="red">{error}</Notice></div>;
+  const rejected = isRouterRejection(error);
+  return (
+    <div className="mb-4"><Notice tone="red" title={rejected ? "Router hat Konfiguration abgelehnt – bitte melden" : undefined}>
+      <span className="break-words font-mono text-xs">{error}</span>
+      {rejected && <p className="mt-1.5 text-sm">Den Fehlertext bitte mit Gerätemodell und RouterOS-Version an den Plattform-Betreiber melden.
+        {" "}{deviceId ? <a href={`/devices/${deviceId}#selftest`} className="font-medium text-blue-text hover:underline">Selbsttest des Geräts öffnen</a>
+          : "Der Selbsttest im Gerätedetail zeigt, welche Pfade und Felder der Router liefert."}</p>}
+    </Notice></div>
+  );
 }
 
 /* ----------------------------------------------------------------------------- Dialog */

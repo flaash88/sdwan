@@ -205,7 +205,7 @@ function Overview({ device: d, state, reload }: { device: Device; state?: Device
       {paired && <AddressCard device={d} />}
       {paired && <DeviceAdvisories device={d} />}
       {paired && <LocalAccessCard device={d} />}
-      {paired && <SelftestCard device={d} />}
+      {paired && <div id="selftest" className="scroll-mt-4"><SelftestCard device={d} /></div>}
       <DeviceAdmin device={d} reload={reload} />
     </>
   );

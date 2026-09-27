@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.config import get_settings
+from app.routeros.naming import routeros_safe_name
 
 ACTIONS = ("accept", "drop", "reject")
 PROTOCOLS = ("tcp", "udp", "icmp", "gre", "esp", "ah", "")
@@ -73,11 +74,11 @@ class Catalog:
 
 # ----------------------------------------------------------------------------- Namen
 def zone_list(zone: dict[str, Any]) -> str:
-    return "sdwan-wan" if zone.get("source") == "wan" else f"sdwan-zone-{zone['slug']}"
+    return "sdwan-wan" if zone.get("source") == "wan" else routeros_safe_name(f"sdwan-zone-{zone['slug']}")
 
 
 def object_list(obj: dict[str, Any]) -> str:
-    return f"sdwan-feed-{obj['slug']}" if obj["kind"] == "feed" else f"sdwan-obj-{obj['slug']}"
+    return routeros_safe_name(f"sdwan-feed-{obj['slug']}" if obj["kind"] == "feed" else f"sdwan-obj-{obj['slug']}")
 
 
 # ----------------------------------------------------------------------------- Validierung der Bausteine
@@ -274,7 +275,7 @@ def compile_spec(spec: dict[str, Any], cat: Catalog) -> dict[str, list[dict[str,
             return name
         if any(o["kind"] == "feed" for o in objs):
             raise SpecError(f"Regel {rid}: Threat-Feed-Objekte nur einzeln verwenden")
-        name = f"sdwan-r-{rid}-{side}"
+        name = routeros_safe_name(f"sdwan-r-{rid}-{side}")
         merged: list[str] = []
         for o in objs:
             merged += [a for a in addresses(cat, o["id"]) if a not in merged]

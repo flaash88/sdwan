@@ -31,9 +31,9 @@ export default function LogTab({ device }: { device: Device }) {
     <div className="flex flex-col gap-4">
       <Card title="Syslog" subtitle={c ? `${c.enabled ? "aktiv" : "aus"} · Aufbewahrung ${c.retention_days} Tage` : undefined}
         actions={can("technician") && c && <Button size="sm" variant="secondary" icon="settings" onClick={() => setEdit(edit ? null : c.topics)}>{edit ? "Schließen" : "Einstellungen"}</Button>}>
-        <ErrorBox error={error ?? c?.last_error} />
+        <ErrorBox error={error ?? c?.last_error} deviceId={device.id} />
         {!c ? <Loading rows={1} /> : !edit ? (
-          <p className="text-fg2">{c.enabled ? <>Der Router sendet die Topics <span className="font-mono">{c.topics.join(", ")}</span> über den Management-Tunnel an die Plattform.</> : "Der Router sendet kein Syslog an die Plattform. In den Einstellungen aktivieren (legt auf dem Router die Aktion sdwan-syslog und passende Logging-Regeln an)."}</p>
+          <p className="text-fg2">{c.enabled ? <>Der Router sendet die Topics <span className="font-mono">{c.topics.join(", ")}</span> über den Management-Tunnel an die Plattform.</> : "Der Router sendet kein Syslog an die Plattform. In den Einstellungen aktivieren (legt auf dem Router die Aktion sdwansyslog und passende Logging-Regeln an)."}</p>
         ) : (
           <div className="flex flex-col gap-3">
             <div className="grid grid-cols-2 gap-1 sm:grid-cols-4 lg:grid-cols-6">

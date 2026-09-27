@@ -65,7 +65,7 @@ export default function PoliciesTab({ device }: { device: Device }) {
           {can("technician") && <Button disabled={!manualCount && !fw.data?.address_lists.some((r) => !r.managed)} onClick={() => setOpen(true)}>Als Policy übernehmen</Button>}
         </>}
       >
-        <ErrorBox error={fw.error} />
+        <ErrorBox error={fw.error} deviceId={device.id} />
         {fw.loading && !fw.data && <p className="text-sm text-slate-400">Lese Regeln vom Router …</p>}
         {tab !== "address_lists" ? (
           <Table head={["#", "Chain", "Action", "Bedingungen", "Kommentar", "Herkunft"]} empty={rows.length === 0}>
@@ -116,7 +116,7 @@ function ImportModal({ device, onClose, onDone }: { device: Device; onClose: () 
         <Button variant="secondary" onClick={onClose}>Abbrechen</Button>
         <Button disabled={busy || !sections.length} onClick={() => void run(async () => setRes(await api.post<ImportResult>(`/devices/${device.id}/firewall/import`, { name, sections, replace })))}>{busy ? "Übernehme …" : "Übernehmen"}</Button>
       </>}>
-      <ErrorBox error={error} />
+      <ErrorBox error={error} deviceId={device.id} />
       {res ? (
         <div className="space-y-3 text-sm">
           <p>Policy angelegt: {res.counts.filter} Filter-, {res.counts.nat} NAT-Regeln, {res.counts.address_lists} Address-List-Einträge.</p>

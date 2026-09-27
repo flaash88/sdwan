@@ -36,6 +36,7 @@ from app.db import system_session, utcnow
 from app.models import Device, DeviceStatus, GuestRegistration, HotspotInstance, HotspotPortal, Tenant, Voucher, VoucherProfile
 from app.routeros import RouterOSError, connect_device
 from app.routeros.client import DeviceAPI, _norm
+from app.routeros.naming import routeros_safe_name
 
 log = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ def generate_code(existing: set[str], length: int = 8) -> str:
 
 
 def base(inst: HotspotInstance) -> str:
-    return f"{PREFIX}{inst.slug}"
+    return routeros_safe_name(f"{PREFIX}{inst.slug}")
 
 
 def retention_days(tenant: Tenant | None) -> int:

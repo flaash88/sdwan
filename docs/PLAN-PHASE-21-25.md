@@ -261,3 +261,18 @@ Grundsatz Allgemeinheit gilt: keine Kundendaten, Defaults nur markiert und ände
   - `influx backup`/`restore`.
   - Kompletter Restore auf einer frischen VM mit DNS-Umstellung (Router verbinden sich ohne Eingriff).
 
+### Stand Phase 22 – Zwei-Faktor-Anmeldung (TOTP)
+- **Erledigt:**
+  - TOTP nach RFC 6238 (eigene Implementierung, Testvektoren) mit Wiederverwendungsschutz; 10 gehashte
+    Wiederherstellungscodes.
+  - Zweistufige Anmeldung mit erzwungener Einrichtung, Pflicht je Mandant und für MSP-Admins.
+  - Deaktivieren nur mit Code (nicht bei Pflicht).
+  - Sperre nach Fehlversuchen (Passwort und 2FA) und IP-Limit, Audit-Einträge.
+  - Reset durch den MSP-Admin mit Webhook, Entsperren, CLI `reset-2fa`/`unlock`.
+  - Oberfläche: Login, Profil-Dialog, Benutzerliste.
+  - Migration 0031 (neue Spalten mit Defaults).
+- **Entscheidung:** Die IP-Sperre zählt nur Fehlversuche (erfolgreiche Anmeldungen hinter einem gemeinsamen
+  NAT sollen nicht blockieren).
+- **Weggelassen:** WebAuthn/FIDO2 und „Gerät merken“ (nicht gefordert; sicherere Variante ohne Ausnahmen).
+- **Im Labor zu verifizieren:** Kompatibilität mit gängigen Authenticator-Apps (QR/otpauth), Server-Uhrzeit (NTP).
+

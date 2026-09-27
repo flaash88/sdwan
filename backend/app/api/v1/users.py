@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from app.api.v1.common import apply_update, get_or_404
-from app.deps import AdminCtx, Ctx
+from app.deps import AdminCtx, Ctx, SuperCtx
 from app.models import User
 from app.schemas import UserCreate, UserOut, UserUpdate
 from app.security import hash_password
@@ -80,3 +80,26 @@ async def delete_user(user_id: uuid.UUID, ctx: Ctx = AdminCtx) -> None:
     await ctx.audit("user.delete", tenant_id=user.tenant_id, target_type="user", target_id=user.id, details={"email": user.email})
     await ctx.db.delete(user)
     await ctx.db.commit()
+
+
+@router.post("/{user_id}/2fa/reset", response_model=UserOut)
+async def reset_user_2fa(user_id: uuid.UUID, ctx: Ctx = SuperCtx) -> User:
+    """Nur MSP-Admin: 2FA eines Benutzers zurücksetzen (Audit + Plattform-Webhook)."""
+    from app.services.account import reset_2fa
+
+    user = await get_or_404(ctx.db, User, user_id, "Benutzer")
+    await reset_2fa(ctx.db, user, ctx.user, "ui", ctx.ip)
+    await ctx.db.commit()
+    return user
+
+
+@router.post("/{user_id}/unlock", response_model=UserOut)
+async def unlock_user(user_id: uuid.UUID, ctx: Ctx = AdminCtx) -> User:
+    """Sperre nach Fehlversuchen aufheben (Admin des Mandanten oder MSP-Admin)."""
+    from app.services.account import unlock
+
+    user = await get_or_404(ctx.db, User, user_id, "Benutzer")
+    _check_access(ctx, user)
+    await unlock(ctx.db, user, ctx.user, "ui", ctx.ip)
+    await ctx.db.commit()
+    return user

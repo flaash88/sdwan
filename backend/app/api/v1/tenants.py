@@ -3,10 +3,11 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from app.api.v1.common import apply_update, get_or_404
-from app.deps import Ctx, ReadCtx, SuperCtx
+from app.deps import AdminCtx, Ctx, ReadCtx, SuperCtx
 from app.models import Device, Site, Tenant
 from app.schemas import TenantCreate, TenantOut, TenantUpdate
 
@@ -59,3 +60,24 @@ async def delete_tenant(tenant_id: uuid.UUID, ctx: Ctx = SuperCtx) -> None:
     await ctx.audit("tenant.delete", tenant_id=None, target_type="tenant", target_id=tenant.id, details={"name": tenant.name})
     await ctx.db.delete(tenant)
     await ctx.db.commit()
+
+
+# ----------------------------------------------------------------------------- Sicherheit je Mandant (Phase 22)
+class SecurityIn(BaseModel):
+    require_2fa: bool
+
+
+@router.get("/current/security")
+async def get_security(ctx: Ctx = ReadCtx) -> dict:
+    t = await get_or_404(ctx.db, Tenant, ctx.require_tenant(), "Tenant")
+    return {"require_2fa": bool((t.settings or {}).get("require_2fa"))}
+
+
+@router.put("/current/security")
+async def put_security(data: SecurityIn, ctx: Ctx = AdminCtx) -> dict:
+    """Pflicht-2FA für alle Benutzer des Mandanten (greift bei der nächsten Anmeldung)."""
+    t = await get_or_404(ctx.db, Tenant, ctx.require_tenant(), "Tenant")
+    t.settings = {**(t.settings or {}), "require_2fa": data.require_2fa}
+    await ctx.audit("tenant.security", target_type="tenant", target_id=t.id, details=data.model_dump())
+    await ctx.db.commit()
+    return {"require_2fa": data.require_2fa}

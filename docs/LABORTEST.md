@@ -487,6 +487,21 @@ WAN, VRRP, Syslog, WLAN, Hotspot, offene Fernzugriffs-Sitzung).
 - [ ] Testwiederherstellung ohne DNS-Umstellung (Abschnitt 4 der DR-Anleitung): Daten vollständig, Router-Backups
       lesbar.
 
+## 19. Zwei-Faktor-Anmeldung (Phase 22)
+
+- [ ] Profil → Zwei-Faktor → einrichten mit einer Authenticator-App (z. B. Aegis, Google Authenticator).
+      **Erwartet:** QR wird erkannt, Code aktiviert 2FA, 10 Wiederherstellungscodes zum Sichern.
+- [ ] Abmelden/Anmelden: Passwort, dann Code. Derselbe Code ein zweites Mal wird abgelehnt.
+- [ ] Anmeldung mit einem Wiederherstellungscode; danach „9 übrig“.
+- [ ] MSP-Admin ohne 2FA (neue Installation, `MFA_ENFORCE_SUPERUSER=true`): Die Anmeldung erzwingt die Einrichtung.
+- [ ] Benutzerseite: „Zwei-Faktor für alle Benutzer verpflichtend“ → Techniker muss bei der nächsten Anmeldung
+      einrichten.
+- [ ] 5× falsches Passwort → „vorübergehend gesperrt“ (auch mit richtigem Passwort). Admin „Sperre aufheben“.
+- [ ] MSP-Admin „2FA zurücksetzen“ → Plattform-Webhook kommt an (falls `PLATFORM_WEBHOOK_URL` gesetzt).
+- [ ] CLI: `docker compose exec api python -m app.cli reset-2fa <email>` und `… unlock <email>` → Audit-Log
+      zeigt `via: cli`.
+- [ ] Uhrzeit des Servers prüfen (NTP) – bei Abweichung > 30 s schlagen Codes fehl. Ergebnis: ______
+
 ---
 
 ## Ergebnis
@@ -511,3 +526,4 @@ WAN, VRRP, Syslog, WLAN, Hotspot, offene Fernzugriffs-Sitzung).
 | 16 Gäste-Portal | ☐ ok ☐ Abweichung | |
 | 17 Offboarding | ☐ ok ☐ Abweichung | |
 | 18 Plattform-Sicherung | ☐ ok ☐ Abweichung | |
+| 19 Zwei-Faktor | ☐ ok ☐ Abweichung | |

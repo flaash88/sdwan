@@ -1,3 +1,4 @@
+import { TwoFactorDialog } from "./TwoFactor";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
@@ -148,9 +149,10 @@ function GlobalSearch({ devices, sites }: { devices: Device[] | null; sites: Sit
 }
 
 function UserMenu() {
-  const { me, logout } = useAuth();
+  const { me, logout, reload } = useAuth();
   const live = useLiveConnected();
   const { open, setOpen, ref } = usePopover();
+  const [tfa, setTfa] = useState(false);
   if (!me) return null;
   const name = me.user.full_name || me.user.email;
   const initials = (me.user.full_name || me.user.email).split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join("");
@@ -174,11 +176,15 @@ function UserMenu() {
           </div>
           <div className="my-1 h-px bg-line" />
           <div className="flex items-center justify-between px-2 py-1.5 sm:hidden"><span className="text-fg2">Darstellung</span><ThemeSwitch /></div>
+          <button role="menuitem" type="button" onClick={() => { setTfa(true); setOpen(false); }} className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-[7px] text-left text-fg hover:bg-hover">
+            <Icon name="lock" className="text-[15px] text-fg3" />Zwei-Faktor{me.user.totp_enabled ? " (aktiv)" : ""}
+          </button>
           <button role="menuitem" type="button" onClick={logout} className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-[7px] text-left text-fg hover:bg-hover">
             <Icon name="logout" className="text-[15px] text-fg3" />Abmelden
           </button>
         </div>
       )}
+      {tfa && <TwoFactorDialog enabled={!!me.user.totp_enabled} required={!!me.mfa_required} left={me.recovery_codes_left} onClose={() => setTfa(false)} onChanged={reload} />}
     </div>
   );
 }

@@ -54,6 +54,13 @@ class User(IdMixin, Base):
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
+    # Phase 22: Zwei-Faktor (TOTP) und Sperre nach Fehlversuchen
+    totp_secret_enc: Mapped[str | None] = mapped_column(Text)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    totp_last_step: Mapped[int | None] = mapped_column(Integer)
+    recovery_codes: Mapped[list] = mapped_column(JSONType, default=list)  # sha256 der unverbrauchten Codes
+    failed_logins: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    locked_until: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
 
 
 class Site(IdMixin, TenantScoped, Base):

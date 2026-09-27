@@ -18,6 +18,8 @@ os.environ.update(
         "BOOTSTRAP_ADMIN_PASSWORD": "mspadmin123",
         "SMTP_HOST": "",
         "NEXTDNS_API_KEY": "",
+        # Phase 22: 2FA-Pflicht für MSP-Admins in den Tests aus (2FA-Tests schalten sie gezielt ein)
+        "MFA_ENFORCE_SUPERUSER": "false",
     }
 )
 
@@ -42,6 +44,9 @@ async def fresh_db():
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     simulator.reset()
+    from app import ratelimit as _ratelimit
+
+    _ratelimit.reset()
     from app.services import metrics as _metrics
 
     _metrics._live_memory.clear()

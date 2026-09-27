@@ -24,9 +24,14 @@ class LoginIn(BaseModel):
 
 
 class TokenOut(BaseModel):
-    access_token: str
+    access_token: str | None = None
     token_type: str = "bearer"
-    user: UserOut
+    user: UserOut | None = None
+    # Phase 22: zweiter Schritt nötig (mfa_token) bzw. Einrichtung erzwungen (setup_token)
+    mfa_required: bool = False
+    mfa_token: str | None = None
+    mfa_setup_required: bool = False
+    setup_token: str | None = None
 
 
 class UserBase(BaseModel):
@@ -57,6 +62,8 @@ class UserOut(ORM):
     is_superuser: bool
     is_active: bool
     last_login_at: dt.datetime | None = None
+    totp_enabled: bool = False
+    locked_until: dt.datetime | None = None
 
 
 # --- Tenants -----------------------------------------------------------------

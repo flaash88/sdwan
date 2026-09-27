@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     encryption_key: str = ""
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 720
+    # Phase 22: 2FA für MSP-Admins immer Pflicht (Einrichtung bei der nächsten Anmeldung erzwungen)
+    mfa_enforce_superuser: bool = True
+    login_max_failures: int = 5  # je Konto (Passwort + 2FA), danach Sperre
+    login_lock_minutes: int = 15
+    login_ip_limit: int = 30  # Anmeldeversuche je IP im Fenster
+    login_ip_window_s: int = 600
     bootstrap_admin_email: str = "admin@example.com"
     bootstrap_admin_password: str = "admin12345"
     # Shared Token zwischen Hub-Agent und Control-Plane (/internal/hub/*)

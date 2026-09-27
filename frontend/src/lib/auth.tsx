@@ -7,12 +7,18 @@ interface Me {
   active_tenant_id: string | null;
   role: Role;
   tenants: Tenant[];
+  mfa_required?: boolean;
+  recovery_codes_left?: number | null;
 }
+
+/** Antwort von /auth/login bzw. /auth/login/2fa: entweder Token oder nächster Schritt. */
+export interface LoginStep { access_token?: string; user?: User; mfa_required?: boolean; mfa_token?: string; mfa_setup_required?: boolean; setup_token?: string }
 
 interface AuthState {
   me: Me | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<LoginStep>;
+  finishLogin: (step: LoginStep) => Promise<void>;
   logout: () => void;
   switchTenant: (id: string | null) => void;
   can: (role: Role) => boolean;
@@ -45,11 +51,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void reload();
   }, [reload]);
 
-  const login = async (email: string, password: string) => {
-    const r = await api.post<{ access_token: string; user: User }>("/auth/login", { email, password });
+  const finishLogin = async (r: LoginStep) => {
+    if (!r.access_token || !r.user) return;
     session.token = r.access_token;
     session.tenant = r.user.is_superuser ? null : r.user.tenant_id;
     await reload();
+  };
+
+  /** Schritt 1: Passwort. Liefert ggf. den nächsten Schritt (2FA-Code oder erzwungene Einrichtung). */
+  const login = async (email: string, password: string) => {
+    const r = await api.post<LoginStep>("/auth/login", { email, password });
+    await finishLogin(r);
+    return r;
   };
 
   const logout = () => {
@@ -66,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const can = (role: Role) => !!me && RANK[me.role] >= RANK[role];
 
-  return <Ctx.Provider value={{ me, loading, login, logout, switchTenant, can, reload }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ me, loading, login, finishLogin, logout, switchTenant, can, reload }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth(): AuthState {

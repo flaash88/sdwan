@@ -946,6 +946,39 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   Testwiederherstellung: `docs/DISASTER-RECOVERY.md`.
 * **Annahmen (Labor):** PGDG-Paket im Image, rclone-Ziele, `influx backup`/`restore` im Container.
 
+## Phase 22 – Zwei-Faktor-Anmeldung (TOTP)
+
+* **TOTP:** eigene Implementierung `app/totp.py` nach RFC 6238 (SHA1, 30 s, 6 Stellen; getestet mit den
+  RFC-Testvektoren), ±1 Zeitschritt Toleranz. Der zuletzt verwendete Schritt wird gespeichert, damit ein Code
+  nicht zweimal gilt.
+  - Geheimnis verschlüsselt (`encrypt_secret`).
+  - 10 Wiederherstellungscodes (`xxxx-xxxx`), gespeichert nur als sha256, je einmal gültig.
+* **Anmeldung:**
+  - `POST /auth/login` liefert bei aktiver 2FA `mfa_token` (JWT `typ=mfa`, 5 min). Danach `POST /auth/login/2fa`
+    mit TOTP oder Wiederherstellungscode.
+  - Ist 2FA Pflicht, aber nicht eingerichtet: `setup_token` (`typ=mfa_setup`, 15 min). Mit ihm laufen
+    `/auth/2fa/setup` (QR per `segno`) und `/auth/2fa/enable`; erst dann gibt es das Access-Token.
+  - Schritt-Tokens werden von `deps` nie als Access-Token akzeptiert.
+* **Pflicht:**
+  - Je Mandant `tenant.settings.require_2fa`, über `PUT /tenants/current/security` (Admin) bzw. die Benutzerseite.
+  - Für MSP-Admins immer, über `MFA_ENFORCE_SUPERUSER` (Default true; in den Tests aus).
+  - Die Pflicht greift bei der **nächsten** Anmeldung; bestehende Sitzungen bleiben gültig.
+  - Bei Pflicht lässt sich 2FA nicht deaktivieren. Sonst ist Deaktivieren nur mit gültigem Code möglich.
+* **Fehlversuche:**
+  - Passwort und 2FA zählen je Konto. Ab `LOGIN_MAX_FAILURES` (5) folgt eine Sperre für `LOGIN_LOCK_MINUTES` (15).
+  - Zusätzlich ein IP-Limit auf Fehlversuche (`LOGIN_IP_LIMIT`/`LOGIN_IP_WINDOW_S`, Redis oder im Prozess,
+    `app/ratelimit.py`).
+  - Audit: `auth.login_failed`, `auth.2fa_failed`, `auth.locked`, `auth.login_blocked`, `auth.recovery_code_used`,
+    `auth.2fa_enabled/disabled/reset`, `auth.unlock`.
+* **Verwaltung:**
+  - MSP-Admin setzt 2FA zurück (`POST /users/{id}/2fa/reset`, Audit und Plattform-Webhook).
+  - Admin/MSP heben Sperren auf (`POST /users/{id}/unlock`).
+  - Notfall mit Server-Zugriff: `python -m app.cli reset-2fa|unlock <email>` (Audit, Webhook; siehe
+    DISASTER-RECOVERY.md).
+* **Oberfläche:** zweistufige Anmeldung mit erzwungener Einrichtung, Profil-Menü „Zwei-Faktor“ (einrichten,
+  Codes neu erzeugen, deaktivieren), Benutzerliste mit 2FA-Status, „2FA zurücksetzen“ und „Sperre aufheben“.
+* Kein SSO / kein Identity-Provider.
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

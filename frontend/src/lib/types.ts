@@ -9,6 +9,8 @@ export interface User {
   is_superuser: boolean;
   is_active: boolean;
   last_login_at: string | null;
+  totp_enabled?: boolean;
+  locked_until?: string | null;
 }
 
 export interface Tenant {

@@ -282,6 +282,11 @@ async def create_instance(data: InstanceIn, ctx: Ctx = AdminCtx) -> dict[str, An
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Device nicht gefunden")
     if (await ctx.db.execute(select(HotspotInstance).where(HotspotInstance.slug == data.slug))).first():
         raise HTTPException(status.HTTP_409_CONFLICT, "Kürzel bereits vergeben")
+    from app.services.advisories import block_message, blocking
+
+    advs = await blocking(ctx.db, dev, "hotspot")
+    if advs:  # Phase 23: Aktivierung blockieren
+        raise HTTPException(status.HTTP_409_CONFLICT, block_message(dev, advs))
     i = HotspotInstance(tenant_id=tenant_id, version=1, **data.model_dump())
     ctx.db.add(i)
     await ctx.db.flush()
@@ -328,7 +333,8 @@ async def apply_instance(instance_id: uuid.UUID, ctx: Ctx = TechCtx) -> dict[str
         i.status, i.last_error = "error", str(exc)
         await ctx.audit("hotspot.instance.apply", target_type="hotspot_instance", target_id=i.id, success=False, details={"error": str(exc)})
         await ctx.db.commit()
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+        code = status.HTTP_409_CONFLICT if isinstance(exc, hs.HotspotBlocked) else status.HTTP_502_BAD_GATEWAY
+        raise HTTPException(code, str(exc)) from exc
     await ctx.audit("hotspot.instance.apply", target_type="hotspot_instance", target_id=i.id, details={"stats": res["stats"], "version": i.version})
     await ctx.db.commit()
     return {**res, "instance": await _inst_out(ctx, i)}

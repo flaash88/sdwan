@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import PairingBox from "../components/PairingBox";
+import AdvisoryPill from "../components/AdvisoryPill";
 import { CpuBar, DeviceStatusBadge, VrrpPill, WanPill } from "../components/fleet";
+import { useFleetAdvisories } from "../lib/advisories";
 import { Button, ErrorBox, Input, Loading, Modal, Notice, PageHeader, RowCheck, Segment, Select, SelectionBar, cls, useAction } from "../components/ui";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -23,6 +25,7 @@ export default function Devices() {
   const nav = useNavigate();
   const [params, setParams] = useSearchParams();
   const devices = useDevices();
+  const advisories = useFleetAdvisories();
   const sites = useSites();
   const fleet = useFleetState();
   const [open, setOpen] = useState(false);
@@ -138,6 +141,7 @@ export default function Devices() {
                     <span className="flex min-w-0 flex-col leading-tight">
                       <span className="truncate font-mono text-xs">{d.routeros_version?.replace(/\s*\(.*\)/, "") ?? "–"}</span>
                       {up?.update_available && <span className="flex items-center gap-[3px] text-[11.5px] text-blue-text"><Icon name="upload" className="text-[11px]" />{up.latest} verfügbar</span>}
+                      {advisories.data?.[d.id] && <span className="mt-0.5"><AdvisoryPill list={advisories.data[d.id]} /></span>}
                     </span>
                     <span className="min-w-0">{d.pairing_status === "paired" ? <WanPill state={state[d.id]} offline={off} /> : <span className="text-fg3">–</span>}</span>
                     <span className="min-w-0"><VrrpPill state={state[d.id]} /></span>

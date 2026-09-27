@@ -276,3 +276,22 @@ Grundsatz Allgemeinheit gilt: keine Kundendaten, Defaults nur markiert und ände
 - **Weggelassen:** WebAuthn/FIDO2 und „Gerät merken“ (nicht gefordert; sicherere Variante ohne Ausnahmen).
 - **Im Labor zu verifizieren:** Kompatibilität mit gängigen Authenticator-Apps (QR/otpauth), Server-Uhrzeit (NTP).
 
+### Stand Phase 23 – Sicherheitsmeldungen und Mindestversionen
+- **Erledigt:**
+  - Modell und Pflege (MSP) mit Versionsbereichen; Seed nur als deaktiviertes Beispiel.
+  - Betroffenheit je Version und aktiver Funktion (verwaltete Features, `/ip/service` im Poll), Status
+    „möglicherweise“ bei unbekannter Funktion.
+  - Anzeige in Geräteliste, Gerätedetail, Firmware-Seite, Dashboard und eigener Seite; Alarmtyp
+    `security_advisory`.
+  - Blockade von Hotspot und WLAN bei high/critical.
+  - Compliance-Regel in der MSP-Baseline (Test auf 7 Regeln angepasst, gewollte Änderung).
+  - Migration 0032 (neue Tabelle).
+- **Entscheidungen:**
+  - Der Alarm ist nicht in den Standardregeln (bestehende Mandanten unverändert).
+  - „Möglicherweise betroffen“ löst keinen Alarm aus.
+  - Ohne bekannte Geräteversion wird nicht blockiert.
+- **Weggelassen:** automatischer Import von Meldungen (laut Auftrag kein Scraping); Blockade weiterer Funktionen
+  (VRRP, Mesh), weil diese für den Betrieb nötig sind – dort nur Anzeige und Alarm.
+- **Im Labor zu verifizieren:** Versionsformat von `/system/resource` bzw. `routeros_version` bei rc/beta; Felder
+  von `/ip/service` (disabled).
+

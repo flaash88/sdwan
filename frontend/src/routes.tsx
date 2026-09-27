@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Advisories from "./pages/Advisories";
 import Alerts from "./pages/Alerts";
 import Compliance from "./pages/Compliance";
 import ConfigSearch from "./pages/ConfigSearch";
@@ -40,6 +41,7 @@ export const extraRoutes: { path: string; element: ReactNode }[] = [
   { path: "/content-filter", element: <ContentFilter /> },
   { path: "/remote", element: <RemoteSessions /> },
   { path: "/firmware", element: <Firmware /> },
+  { path: "/advisories", element: <Advisories /> },
   { path: "/alerts", element: <Alerts /> },
   { path: "/reports", element: <Reports /> },
 ];

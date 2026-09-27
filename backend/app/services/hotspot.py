@@ -59,6 +59,10 @@ class HotspotError(ValueError):
     pass
 
 
+class HotspotBlocked(HotspotError):
+    """Sicherheitsmeldung (Phase 23) verhindert das Ausrollen – erst Firmware aktualisieren."""
+
+
 # ----------------------------------------------------------------------------- Validierung
 def check_slug(s: str) -> None:
     if not _SLUG.match(s or ""):
@@ -338,6 +342,12 @@ async def apply_instance(db: AsyncSession, inst: HotspotInstance, remove: bool =
         raise HotspotError("Gerät gelöscht")
     if dev.status == DeviceStatus.offline:
         raise RouterOSError("Gerät offline")
+    if not remove:  # Phase 23: Entfernen bleibt immer erlaubt
+        from app.services.advisories import block_message, blocking
+
+        advs = await blocking(db, dev, "hotspot")
+        if advs:
+            raise HotspotBlocked(block_message(dev, advs))
     portal = await db.get(HotspotPortal, inst.portal_id)
     b = base(inst)
     stats = {"added": 0, "changed": 0, "removed": 0}

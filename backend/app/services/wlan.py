@@ -406,6 +406,14 @@ async def apply_device(db: AsyncSession, device: Device) -> dict[str, Any]:
         for st in states.values():
             st.status, st.error = "offline", "Gerät nicht erreichbar – wird beim nächsten Ausrollen übertragen"
         return {"status": "offline"}
+    if items:  # Phase 23: Sicherheitsmeldung für WLAN → nicht ausrollen (Entfernen ohne Profile bleibt erlaubt)
+        from app.services.advisories import block_message, blocking
+
+        advs = await blocking(db, device, "wlan")
+        if advs:
+            for st in states.values():
+                st.status, st.error = "blocked", block_message(device, advs)
+            return {"status": "blocked", "error": block_message(device, advs)}
     try:
         async with connect_device(device) as api:
             res = await apply_to_router(api, device, items, tenant)

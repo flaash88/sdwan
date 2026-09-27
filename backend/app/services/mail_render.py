@@ -67,6 +67,10 @@ NEXT_STEPS: dict[str, list[str]] = {
         "Compliance-Bericht öffnen und die verletzten Regeln am Gerät prüfen.",
         "Nach der Korrektur ein Backup erstellen – die Prüfung läuft danach automatisch erneut.",
     ],
+    "security_advisory": [
+        "Sicherheitsmeldung prüfen (Seite „Sicherheitsmeldungen“) und das Gerät auf die genannte Version aktualisieren.",
+        "Bis zum Update lassen sich betroffene Funktionen (Hotspot, WLAN …) nicht neu ausrollen.",
+    ],
     "feed_stale": [
         "Threat-Feeds-Seite öffnen und den Fehler des Feeds prüfen (URL erreichbar? Format geändert?).",
         "Die letzte gültige Liste bleibt auf den Geräten aktiv, bis eine Aktualisierung gelingt.",

@@ -2,14 +2,15 @@
   "_hinweis": "Vordefinierte Compliance-Regelsets (global, schreibgeschützt; Kopieren zum Anpassen). Mindestversion ist ein Beispielwert.",
   "rule_sets": [
     {"seed_key": "cs-msp-baseline", "name": "MSP-Baseline",
-     "description": "Grundhärtung für verwaltete Router: unsichere Dienste aus, kein Standard-Benutzer, Zeit synchron, Verwaltung nur über den Tunnel, stabiler Update-Kanal, Mindestversion.",
+     "description": "Grundhärtung für verwaltete Router: unsichere Dienste aus, kein Standard-Benutzer, Zeit synchron, Verwaltung nur über den Tunnel, stabiler Update-Kanal, Mindestversion, keine bekannten Sicherheitsmeldungen.",
      "rules": [
        {"id": "www-off", "name": "Dienst www (HTTP) deaktiviert", "type": "service_disabled", "params": {"service": "www"}},
        {"id": "no-admin", "name": "Kein Benutzer „admin“", "type": "no_user", "params": {"name": "admin"}},
        {"id": "ntp", "name": "NTP-Client aktiv", "type": "ntp_enabled", "params": {}},
        {"id": "mgmt-tunnel", "name": "API und SSH nur aus dem Tunnel-Netz", "type": "service_restricted_to_tunnel", "params": {"services": ["api", "ssh"]}},
        {"id": "channel", "name": "Update-Kanal stable oder long-term", "type": "channel_in", "params": {"channels": ["stable", "long-term"]}},
-       {"id": "min-version", "name": "RouterOS mindestens 7.12", "type": "min_version", "params": {"version": "7.12"}}
+       {"id": "min-version", "name": "RouterOS mindestens 7.12", "type": "min_version", "params": {"version": "7.12"}},
+       {"id": "no-advisory", "name": "Keine bekannten Sicherheitsmeldungen", "type": "no_security_advisory", "params": {}}
      ]}
   ]
 }

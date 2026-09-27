@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import { WanPill } from "../components/fleet";
 import { EmptyState, KpiTile, Loading, PageHeader, SeverityBadge, StatusDot, cls, type Tone } from "../components/ui";
+import { useFleetAdvisories } from "../lib/advisories";
 import { useAuth } from "../lib/auth";
 import { alarmState, alertTitle, firmwareUpdate, type DeviceState, useDevices, useFleetState, useOpenAlerts, useSites } from "../lib/fleet";
 import { fmtShort, fmtSince } from "../lib/format";
@@ -15,6 +16,7 @@ export default function Dashboard() {
   const { me } = useAuth();
   const nav = useNavigate();
   const devices = useDevices();
+  const advisories = useFleetAdvisories();
   const sites = useSites();
   const fleet = useFleetState();
   const alerts = useOpenAlerts();
@@ -32,6 +34,8 @@ export default function Dashboard() {
   const state = fleet.data?.devices ?? {};
   const onBackup = paired.filter((d) => state[d.id]?.on_backup);
   const updates = paired.filter((d) => firmwareUpdate(d)?.update_available);
+  const advAffected = paired.filter((d) => advisories.data?.[d.id]?.some((a) => a.status === "affected"));
+  const advPossible = paired.filter((d) => !advAffected.includes(d) && advisories.data?.[d.id]?.length);
   const targets = [...new Set(updates.map((d) => firmwareUpdate(d)!.latest))];
   const openList = (alerts.data ?? []).filter((a) => ["active", "ack"].includes(alarmState(a)))
     .sort((a, b) => (SEV_ORDER[a.severity] ?? 3) - (SEV_ORDER[b.severity] ?? 3) || b.started_at.localeCompare(a.started_at));
@@ -48,7 +52,7 @@ export default function Dashboard() {
         subtitle={`${tenant ?? ""} · ${plural(sites.data.length, "Standort", "Standorte")} · ${plural(paired.length, "Gerät", "Geräte")}`}
         actions={<span className="flex items-center gap-1.5 text-xs text-fg3"><Icon name="rotate" className="text-[13px]" />Aktualisiert {updated.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "medium" })}</span>}
       />
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 2xl:grid-cols-7">
         <KpiTile label="Geräte gesamt" icon="router" value={paired.length} sub={plural(sites.data.length, "Standort", "Standorte")} subIcon="pin" onClick={() => nav("/devices")} />
         <KpiTile label="Online" icon="checkCircle" value={online.length} unit={`von ${paired.length}`} onClick={() => nav("/devices?status=online")}
           sub={offline.length ? plural(offline.length, "Gerät nicht erreichbar", "Geräte nicht erreichbar") : "Alle Geräte erreichbar"} subIcon={offline.length ? "alert" : "checkCircle"} tone={offline.length ? undefined : "green"} />
@@ -62,6 +66,9 @@ export default function Dashboard() {
           onClick={firstBackup ? () => nav(`/devices/${firstBackup.id}`) : undefined} />
         <KpiTile label="Firmware-Updates" icon="cpu" value={updates.length} unit="ausstehend" onClick={() => nav("/firmware")}
           sub={updates.length ? `Ziel: RouterOS ${targets.join(", ")}` : "Alle Geräte aktuell"} subIcon={updates.length ? "upload" : "checkCircle"} />
+        <KpiTile label="Sicherheitsmeldungen" icon="alert" value={advAffected.length} unit="Geräte betroffen" onClick={() => nav("/advisories")}
+          valueTone={advAffected.length ? "red" : undefined} tone={advAffected.length ? "red" : "green"} subIcon={advAffected.length ? "alert" : "checkCircle"}
+          sub={advAffected.length ? "Firmware aktualisieren" : advPossible.length ? `${advPossible.length} möglicherweise betroffen` : "Keine bekannten Meldungen"} />
       </div>
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">

@@ -34,6 +34,7 @@ TYPES = {
     "wan_volume": "WAN-Datenvolumen (80 % / 100 % des Monatslimits)",
     "feed_stale": "Threat-Feed veraltet",
     "compliance_failed": "Compliance-Prüfung fehlgeschlagen",
+    "security_advisory": "Sicherheitsmeldung betrifft Gerät",
 }
 DEFAULT_RULES = [
     {"name": "Gerät offline", "type": "device_offline", "severity": "critical", "duration_s": 300},
@@ -41,7 +42,8 @@ DEFAULT_RULES = [
     {"name": "WAN-Latenz > 150 ms", "type": "latency", "severity": "warning", "duration_s": 300, "params": {"threshold": 150, "metric": "wan"}},
     {"name": "VPN-Tunnel down", "type": "mesh_down", "severity": "warning", "duration_s": 300},
     {"name": "VRRP: Standort auf Backup (Master)", "type": "vrrp_master", "severity": "warning", "duration_s": 30},
-    # compliance_failed (Phase 16) bewusst nicht in den Standardregeln: standardmäßig aus, bei Bedarf anlegen
+    # compliance_failed (Phase 16) und security_advisory (Phase 23) bewusst nicht in den Standardregeln:
+    # standardmäßig aus (bestehende Mandanten unverändert), bei Bedarf anlegen
 ]
 
 
@@ -189,6 +191,17 @@ async def conditions(db: AsyncSession, rule: AlertRule, devices: list[Device]) -
                 bad = ", ".join(x["name"] for x in r.results if x["status"] == "fail")
                 out.append(Condition(by_id[dev_id], f"compliance:{rs_id}", f"{by_id[dev_id].name}: {names.get(rs_id, 'Regelset')} – {r.failed} "
                                                                            f"Regel(n) verletzt: {bad}", float(r.failed)))
+    elif rule.type == "security_advisory":
+        from app.services.advisories import device_advisories, enabled_advisories
+
+        min_sev = str(p.get("min_severity", "high"))
+        order = ["low", "medium", "high", "critical"]
+        advs = [a for a in await enabled_advisories(db) if order.index(a.severity) >= order.index(min_sev if min_sev in order else "high")]
+        for d in devs:
+            for a in await device_advisories(db, d, advs):
+                if a["status"] == "affected":  # „möglicherweise“ nur Anzeige, kein Alarm
+                    out.append(Condition(d, f"advisory:{a['cve']}", f"{d.name}: {a['cve']} ({a['severity']}) – {a['title']}"
+                                         + (f"; behoben in {a['fixed_in']}" if a["fixed_in"] else ""), 1.0))
     elif rule.type == "cpu_high":
         thr = float(p.get("threshold", 90))
         for d in devs:

@@ -1,0 +1,9 @@
+{
+  "_hinweis": "Sicherheitsmeldungen sind vom MSP zu pflegen (Quelle: MikroTik-Security-Advisories, CVE-Datenbanken). Die Plattform liefert bewusst keine geratenen Versionsbereiche – der Eintrag unten ist nur ein deaktiviertes BEISPIEL für das Format.",
+  "advisories": [
+    {"seed_key": "adv-example", "cve": "BEISPIEL-0000", "title": "Beispiel – Format einer Sicherheitsmeldung (deaktiviert)",
+     "description": "BEISPIEL: betroffen ab affected_from, behoben in fixed_in (exklusiv). Funktion 'hotspot' bedeutet: nur Geräte mit verwaltetem Hotspot gelten als betroffen. Kopieren/anlegen und echte Daten eintragen.",
+     "function": "hotspot", "severity": "high", "affected_from": "7.0", "affected_to": null, "fixed_in": "7.0.1",
+     "link": null, "enabled": false}
+  ]
+}

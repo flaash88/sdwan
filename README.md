@@ -52,6 +52,7 @@ Installation auf einem Server: [INSTALL.md](INSTALL.md) · Aufbau und Design-Ent
 | – | Offboarding: Router bereinigen (Backup, defconf zuerst, verwaltete Objekte, Dienste, Fernzugriff, zuletzt Tunnel per Router-Scheduler) oder nur aus der Plattform entfernen; Offboarding-Archiv 90 Tage | ✅ |
 | 21 | Plattform-Sicherung: täglich PostgreSQL, .env-Schlüssel und WireGuard-Hub als age-verschlüsseltes Archiv (lokal + optional S3/SFTP), Status und Alarm für MSP-Admins, Wiederherstellung auf frischem Server ohne Router-Eingriff (docs/DISASTER-RECOVERY.md) | ✅ |
 | 22 | Zwei-Faktor-Anmeldung (TOTP) mit QR und 10 Wiederherstellungscodes, Pflicht je Mandant und für MSP-Admins, Sperre nach Fehlversuchen, Reset durch MSP-Admin und per CLI | ✅ |
+| 23 | Sicherheitsmeldungen (vom MSP gepflegt): Betroffenheit je Version und aktiver Funktion, Anzeige in Geräteliste/-detail, Firmware und Dashboard, Alarm, Blockade von Hotspot/WLAN bis zum Update, Compliance-Regel | ✅ |
 
 ## Schnellstart (Demo ohne Hardware)
 

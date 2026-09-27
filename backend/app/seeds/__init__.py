@@ -88,7 +88,19 @@ async def apply_hotspot(db: AsyncSession) -> None:
         await _upsert(db, HotspotPortal, {"custom_files": {}, **p})
 
 
-APPLIERS = [apply_firewall, apply_feeds, apply_compliance, apply_scripts, apply_hotspot]
+async def apply_advisories(db: AsyncSession) -> None:
+    from app.models import SecurityAdvisory
+
+    for a in load("advisories")["advisories"]:
+        row = (await db.execute(select(SecurityAdvisory).where(SecurityAdvisory.seed_key == a["seed_key"]))).scalar_one_or_none()
+        if row is None:
+            db.add(SecurityAdvisory(builtin=True, **a))
+        elif row.builtin:
+            for k, v in a.items():
+                setattr(row, k, v)
+
+
+APPLIERS = [apply_firewall, apply_feeds, apply_compliance, apply_scripts, apply_hotspot, apply_advisories]
 
 
 async def apply_all() -> None:

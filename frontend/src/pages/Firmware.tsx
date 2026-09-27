@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import AdvisoryPill from "../components/AdvisoryPill";
 import { Badge, Button, Card, Checkbox, ErrorBox, Input, Modal, PageHeader, Select, StatusBadge, Table, useAction } from "../components/ui";
+import { maxVersion, useFleetAdvisories } from "../lib/advisories";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { fmtDate } from "../lib/format";
@@ -13,6 +15,7 @@ interface Job { id: string; name: string; channel: string; batch_size: number; b
 export default function Firmware() {
   const { can } = useAuth();
   const rows = useFetch<Row[]>("/firmware/overview");
+  const advisories = useFleetAdvisories();
   const jobs = useFetch<Job[]>("/firmware/jobs");
   const [sel, setSel] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
@@ -29,7 +32,7 @@ export default function Firmware() {
         </>} />
       <ErrorBox error={error} />
       <Card title={`Geräte (${upd.length} Updates verfügbar)`} actions={<Button variant="ghost" onClick={() => setSel(upd.map((r) => r.device_id))}>Alle mit Update wählen</Button>}>
-        <Table head={["", "", "Gerät", "Modell", "Installiert", "Verfügbar", "Kanal", "Geprüft"]} empty={rows.data?.length === 0}>
+        <Table head={["", "", "Gerät", "Modell", "Installiert", "Verfügbar", "Kanal", "Sicherheit", "Geprüft"]} empty={rows.data?.length === 0}>
           {rows.data?.map((r) => (
             <tr key={r.device_id}>
               <td className="px-3 py-2"><input type="checkbox" checked={sel.includes(r.device_id)} onChange={(e) => setSel(e.target.checked ? [...sel, r.device_id] : sel.filter((x) => x !== r.device_id))} /></td>
@@ -39,6 +42,8 @@ export default function Firmware() {
               <td className="px-3 py-2 font-mono text-xs">{r.update?.installed ?? r.routeros_version ?? "–"}</td>
               <td className="px-3 py-2 font-mono text-xs">{r.update ? (r.update.update_available ? <Badge color="yellow">{r.update.latest}</Badge> : <Badge color="green">aktuell</Badge>) : "–"}</td>
               <td className="px-3 py-2">{r.update?.channel ?? "–"}</td>
+              <td className="px-3 py-2">{advisories.data?.[r.device_id] ? <span className="flex flex-col gap-0.5"><AdvisoryPill list={advisories.data[r.device_id]} />
+                {(() => { const fix = maxVersion(advisories.data[r.device_id].map((a) => a.fixed_in)); return fix ? <span className="font-mono text-[11px] text-fg3">behoben ab {fix}</span> : null; })()}</span> : <span className="text-fg3">–</span>}</td>
               <td className="px-3 py-2 text-slate-500">{fmtDate(r.update?.checked_at)}</td>
             </tr>
           ))}

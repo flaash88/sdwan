@@ -979,6 +979,34 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   Codes neu erzeugen, deaktivieren), Benutzerliste mit 2FA-Status, „2FA zurücksetzen“ und „Sperre aufheben“.
 * Kein SSO / kein Identity-Provider.
 
+## Phase 23 – Sicherheitsmeldungen und Mindestversionen
+
+* **Modell** `security_advisories` (global): Kennung/CVE, Titel, Beschreibung, Funktion, Schweregrad, Link,
+  aktiviert.
+  - Funktionen: general, hotspot, wlan, vrrp, wireguard, dns, rest-api, api, winbox, www, ssh, other.
+  - Schweregrade: low bis critical.
+  - Versionsbereich: `affected_from` (inklusive), optional `affected_to` (inklusive) bzw. `fixed_in` (exklusiv).
+  - Pflege nur durch MSP-Admins, kein Scraping.
+  - Der Seed enthält nur ein **deaktiviertes Beispiel**; echte Versionsbereiche werden nicht geraten.
+* **Versionsvergleich** (`services/advisories.parse_version`): `7.15.3`, `7.16rc2`, `7.16beta1`
+  (beta < rc < final).
+* **Aktive Funktionen je Gerät:**
+  - general/api/wireguard immer (Management-Tunnel und API).
+  - hotspot, wlan, vrrp aus den verwalteten Objekten der Plattform.
+  - winbox/ssh/www/rest-api aus `facts.services`: Der Info-Poll liest `/ip/service` alle 10 min.
+  - Unbekannt: Status „möglicherweise betroffen“, nur Anzeige, kein Alarm.
+* **Anzeige:** Geräteliste (Pill in der RouterOS-Spalte), Gerätedetail (Karte mit „behoben ab“), Firmware-Seite
+  (Spalte „Sicherheit“), Dashboard-Kachel, Seite „Sicherheitsmeldungen“ mit Anzahl betroffener Geräte.
+* **Alarmtyp `security_advisory`:** gerätebezogen, nur „betroffen“, ab Schweregrad `min_severity` (Default high).
+  Wie `compliance_failed` nicht in den Standardregeln, sodass bestehende Mandanten unverändert bleiben.
+* **Blockade:** Hotspot anlegen/ausrollen (409) und WLAN-Ausrollen je Gerät (Status „Sicherheitsmeldung“) werden
+  verweigert, wenn eine aktive Meldung mit Schweregrad high/critical für die Funktion (oder `general`) die
+  Geräteversion betrifft.
+  - Hinweis „erst Firmware aktualisieren“ mit „behoben ab“.
+  - Entfernen bleibt immer erlaubt.
+  - Ohne bekannte Version wird nicht blockiert.
+* **Compliance:** Regeltyp `no_security_advisory` (Plattform-Daten statt Router-Abfrage), in der MSP-Baseline.
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

@@ -75,8 +75,24 @@ async def read_addresses(api: DeviceAPI) -> list[dict[str, Any]]:
     return build_addresses(await api.print("/ip/address"), await api.print("/ip/dhcp-client"))
 
 
+SERVICES_INTERVAL_S = 600
+
+
+async def read_services(api: DeviceAPI) -> dict[str, Any]:
+    """``/ip/service`` kompakt (Phase 23: aktive Funktionen für Sicherheitsmeldungen)."""
+    return {str(r.get("name")): {"disabled": str(r.get("disabled", "false")).lower() in ("true", "yes"), "port": r.get("port"),
+                                 "address": r.get("address") or ""} for r in await api.print("/ip/service")}
+
+
 async def info_poll_hook(device: Device, api: DeviceAPI, _res: dict[str, Any]) -> dict[str, Any] | None:
+    import time
+
     out: dict[str, Any] = {"addresses": await read_addresses(api)}
+    if time.time() - float((device.facts or {}).get("_services_at") or 0) >= SERVICES_INTERVAL_S:
+        try:
+            out["services"], out["_services_at"] = await read_services(api), time.time()
+        except RouterOSError:
+            pass
     try:
         out["health"] = parse_health(await api.call("/system/health/print"))
     except RouterOSError:  # manche Plattformen kennen den Befehl nicht

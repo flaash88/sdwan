@@ -502,6 +502,19 @@ WAN, VRRP, Syslog, WLAN, Hotspot, offene Fernzugriffs-Sitzung).
       zeigt `via: cli`.
 - [ ] Uhrzeit des Servers prüfen (NTP) – bei Abweichung > 30 s schlagen Codes fehl. Ergebnis: ______
 
+## 20. Sicherheitsmeldungen (Phase 23)
+
+- [ ] Eine echte Meldung aus den MikroTik-Security-Advisories eintragen (Version des Testgeräts im Bereich,
+      Funktion „allgemein“). **Erwartet:** Geräteliste, Gerätedetail, Firmware-Seite und Dashboard zeigen das
+      Gerät als betroffen mit „behoben ab“.
+- [ ] Meldung mit Funktion „winbox“: Nach ≤ 10 min wird das Gerät als betroffen geführt (WinBox aktiv); nach
+      `/ip service disable winbox` und ≤ 10 min nicht mehr.
+- [ ] Meldung „Hotspot“, Schweregrad hoch: Hotspot anlegen → abgelehnt mit Hinweis „erst Firmware aktualisieren“.
+      Nach Firmware-Update über die Firmware-Seite ist das Anlegen möglich.
+- [ ] Alarmregel „Sicherheitsmeldung betrifft Gerät“ anlegen → Alarm; nach dem Update behoben.
+- [ ] Compliance MSP-Baseline: Regel „Keine bekannten Sicherheitsmeldungen“ schlägt fehl bzw. ist nach dem
+      Update ok.
+
 ---
 
 ## Ergebnis
@@ -527,3 +540,4 @@ WAN, VRRP, Syslog, WLAN, Hotspot, offene Fernzugriffs-Sitzung).
 | 17 Offboarding | ☐ ok ☐ Abweichung | |
 | 18 Plattform-Sicherung | ☐ ok ☐ Abweichung | |
 | 19 Zwei-Faktor | ☐ ok ☐ Abweichung | |
+| 20 Sicherheitsmeldungen | ☐ ok ☐ Abweichung | |

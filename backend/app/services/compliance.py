@@ -34,7 +34,9 @@ log = logging.getLogger(__name__)
 
 TEXT_TYPES = {"contains", "not_contains", "regex"}
 LIVE_TYPES = {"service_disabled", "no_user", "ntp_enabled", "service_restricted_to_tunnel", "channel_in", "min_version"}
-TYPES = TEXT_TYPES | LIVE_TYPES
+# Plattform-Daten statt Router-Abfrage (Phase 23 ff.)
+PLATFORM_TYPES = {"no_security_advisory"}
+TYPES = TEXT_TYPES | LIVE_TYPES | PLATFORM_TYPES
 REGEX_MAX = 200
 REGEX_TIMEOUT_S = 3.0
 RESULT_RETENTION_DAYS = 180
@@ -133,8 +135,15 @@ def _in_tunnel(address: str) -> bool:
         return False
 
 
-def evaluate_rule(rule: dict[str, Any], text: str | None, live: dict[str, Any] | None) -> tuple[str, str]:
+def evaluate_rule(rule: dict[str, Any], text: str | None, live: dict[str, Any] | None,
+                  platform: dict[str, Any] | None = None) -> tuple[str, str]:
     t, p = rule["type"], rule["params"]
+    if t == "no_security_advisory":
+        affected = [a for a in (platform or {}).get("advisories", []) if a["status"] == "affected"]
+        if affected:
+            return "fail", ", ".join(f"{a['cve']} ({a['severity']})" for a in affected)[:300]
+        possible = [a for a in (platform or {}).get("advisories", []) if a["status"] == "possible"]
+        return "ok", (f"keine bekannten; möglicherweise: {', '.join(a['cve'] for a in possible)}" if possible else "keine bekannten Meldungen")
     if t in TEXT_TYPES:
         if text is None:
             return "unknown", "Kein Backup vorhanden"
@@ -203,13 +212,18 @@ async def evaluate_device(db: AsyncSession, device: Device, rule_sets: list[Comp
     backup = await latest_backup(db, device.id)
     text = backup.content if backup else None
     live = await read_live(device) if any(r["type"] in LIVE_TYPES for rs in sets for r in rs.rules or []) else None
+    platform: dict[str, Any] = {}
+    if any(r["type"] == "no_security_advisory" for rs in sets for r in rs.rules or []):
+        from app.services.advisories import device_advisories
+
+        platform["advisories"] = await device_advisories(db, device)
     now = utcnow()
     results = []
     for rs in sets:
         rows = []
         for r in rs.rules or []:
             try:
-                st, detail = evaluate_rule(r, text, live)
+                st, detail = evaluate_rule(r, text, live, platform)
             except ComplianceError as exc:
                 st, detail = "unknown", str(exc)
             rows.append({"rule_id": r["id"], "name": r["name"], "status": st, "detail": detail})

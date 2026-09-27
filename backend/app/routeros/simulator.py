@@ -181,6 +181,9 @@ class SimRouter:
             self.fail_next.discard(cmd)
             raise RouterOSError(f"{cmd}: simulated failure")
         path, _, action = cmd.rpartition("/")
+        if cmd.startswith("/interface/wifi/") and self.wlan_driver != "wifi" and getattr(self, "wifi_menu_empty", False) \
+                and cmd.endswith("/print"):
+            return []  # RouterOS 7 ohne wifi-fähige Radios: Menü vorhanden, aber leer (z. B. RB751G, wireless-Treiber)
         if (cmd.startswith("/interface/wifi/") and self.wlan_driver != "wifi") or \
                 (cmd.startswith("/interface/wireless/") and self.wlan_driver != "wireless"):
             raise RouterOSError("no such command prefix")

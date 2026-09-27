@@ -143,18 +143,25 @@ def base(p: WlanProfile) -> str:
 
 # ----------------------------------------------------------------------------- Erkennung
 async def detect(api: DeviceAPI) -> dict[str, Any]:
-    """Treiber und Radios lesen – nur ``print``-Befehle. Fehlschläge = Paket nicht vorhanden."""
+    """Treiber und Radios lesen – nur ``print``-Befehle. Fehlschläge = Paket nicht vorhanden.
+
+    RouterOS 7 hat ``/interface/wifi`` auch auf Geräten ohne wifi-fähige Radios (Menü leer, z. B. RB751G mit altem
+    wireless-Chip). Daher gilt ``wifi`` nur, wenn ``/interface/wifi`` oder ``/interface/wifi/radio`` Einträge hat; sonst
+    ``wireless`` bei Einträgen in ``/interface/wireless`` (nur Anzeige), sonst kein WLAN.
+    """
     try:
         rows = await api.print("/interface/wifi")
     except RouterOSError:
         rows = None
+    radio_rows: list[dict[str, Any]] = []
     if rows is not None:
-        radios_info: dict[str, str] = {}
         try:
-            for r in await api.print("/interface/wifi/radio"):
-                radios_info[str(r.get("interface", ""))] = str(r.get("bands", ""))
+            radio_rows = await api.print("/interface/wifi/radio")
         except RouterOSError:
-            pass
+            radio_rows = []
+    if rows or radio_rows:
+        rows = rows or []
+        radios_info: dict[str, str] = {str(r.get("interface", "")): str(r.get("bands", "")) for r in radio_rows}
         radios = [{"name": r.get("name"), "bands": radios_info.get(str(r.get("name")), ""), "ssid": r.get("configuration.ssid") or r.get("ssid"),
                    "disabled": _norm(r.get("disabled")) == "true", "managed": str(r.get("comment", "")).startswith(COMMENT),
                    "master": r.get("master-interface") or None}
@@ -172,6 +179,8 @@ async def detect(api: DeviceAPI) -> dict[str, Any]:
     try:
         rows = await api.print("/interface/wireless")
     except RouterOSError:
+        rows = []
+    if not rows:
         return {"driver": None, "radios": [], "capsman": False, "cap": False}
     return {"driver": "wireless", "radios": [{"name": r.get("name"), "bands": str(r.get("band", "")), "ssid": r.get("ssid"),
                                               "disabled": _norm(r.get("disabled")) == "true", "managed": False,
@@ -422,7 +431,7 @@ async def apply_device(db: AsyncSession, device: Device) -> dict[str, Any]:
             st.status, st.error = "error", str(exc)
         return {"status": "error", "error": str(exc)}
     if res["status"] != "ok":
-        msg = {"unsupported_driver": "Treiber „wireless“: nur Anzeige, Konfiguration nicht unterstützt",
+        msg = {"unsupported_driver": "Nicht unterstützt: alter wireless-Treiber (nur Anzeige)",
                "no_wlan": "Kein WLAN-Paket auf dem Gerät"}[res["status"]]
         for st in states.values():
             st.status, st.error = res["status"], msg

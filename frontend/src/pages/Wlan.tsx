@@ -25,7 +25,7 @@ const SEC: Record<string, string> = { "wpa2-psk": "WPA2-PSK", "wpa2-wpa3-psk": "
 const BAND: Record<string, string> = { both: "2,4 + 5 GHz", "2ghz": "2,4 GHz", "5ghz": "5 GHz" };
 export const WLAN_STATUS: Record<string, [string, Tone]> = {
   ok: ["ausgerollt", "green"], pending: ["ausstehend", "gray"], error: ["Fehler", "red"], offline: ["offline", "gray"],
-  unsupported_driver: ["wireless-Treiber", "orange"], no_wlan: ["kein WLAN", "orange"], blocked: ["Sicherheitsmeldung", "red"],
+  unsupported_driver: ["Nicht unterstützt: alter wireless-Treiber (nur Anzeige)", "gray"], no_wlan: ["kein WLAN", "orange"], blocked: ["Sicherheitsmeldung", "red"],
 };
 const EMPTY: Form = { name: "", slug: "", description: null, ssid: "", security: "wpa2-wpa3-psk", passphrase: "", radius_server: null, radius_port: 1812, radius_secret: "",
   band: "both", channel_width: "auto", country_code: null, vlan_id: null, bridge: "bridge", client_isolation: false, hidden: false, schedule: null, use_schedule: false,

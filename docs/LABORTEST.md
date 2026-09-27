@@ -425,6 +425,9 @@ Voraussetzung: ein Gerät mit `wifi`-Paket (z. B. hAP ax²/ax³), optional ein G
 - [ ] Gäste-Profil: „PSK rotieren“ → neues PSK auf dem Router; Aushang drucken, QR-Code mit iOS und Android
       scannen → Verbindung ohne Eintippen.
 - [ ] Zuweisung entfernen und ausrollen → alle `sdwan-wifi`-Objekte weg, Werks-WLAN läuft weiter.
+- [ ] Gerät mit altem wireless-Chip unter RouterOS 7 (z. B. RB751G-2HnD; `/interface wifi print` leer,
+      `/interface wireless print` mit wlan1): Treiber „wireless“ (nur Anzeige); Profil-Zuweisung zeigt grau
+      „Nicht unterstützt: alter wireless-Treiber (nur Anzeige)“, auf dem Router wird nichts geändert.
 
 ## 16. Gäste-Portal / Hotspot (Phase 20)
 

@@ -216,3 +216,45 @@ async def test_tenant_country_default(client, msp, hub):
     assert r.json()["country_code"] == "AT"
     r = await client.patch(f"/api/v1/tenants/{r.json()['id']}", json={"country_code": "CH"}, headers=msp)
     assert r.json()["country_code"] == "CH"
+
+
+async def test_ros7_empty_wifi_menu_detected_as_wireless_display_only(client, msp, hub):
+    """RB751G-2HnD mit RouterOS 7: /interface/wifi existiert, ist aber leer; das Radio läuft über /interface/wireless."""
+    from app.db import system_session
+    from app.models import WlanDeviceState
+
+    _t, h, dev = await _setup(client, msp)
+    r = _wifi_router(dev, "wireless")
+    r.wifi_menu_empty = True
+    assert r.call("/interface/wifi/print", {}) == []  # wie auf echter Hardware: Menü leer statt Fehler
+    info = await wl.detect(_Api(r))
+    assert info["driver"] == "wireless" and [x["name"] for x in info["radios"]] == ["wlan1"]
+    await poll_all()
+    d = next(x for x in (await client.get("/api/v1/devices", headers=h)).json() if x["id"] == dev["id"])
+    assert d["facts"]["wlan"]["driver"] == "wireless"
+    # bestehende Zuweisung mit altem Fehlerstatus → beim nächsten Abgleich umgestellt, nichts auf den Router geschrieben
+    p = (await client.post("/api/v1/wlan/profiles", json=PROFILE, headers=h)).json()
+    await client.put(f"/api/v1/wlan/profiles/{p['id']}/assignments", json=[{"device_ids": [dev["id"]]}], headers=h)
+    async with system_session() as db:
+        await db.execute(WlanDeviceState.__table__.update().values(status="error", error="Kein passendes Radio für das gewählte Band"))
+        await db.commit()
+    calls = _log_calls(r)
+    await client.post(f"/api/v1/wlan/profiles/{p['id']}/apply", headers=h)
+    assert calls and all(c.endswith("/print") for c in calls if c.startswith("/interface/wi")), calls
+    p = next(x for x in (await client.get("/api/v1/wlan/profiles", headers=h)).json() if x["id"] == p["id"])
+    assert p["devices"][0]["status"] == "unsupported_driver"
+    assert p["devices"][0]["error"] == "Nicht unterstützt: alter wireless-Treiber (nur Anzeige)"
+    assert r.tables["/interface/wifi/configuration"] == [] and r.tables["/interface/wifi"] == []
+    # weder wifi-Einträge noch wireless-Einträge → kein WLAN
+    r.tables["/interface/wireless"] = []
+    assert (await wl.detect(_Api(r)))["driver"] is None
+
+
+class _Api:
+    """Minimaler DeviceAPI-Ersatz über den Simulator (nur print)."""
+
+    def __init__(self, r):
+        self.r = r
+
+    async def print(self, path, **kw):
+        return self.r.call(f"{path}/print", kw)

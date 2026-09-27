@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from app import locks
 from app.api.v1.common import get_or_404
 from app.deps import AdminCtx, Ctx
 from app.models import Device, OffboardingArchive
@@ -35,10 +36,15 @@ async def offboard(device_id: uuid.UUID, data: OffboardIn, ctx: Ctx = AdminCtx) 
     dev = await get_or_404(ctx.db, Device, device_id, "Device")
     if data.confirm_name != dev.name:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Bestätigung: Gerätename stimmt nicht überein")
-    try:
-        res = await ob.offboard(ctx.db, dev, data.mode, ctx.user.email, keep_local_access=data.keep_local_access)
-    except ob.OffboardError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    # AUDIT-014/016: nicht parallel zu Deploy, Firmware, Script oder Post-Poll-Hooks auf demselben Gerät
+    async with locks.device(dev.id, "offboarding", ttl=300, wait=15) as got:
+        if not got:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Gerät gesperrt – ein anderer Vorgang läuft (Deployment, Firmware, Script). "
+                                                          "Bitte nach dessen Ende erneut versuchen.")
+        try:
+            res = await ob.offboard(ctx.db, dev, data.mode, ctx.user.email, keep_local_access=data.keep_local_access)
+        except ob.OffboardError as exc:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     await ctx.audit("device.offboard", target_type="device", target_id=dev.id, success=res["ok"],
                     details={"name": dev.name, "mode": data.mode, "keep_local_access": data.keep_local_access, "steps": res["steps"], "archive_id": res["archive_id"]})
     if not res["ok"]:

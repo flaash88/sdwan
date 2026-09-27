@@ -34,6 +34,12 @@ async def lifespan(app: FastAPI):
     from app.seeds import apply_all as apply_seeds
 
     await apply_seeds()
+    try:  # AUDIT-016: Deployments, die ein früherer API-Prozess nicht beenden konnte, als abgebrochen markieren
+        from app.services.policy import abort_stale_deployments
+
+        await abort_stale_deployments()
+    except Exception:  # noqa: BLE001
+        logging.getLogger("app").exception("Aufräumen hängender Deployments fehlgeschlagen")
     yield
 
 

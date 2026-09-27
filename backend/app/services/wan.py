@@ -255,9 +255,18 @@ async def wan_poll_hook(device: Device, api: DeviceAPI, _res: dict[str, Any]) ->
     return extra
 
 
-def account_volume(lk: WanLink, iface: dict[str, Any] | None, now: dt.datetime) -> None:
-    """Addiert den Traffic seit dem letzten Poll auf das Monatsvolumen des WAN-Links."""
-    month = now.strftime("%Y-%m")
+def account_volume(lk: WanLink, iface: dict[str, Any] | None, now: dt.datetime, tz: str | None = None) -> None:
+    """Addiert den Traffic seit dem letzten Poll auf das Monatsvolumen des WAN-Links. Der Monatswechsel gilt in der
+    Zeitzone des Mandanten (AUDIT-033)."""
+    local = now
+    if tz:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        try:
+            local = now.astimezone(ZoneInfo(tz))
+        except (ZoneInfoNotFoundError, ValueError):
+            pass
+    month = local.strftime("%Y-%m")
     if lk.vol_month != month:
         lk.vol_month, lk.vol_bytes = month, 0
     if not iface or iface.get("rx_bytes") is None or iface.get("tx_bytes") is None:
@@ -275,6 +284,9 @@ async def update_wan_status(db: AsyncSession, devices: list[Device]) -> None:
     by_id = {d.id: d for d in devices}
     links = (await db.execute(select(WanLink).where(WanLink.device_id.in_(list(by_id))))).scalars().all()
     now = utcnow()
+    from app.models import Tenant
+
+    tzs = dict((await db.execute(select(Tenant.id, Tenant.timezone).where(Tenant.id.in_({d.tenant_id for d in devices})))).all())
     resync: set = set()
     for lk in links:
         dev = by_id[lk.device_id]
@@ -285,7 +297,7 @@ async def update_wan_status(db: AsyncSession, devices: list[Device]) -> None:
                 resync.add(dev.id)
         info = (facts.get("wan") or {}).get(str(lk.slot))
         if getattr(dev, "_poll_ok", False):  # nur frische Zählerstände zählen
-            account_volume(lk, (facts.get("interfaces") or {}).get(lk.interface), now)
+            account_volume(lk, (facts.get("interfaces") or {}).get(lk.interface), now, tzs.get(dev.tenant_id))
         old = lk.status
         if not lk.enabled:
             lk.status = "disabled"

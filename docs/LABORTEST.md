@@ -680,6 +680,23 @@ Voraussetzung: Router im Werkszustand (defconf) onboarden; Notebook am LAN, zwei
       Benutzer `app` (bzw. UID 10001). Syslog empfängt weiter auf UDP 514 (LABORTEST 14). Plattform-Sicherung
       „Jetzt sichern“ funktioniert (Worker läuft als root).
 
+## 26. Audit-Behebung AP4: Sperren, hängende Vorgänge, Zeitzonen
+
+- [ ] Policy-Deploy auf das Testgerät starten und während des Pushs „Offboarding“ versuchen.
+      **Erwartet:** 409 „Gerät gesperrt“.
+- [ ] Zwei Deploys kurz nacheinander auf dasselbe Gerät starten.
+      **Erwartet:** Sie laufen nacheinander, beide mit Erfolg; die Regeln sind nicht doppelt.
+- [ ] `docker compose restart api` während eines Deploys über viele Geräte.
+      **Erwartet:** Innerhalb von ≤ 5 min steht das Deployment auf „Abgebrochen“ mit Hinweis. Konfiguration am Gerät prüfen.
+- [ ] Firmware-Job starten und direkt nach dem Auslösen der Installation `docker compose restart worker` ausführen.
+      **Erwartet:** Keine zweite Installation; das Gerät wird nach dem Neustart als erfolgreich erkannt.
+- [ ] Zweiten Worker starten (`docker compose up -d --scale worker=2`).
+      **Erwartet:** Im Log steht beim zweiten „Standby“; Jobs laufen nur einmal (Audit-Log, keine doppelten Mails).
+- [ ] Vor-Ort-Zugang auf einem Gerät mit Live-Ansicht (Übersicht offen) anlegen lassen.
+      **Erwartet:** Das angezeigte Passwort funktioniert per WinBox (kein Doppel-Anlegen durch Live- und Flotten-Poll).
+- [ ] Monatsbericht (SLA) für einen Mandanten in Europe/Vienna.
+      **Erwartet:** Der Zeitraum beginnt am 1. um 00:00 Ortszeit.
+
 ---
 
 ## Ergebnis
@@ -711,3 +728,4 @@ Voraussetzung: Router im Werkszustand (defconf) onboarden; Notebook am LAN, zwei
 | 23 Audit AP1 (Zertifikate, ftp) | ☐ ok ☐ Abweichung | Mindestversion: |
 | 24 Audit AP2 (Proxy, Geheimnisse) | ☐ ok ☐ Abweichung | |
 | 25 Audit AP3 (Header, WS, SSRF, Container) | ☐ ok ☐ Abweichung | |
+| 26 Audit AP4 (Sperren, Neustarts) | ☐ ok ☐ Abweichung | |

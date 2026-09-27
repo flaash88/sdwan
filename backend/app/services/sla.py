@@ -243,11 +243,31 @@ def render_pdf(rep: dict[str, Any]) -> bytes:
     return buf.getvalue()
 
 
-def previous_month(now: dt.datetime | None = None) -> tuple[dt.datetime, dt.datetime]:
+def previous_month(now: dt.datetime | None = None, tz: str | None = None) -> tuple[dt.datetime, dt.datetime]:
+    """Vormonat als [Beginn, Ende) in UTC. Mit ``tz`` gelten die Monatsgrenzen in der Zeitzone des Mandanten
+    (AUDIT-033: sonst zählen in Mitteleuropa die ersten 1–2 Stunden eines Monats zum Vormonat)."""
     now = now or utcnow()
-    first_this = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    last_prev = first_this - dt.timedelta(days=1)
-    return last_prev.replace(day=1), first_this
+    zone = _zone(tz)
+    local = now.astimezone(zone) if zone else now
+    first_this = local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    first_prev = (first_this - dt.timedelta(days=1)).replace(day=1)
+    if zone:
+        # Wanduhrzeit 00:00 in der Zone -> UTC (fold/DST korrekt über zoneinfo)
+        first_this = first_this.replace(tzinfo=zone).astimezone(dt.UTC)
+        first_prev = first_prev.replace(tzinfo=zone).astimezone(dt.UTC)
+    return first_prev, first_this
+
+
+def _zone(tz: str | None):
+    if not tz:
+        return None
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    try:
+        return ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError):
+        log.warning("Unbekannte Zeitzone %r – Monatsgrenzen in UTC", tz)
+        return None
 
 
 async def generate_and_store(db: AsyncSession, tenant: Tenant, start: dt.datetime, end: dt.datetime, send: bool) -> SlaReport:
@@ -288,14 +308,25 @@ def _jsonable(o: Any) -> Any:
 
 
 async def monthly_reports() -> None:
-    """Worker-Job (1. des Monats): Bericht für den Vormonat je Mandant erzeugen und versenden."""
-    start, end = previous_month()
+    """Worker-Job (täglich): fehlenden Bericht für den Vormonat je Mandant erzeugen und versenden. Monatsgrenzen in der
+    Zeitzone des Mandanten; täglich statt nur am 1., damit auch Zeitzonen westlich von UTC (Monat endet später) und ein
+    zuvor fehlgeschlagener Lauf nachgeholt werden. Fehler je Mandant isoliert (AUDIT-033)."""
     async with system_session() as db:
-        for tenant in (await db.execute(select(Tenant).where(Tenant.is_active.is_(True)))).scalars().all():
-            if not (tenant.settings or {}).get("monthly_report", True):
+        tenant_ids = list((await db.execute(select(Tenant.id).where(Tenant.is_active.is_(True)))).scalars())
+    for tid in tenant_ids:
+        async with system_session() as db:
+            tenant = await db.get(Tenant, tid)
+            if tenant is None or not (tenant.settings or {}).get("monthly_report", True):
                 continue
+            start, end = previous_month(tz=tenant.timezone)
+            if utcnow() < end:
+                continue  # Vormonat in dieser Zeitzone noch nicht zu Ende
             exists = (await db.execute(select(SlaReport).where(SlaReport.tenant_id == tenant.id, SlaReport.period_start == start))).first()
             if exists:
                 continue
-            await generate_and_store(db, tenant, start, end, send=True)
-        await db.commit()
+            try:
+                await generate_and_store(db, tenant, start, end, send=True)
+                await db.commit()
+            except Exception:  # noqa: BLE001
+                log.exception("Monatsbericht %s fehlgeschlagen – nächster Versuch morgen", tenant.slug)
+                await db.rollback()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import ipaddress
 import logging
 import re
@@ -12,7 +13,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import events
+from app import events, locks
 from app.audit import audit
 from app.db import system_session, utcnow
 from app.models import Device, FirewallPolicy, PairingStatus, PolicyAssignment, PolicyDeployment
@@ -159,8 +160,58 @@ async def device_policies(db: AsyncSession, device_id: uuid.UUID) -> list[tuple[
     return [(a, p) for a, p in rows.all()]
 
 
+DEPLOY_LOCK_WAIT_S = 60  # so lange wartet ein Deployment auf ein gerade anderweitig gesperrtes Gerät
+STALE_AFTER = dt.timedelta(minutes=2)
+
+
+def deployment_key(deployment_id: uuid.UUID | str) -> str:
+    return f"deployment:{deployment_id}"
+
+
 async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) -> None:
-    """Pusht die Policies auf alle Geräte parallel; Fehler -> Rollback (pro Gerät bzw. atomar)."""
+    """Pusht die Policies auf alle Geräte parallel; Fehler -> Rollback (pro Gerät bzw. atomar).
+
+    Hält während des ganzen Laufs die Sperre ``deployment:<id>`` (Erkennung hängender Deployments) und je Gerät die
+    Gerätesperre (kein paralleler Deploy, Post-Poll-Hook, Firmware, Script oder Offboarding – AUDIT-016)."""
+    async with locks.hold(deployment_key(deployment_id), "deploy", ttl=120):
+        try:
+            await _run_deployment(deployment_id, device_ids)
+        except Exception as exc:  # noqa: BLE001 - nie „running“ zurücklassen
+            log.exception("Deployment %s abgebrochen", deployment_id)
+            async with system_session() as db:
+                dep = await db.get(PolicyDeployment, deployment_id)
+                if dep is not None and dep.status in ("queued", "running"):
+                    dep.status, dep.finished_at = "failed", utcnow()
+                    dep.results = {**(dep.results or {}), "_error": f"Abbruch: {exc}"}
+                    await db.commit()
+            raise
+
+
+async def abort_stale_deployments() -> int:
+    """Deployments, die ``queued``/``running`` sind, aber von keinem Prozess mehr bearbeitet werden (Sperre
+    ``deployment:<id>`` frei, älter als ``STALE_AFTER``) – z. B. nach Neustart der API mitten im Push – als ``aborted``
+    markieren. Läuft beim Start von API/Worker und im Worker alle 5 min."""
+    n = 0
+    async with system_session() as db:
+        rows = (await db.execute(select(PolicyDeployment).where(PolicyDeployment.status.in_(("queued", "running")),
+                                                                 PolicyDeployment.created_at < utcnow() - STALE_AFTER))).scalars().all()
+        for dep in rows:
+            if await locks.owner_of(deployment_key(dep.id)):
+                continue  # läuft noch (anderer Prozess)
+            results = dict(dep.results or {})
+            for v in results.values():
+                if isinstance(v, dict) and not v.get("ok") and not v.get("error") and not v.get("skipped"):
+                    v["error"] = "abgebrochen"
+            results["_error"] = "Abgebrochen – Neustart während des Vorgangs. Gerätezustand prüfen (Konfiguration/Rollback) und erneut ausrollen."
+            dep.results, dep.status, dep.finished_at = results, "aborted", utcnow()
+            await audit(db, "policy.deploy.aborted", tenant_id=dep.tenant_id, target_type="deployment", target_id=dep.id, success=False,
+                        details={"reason": "stale"})
+            n += 1
+        await db.commit()
+    return n
+
+
+async def _run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) -> None:
     async with system_session() as db:
         dep = await db.get(PolicyDeployment, deployment_id)
         assert dep is not None
@@ -194,7 +245,13 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
                 return
             pols = assigned[dev.id]
             cfg = render([(p, p.content) for _a, p in pols])
-            async with sem:
+            async with sem, locks.device(dev.id, f"deploy:{deployment_id}", ttl=120, wait=DEPLOY_LOCK_WAIT_S) as got:
+                if not got:
+                    res["error"] = (f"Gerät gesperrt – ein anderer Vorgang läuft ({await locks.owner_of(locks.device_key(dev.id)) or '?'}); "
+                                    "nach dessen Ende erneut ausrollen")
+                    for a, _p in pols:
+                        a.status, a.last_error = "failed", res["error"]
+                    return
                 try:
                     async with connect_device(dev) as api:
                         snaps[dev.id] = await snapshot(api)
@@ -207,12 +264,12 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
                                 res["defconf_disabled"] = await fw_defconf.disable(api)
                             elif not drop_active[dev.id] and remembered[dev.id]:
                                 res["defconf_restored"] = await fw_defconf.enable(api, remembered[dev.id])
-                        except RouterOSError as exc:
-                            res["error"] = str(exc)
+                        except Exception as exc:  # noqa: BLE001 - jeder Fehler beim Push -> Rollback (nicht nur RouterOSError)
+                            res["error"] = str(exc) if isinstance(exc, RouterOSError) else f"{type(exc).__name__}: {exc}"
                             try:
                                 await restore(api, snaps[dev.id])
                                 res["rolled_back"] = True
-                            except RouterOSError as exc2:
+                            except Exception as exc2:  # noqa: BLE001
                                 res["rollback_error"] = str(exc2)
                 except RouterOSError as exc:
                     res["error"] = str(exc)
@@ -230,7 +287,7 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
             # Atomar: auch erfolgreiche Geräte auf den Stand vor dem Push zurücksetzen
             for dev in ok:
                 try:
-                    async with connect_device(dev) as api:
+                    async with locks.device(dev.id, f"deploy:{deployment_id}", ttl=120, wait=DEPLOY_LOCK_WAIT_S), connect_device(dev) as api:
                         await restore(api, snaps[dev.id])
                         done = results[str(dev.id)].pop("defconf_disabled", None)
                         if done:  # atomarer Rollback: soeben deaktivierte defconf-Regeln wieder aktivieren

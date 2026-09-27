@@ -132,7 +132,7 @@ async def backup_all() -> dict[str, int]:
             async with sem:
                 try:
                     exports[dev.id] = await export_config(dev)
-                except (BackupError, RouterOSError) as exc:
+                except Exception as exc:  # noqa: BLE001 - ein Gerät darf die Sicherung der anderen nicht verhindern (AUDIT-033)
                     exports[dev.id] = exc
 
         await asyncio.gather(*(fetch(d) for d in devices))
@@ -142,8 +142,13 @@ async def backup_all() -> dict[str, int]:
                 stats["failed"] += 1
                 log.warning("Backup %s fehlgeschlagen: %s", dev.name, res)
                 continue
-            _b, new = await take_backup(db, dev, "scheduled", raw=res)
-            stats["new" if new else "unchanged"] += 1
+            try:
+                async with db.begin_nested():  # Savepoint je Gerät: Fehler beim Speichern betrifft nur dieses Gerät
+                    _b, new = await take_backup(db, dev, "scheduled", raw=res)
+                stats["new" if new else "unchanged"] += 1
+            except Exception as exc:  # noqa: BLE001
+                stats["failed"] += 1
+                log.warning("Backup %s nicht gespeichert: %s", dev.name, exc)
         await db.commit()
     log.info("Backups: %s", stats)
     return stats

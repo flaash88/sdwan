@@ -19,8 +19,10 @@ import datetime as dt
 import ipaddress
 import logging
 import re
+import time
 from typing import Any
 
+import regex as _rx
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +44,8 @@ REGEX_TIMEOUT_S = 3.0
 RESULT_RETENTION_DAYS = 180
 # Verschachtelte Quantoren (z. B. (a+)+) sind die typische Ursache für katastrophales Backtracking
 _NESTED_QUANT = re.compile(r"\([^)]*[+*][^)]*\)[+*{]")
+# … ebenso wiederholte Gruppen mit Alternative, z. B. (\w|\w)*  (AUDIT-008)
+_QUANT_ALT = re.compile(r"\([^)]*\|[^)]*\)[+*{]")
 # Geheimnisse im Export: key=wert (auch in Anführungszeichen) -> key=***
 SECRET_KEYS = ("password", "passphrase", "secret", "private-key", "preshared-key", "pre-shared-key", "authentication-key",
                "wpa-pre-shared-key", "wpa2-pre-shared-key", "psk", "auth-key", "key", "api-key", "token")
@@ -56,14 +60,32 @@ def mask_secrets(text: str) -> str:
     return _SECRET.sub(lambda m: f"{m.group(1)}=***", text)
 
 
-def check_regex(pattern: str) -> re.Pattern[str]:
+class SafePattern:
+    """Regex mit hartem Zeitlimit je Suche (Modul ``regex``: bricht im Matcher ab – der Thread wird frei, anders als bei
+    ``asyncio.wait_for`` um ``re``; AUDIT-008)."""
+
+    def __init__(self, pattern: str) -> None:
+        self.pattern = pattern
+        self._rx = _rx.compile(pattern, _rx.MULTILINE | _rx.VERSION0)
+
+    def search(self, text: str, timeout: float = REGEX_TIMEOUT_S) -> Any:
+        try:
+            return self._rx.search(text, timeout=max(timeout, 0.001))
+        except TimeoutError as exc:
+            raise ComplianceError("Regulärer Ausdruck zu aufwendig (Zeitlimit) – Ausdruck vereinfachen") from exc
+
+
+def check_regex(pattern: str) -> SafePattern:
     if len(pattern) > REGEX_MAX:
         raise ComplianceError(f"Regulärer Ausdruck zu lang (max. {REGEX_MAX} Zeichen)")
     if _NESTED_QUANT.search(pattern):
         raise ComplianceError("Verschachtelte Wiederholungen wie (a+)+ sind nicht erlaubt")
+    if _QUANT_ALT.search(pattern):
+        raise ComplianceError("Wiederholte Gruppen mit Alternative wie (a|b)* sind nicht erlaubt – Zeichenklasse [ab]* verwenden")
     try:
-        return re.compile(pattern, re.MULTILINE)
-    except re.error as exc:
+        re.compile(pattern, re.MULTILINE)  # Syntax wie bisher (Python-re)
+        return SafePattern(pattern)
+    except (re.error, _rx.error) as exc:
         raise ComplianceError(f"Ungültiger regulärer Ausdruck: {exc}") from exc
 
 
@@ -304,12 +326,13 @@ async def search_backups(db: AsyncSession, query: str, regex: bool, context: int
     devices = {d.id: d for d in (await db.execute(select(Device).where(Device.id.in_(list(latest))))).scalars()} if latest else {}
 
     def run() -> list[dict[str, Any]]:
+        deadline = time.monotonic() + REGEX_TIMEOUT_S
         hits, total = [], 0
         for dev_id, b in latest.items():
             lines = mask_secrets(b.content).splitlines()
             matches = []
             for i, line in enumerate(lines):
-                ok = bool(pat.search(line)) if pat else query.lower() in line.lower()
+                ok = bool(pat.search(line, deadline - time.monotonic())) if pat else query.lower() in line.lower()
                 if ok:
                     total += 1
                     if total > limit:
@@ -325,7 +348,7 @@ async def search_backups(db: AsyncSession, query: str, regex: bool, context: int
         return hits
 
     try:
-        hits = await asyncio.wait_for(asyncio.to_thread(run), timeout=REGEX_TIMEOUT_S)
+        hits = await asyncio.wait_for(asyncio.to_thread(run), timeout=REGEX_TIMEOUT_S + 2)
     except TimeoutError as exc:
         raise ComplianceError("Suche abgebrochen (Zeitlimit) – Ausdruck vereinfachen") from exc
     return {"hits": hits, "devices_searched": len(latest), "truncated": sum(len(h["matches"]) for h in hits) >= limit}

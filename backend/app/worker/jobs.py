@@ -58,4 +58,10 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
     scheduler.add_job(_safe(firmware.firmware_tick), "interval", seconds=15, id="firmware_tick", max_instances=1, coalesce=True)
     scheduler.add_job(_safe(alerts.evaluate_all), "interval", seconds=60, id="alerts", next_run_time=now + dt.timedelta(seconds=20),
                       max_instances=1, coalesce=True)
-    scheduler.add_job(_safe(sla.monthly_reports), "cron", day=1, hour=6, minute=0, id="monthly_sla", max_instances=1, coalesce=True)
+    # täglich: fehlende Vormonatsberichte (Zeitzone je Mandant, Nachholen nach Fehlern – AUDIT-033)
+    scheduler.add_job(_safe(sla.monthly_reports), "cron", hour=6, minute=0, id="monthly_sla", max_instances=1, coalesce=True)
+    from app.services.policy import abort_stale_deployments
+
+    # hängende Deployments (Prozess während des Pushes neu gestartet) als abgebrochen markieren (AUDIT-016)
+    scheduler.add_job(_safe(abort_stale_deployments), "interval", minutes=5, id="stale_deployments",
+                      next_run_time=now + dt.timedelta(seconds=45), max_instances=1, coalesce=True)

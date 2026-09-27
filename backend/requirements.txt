@@ -24,3 +24,4 @@ jinja2==3.1.*
 tzdata>=2024.1
 asyncssh==2.*
 pyzipper==0.4.*  # AUDIT-040
+regex>=2024.9  # AUDIT-008: Regex-Suche mit hartem Zeitlimit (Compliance, Config-Suche)

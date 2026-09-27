@@ -243,6 +243,25 @@ async def _notify(db: AsyncSession, rule: AlertRule, alert: Alert, tenant: Tenan
             alert.notified = True
 
 
+def _queue(db: AsyncSession, rule: AlertRule, alert: Alert, tenant: Tenant | None, resolved: bool) -> None:
+    """Benachrichtigung vormerken – versendet wird erst nach dem Commit (``send_queued``), sonst gingen bei einem
+    fehlgeschlagenen Commit in jedem Zyklus erneut Mails raus (AUDIT-033)."""
+    db.info.setdefault("alert_outbox", []).append((rule, alert, tenant, resolved))
+
+
+async def send_queued(db: AsyncSession) -> int:
+    """Vorgemerkte Benachrichtigungen versenden (nach dem Commit) und ``notified`` festschreiben."""
+    outbox = db.info.pop("alert_outbox", [])
+    for rule, alert, tenant, resolved in outbox:
+        try:
+            await _notify(db, rule, alert, tenant, resolved)
+        except Exception:  # noqa: BLE001 - ein Empfänger darf die übrigen nicht blockieren
+            log.exception("Benachrichtigung für Alarm %s fehlgeschlagen", alert.id)
+    if outbox:
+        await db.commit()
+    return len(outbox)
+
+
 async def evaluate_tenant(db: AsyncSession, tenant: Tenant) -> dict[str, int]:
     stats = {"fired": 0, "resolved": 0, "pending": 0}
     rules = (await db.execute(select(AlertRule).where(AlertRule.tenant_id == tenant.id, AlertRule.enabled.is_(True)))).scalars().all()
@@ -278,7 +297,7 @@ async def evaluate_tenant(db: AsyncSession, tenant: Tenant) -> dict[str, int]:
                 if (now - alert.started_at).total_seconds() >= rule.duration_s:
                     alert.status, alert.fired_at = "firing", now
                     stats["fired"] += 1
-                    await _notify(db, rule, alert, tenant, resolved=False)
+                    _queue(db, rule, alert, tenant, resolved=False)
                     await events.publish(tenant.id, "alert.firing", {"rule": rule.name, "message": alert.message, "severity": alert.severity,
                                                                      "device_id": str(c.device.id)})
                 else:
@@ -292,7 +311,7 @@ async def evaluate_tenant(db: AsyncSession, tenant: Tenant) -> dict[str, int]:
                 alert.status, alert.resolved_at = "resolved", now
                 stats["resolved"] += 1
                 if rule.notify_resolved:
-                    await _notify(db, rule, alert, tenant, resolved=True)
+                    _queue(db, rule, alert, tenant, resolved=True)
                 await events.publish(tenant.id, "alert.resolved", {"rule": rule.name, "message": alert.message, "device_id": str(alert.device_id)})
             by_key.pop(key)
     return stats
@@ -300,12 +319,20 @@ async def evaluate_tenant(db: AsyncSession, tenant: Tenant) -> dict[str, int]:
 
 async def evaluate_all() -> None:
     async with system_session() as db:
-        for tenant in (await db.execute(select(Tenant).where(Tenant.is_active.is_(True)))).scalars().all():
+        tenant_ids = list((await db.execute(select(Tenant.id).where(Tenant.is_active.is_(True)))).scalars())
+        for tid in tenant_ids:  # IDs statt Objekte: nach einem Rollback sind geladene Objekte abgelaufen
+            tenant = await db.get(Tenant, tid)
+            if tenant is None:
+                continue
             try:
                 await evaluate_tenant(db, tenant)
+                await db.commit()  # je Mandant: ein Fehler verwirft nicht die Auswertung der anderen (AUDIT-033)
             except Exception:  # noqa: BLE001
-                log.exception("Alert-Auswertung %s fehlgeschlagen", tenant.slug)
-        await db.commit()
+                log.exception("Alert-Auswertung %s fehlgeschlagen", tid)
+                await db.rollback()
+                db.info.pop("alert_outbox", None)  # nicht festgeschrieben -> nicht benachrichtigen
+                continue
+            await send_queued(db)
 
 
 async def create_default_rules(db: AsyncSession, tenant_id: uuid.UUID) -> list[AlertRule]:

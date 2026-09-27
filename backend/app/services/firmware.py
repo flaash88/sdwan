@@ -20,7 +20,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import events
+from app import events, locks
 from app.audit import audit
 from app.config import get_settings
 from app.db import system_session, utcnow
@@ -78,6 +78,10 @@ async def _start_item(db: AsyncSession, job: FirmwareJob, item: FirmwareJobItem,
             item.status, item.finished_at = "skipped", utcnow()
             return
         await _mark_reboot(dev, job)
+        # AUDIT-018: Zustand VOR dem Auslösen festschreiben – stürzt der Worker danach ab oder scheitert der spätere
+        # Commit, wird die Installation nicht erneut ausgelöst (der nächste Tick prüft nur noch die Version).
+        item.status = "rebooting"
+        await db.commit()
         async with connect_device(dev) as api:
             try:
                 await api.call("/system/package/update/install")
@@ -154,28 +158,47 @@ async def tick_job(db: AsyncSession, job: FirmwareJob) -> None:
         if item.status == "queued" and in_window is not None and dev.id not in in_window:
             item.error = "wartet auf Wartungsfenster"  # bleibt queued, Start im nächsten Fenster
             continue
-        if item.status == "queued":
-            item.error = None
-            await _start_item(db, job, item, dev)
-        elif item.status == "rebooting":
-            await _verify_item(db, job, item, dev)
+        if item.status == "updating":
+            # Vorgang ohne festgeschriebenen Zustand unterbrochen (Neustart) – nicht blind erneut installieren
+            item.status, item.finished_at = "failed", utcnow()
+            item.error = "Unterbrochen (Neustart des Workers) – Version am Gerät prüfen und Job ggf. neu anlegen"
+            continue
+        if item.status not in ("queued", "rebooting"):
+            continue
+        # AUDIT-014/016: Gerät gerade anderweitig in Arbeit (Deploy, Script, Offboarding …) -> nächster Tick
+        async with locks.device(dev.id, f"firmware:{job.id}", ttl=300) as got:
+            if not got:
+                continue
+            if item.status == "queued":
+                item.error = None
+                await _start_item(db, job, item, dev)
+            elif item.status == "rebooting":
+                await _verify_item(db, job, item, dev)
         if item.status in FINAL:
             await events.publish(item.tenant_id, "firmware.item", {"job_id": str(job.id), "device_id": str(dev.id), "status": item.status})
 
 
 async def firmware_tick() -> None:
     async with system_session() as db:
-        jobs = (await db.execute(select(FirmwareJob).where(FirmwareJob.status == "running"))).scalars().all()
-        for job in jobs:
+        job_ids = list((await db.execute(select(FirmwareJob.id).where(FirmwareJob.status == "running"))).scalars())
+    for job_id in job_ids:  # AUDIT-018: je Job eigene Session – ein Fehler verdirbt nicht die Transaktion der anderen
+        async with system_session() as db:
+            job = await db.get(FirmwareJob, job_id)
+            if job is None or job.status != "running":
+                continue
             try:
                 await tick_job(db, job)
             except Exception as exc:  # noqa: BLE001
-                log.exception("Firmware-Job %s", job.id)
+                log.exception("Firmware-Job %s", job_id)
+                await db.rollback()
+                job = await db.get(FirmwareJob, job_id)
+                if job is None:
+                    continue
                 job.last_error = str(exc)
             if job.status in ("completed", "failed", "paused"):
                 await audit(db, f"firmware.job.{job.status}", tenant_id=job.tenant_id, target_type="firmware_job", target_id=job.id,
                             success=job.status == "completed", details={"name": job.name, "error": job.last_error})
-        await db.commit()
+            await db.commit()
 
 
 def plan_batches(device_ids: list[Any], batch_size: int) -> list[tuple[Any, int]]:

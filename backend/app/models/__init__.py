@@ -32,3 +32,4 @@ from app.models.platform import PlatformAlert, PlatformBackup  # noqa: F401,E402
 from app.models.advisories import SecurityAdvisory  # noqa: F401,E402
 from app.models.local_access import ApiToken, LocalAccess  # noqa: F401,E402
 from app.models.operations25 import DeviceFlow, DeviceInventory, DeviceNeighbor, EolModel, FlowAggregate  # noqa: F401,E402
+import app.facts_merge  # noqa: F401,E402  – Drei-Wege-Merge für Device.facts vor jedem Flush (AUDIT-015)

@@ -1182,6 +1182,35 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   läuft mit `RUN_AS_ROOT=true`, weil er die root-eigene `.env` sichert. `exec`/`run --entrypoint` (CLI, Restore) laufen als root.
 * **Abhängigkeiten:** fastapi 0.141, `starlette>=1.3.1` (Advisories aus AUDIT-037), pyzipper 0.4.
 
+### AP4 – Robustheit von Poll und Jobs
+* **Sperren** (`app/locks.py`): Mit Redis `SET NX PX` mit Eigentümer-Token, Freigabe und Verlängerung per Lua. Ohne Redis
+  im Prozess. Die Sperre verlängert sich selbst und ist reentrant im selben asyncio-Kontext.
+  * **Gerätesperre** `device:<id>`:
+    * Policy-Deploy: wartet bis 60 s, sonst Geräteergebnis „gesperrt – anderer Vorgang läuft (…)“.
+    * Post-Poll-Hooks: nur für Geräte mit freier Sperre; Live- und Flotten-Poll überlappen damit nie.
+    * Firmware- und Script-Tick: gesperrt → nächster Tick; der Batch rückt erst weiter, wenn alle Geräte dran waren.
+    * Offboarding: 409.
+  * **Deployment-Sperre** `deployment:<id>` für die ganze Laufzeit. `abort_stale_deployments()` markiert `queued`/`running`
+    ohne Sperre, älter als 2 min, als `aborted`: beim API-Start, beim Worker-Start und alle 5 min.
+    Ein unerwarteter Fehler setzt `failed`, nie mehr dauerhaft `running`. Rollback bei jedem Fehler, nicht nur bei `RouterOSError`.
+  * **Worker-Leader** `worker-leader`: Jobs laufen nur in einem Worker, weitere Worker warten als Standby.
+    Für mehrere Worker ist Redis nötig.
+* **Poll:** Ein Fehler je Gerät oder Hook wird isoliert und protokolliert. Commit und Post-Hooks laufen für alle übrigen Geräte.
+* **`Device.facts`** (`app/facts_merge.py`): Vor jedem Flush läuft ein Drei-Wege-Merge (geladener Stand, Session, Datenbank).
+  Parallele Schreiber (Poll, Content-Filter `dns_backup`, Reboot-Marker, VRRP-Peers) verlieren nichts mehr.
+* **Commit vor Router-Aktion:**
+  * Firmware setzt `rebooting` und committet vor `install`. Ein nach Neustart gefundenes `updating` wird `failed`, nicht erneut installiert.
+  * Scripts committen `running` vor der Ausführung; ein nach Neustart gefundenes `running` wird `failed` („Ergebnis unbekannt“).
+  * Firmware-Jobs laufen je in eigener Session.
+* **Alarme:** Benachrichtigungen werden vorgemerkt und erst nach dem Commit versendet (`send_queued`). Jeder Mandant wird
+  einzeln committet, ein Fehler betrifft nur ihn.
+* **Zeitzonen:** SLA-Vormonat und WAN-Volumen-Monat richten sich nach der Zeitzone des Mandanten. Der SLA-Job läuft täglich
+  und holt fehlende Berichte nach; Fehler bleiben je Mandant isoliert.
+* **Nachtbackup:** Savepoint je Gerät.
+* **Plattform-Sicherung:** `TimeoutExpired`/`SubprocessError` → `failed` mit Alarm. `running` älter als 3 h wird beim Worker-Start `failed`.
+* **Regex (AUDIT-008):** `check_regex` lehnt auch wiederholte Gruppen mit Alternative ab. Gesucht wird mit dem Modul `regex`
+  und hartem Zeitlimit im Matcher, der Thread bleibt nicht hängen.
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

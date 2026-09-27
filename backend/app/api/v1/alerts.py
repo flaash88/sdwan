@@ -15,7 +15,7 @@ from app.api.v1.common import get_or_404
 from app.db import utcnow
 from app.deps import AdminCtx, Ctx, ReadCtx, SuperCtx, TechCtx
 from app.models import Alert, AlertRule, Device, SlaReport, Tenant
-from app.services.alerts import TYPES, create_default_rules, evaluate_tenant
+from app.services.alerts import TYPES, create_default_rules, evaluate_tenant, send_queued
 from app.services.mailer import send_mail
 from app.services.sla import _jsonable, build_report, generate_and_store, render_pdf
 
@@ -200,6 +200,7 @@ async def evaluate_now(ctx: Ctx = TechCtx) -> dict:
     tenant = await get_or_404(ctx.db, Tenant, ctx.require_tenant(), "Tenant")
     stats = await evaluate_tenant(ctx.db, tenant)
     await ctx.db.commit()
+    await send_queued(ctx.db)  # erst nach dem Commit benachrichtigen (AUDIT-033)
     return stats
 
 

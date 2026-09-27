@@ -165,7 +165,7 @@ def test_012_webhook_blocks_cgnat_and_non_global():
 
 
 # ============================================================================= Eingaben, ReDoS, Exporte
-@xf("AUDIT-008")
+# AUDIT-008: behoben (AP4, im Bericht keinem Arbeitspaket zugeordnet)
 def test_008_redos_alternation_rejected():
     from app.services.compliance import ComplianceError, check_regex
 
@@ -225,7 +225,7 @@ async def test_021_content_filter_api_key_network_error_handled(client, msp, mon
 
 
 # ============================================================================= Robustheit
-@xf("AUDIT-013")
+# AUDIT-013: behoben (AP4)
 async def test_013_one_bad_device_does_not_abort_fleet_poll(client, msp, hub, monkeypatch):
     from app.db import system_session
     from app.models import Device
@@ -252,7 +252,7 @@ async def test_013_one_bad_device_does_not_abort_fleet_poll(client, msp, hub, mo
     assert bad
 
 
-@xf("AUDIT-015")
+# AUDIT-015: behoben (AP4)
 async def test_015_poll_does_not_drop_concurrent_facts_updates(client, msp, hub, monkeypatch):
     from app.db import system_session
     from app.models import Device
@@ -276,7 +276,7 @@ async def test_015_poll_does_not_drop_concurrent_facts_updates(client, msp, hub,
         assert "dns_backup" in (d.facts or {}), "Poll überschreibt facts komplett – dns_backup verloren"
 
 
-@xf("AUDIT-017")
+# AUDIT-017: behoben (AP4)
 async def test_017_platform_backup_timeout_marks_failed(tmp_path, monkeypatch):
     from app import platform_backup as pb
 

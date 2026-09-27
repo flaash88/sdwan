@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime as dt
 import logging
 import time
@@ -10,7 +11,7 @@ from typing import Any
 
 from sqlalchemy import select
 
-from app import events
+from app import events, locks
 from app.config import get_settings
 from app.db import system_session, utcnow
 from app.models import Device, DeviceStatus, PairingStatus
@@ -35,6 +36,8 @@ async def poll_device(device: Device) -> dict[str, Any]:
                     result.update(extra)
             except RouterOSError as exc:
                 log.info("Poll-Hook %s für %s fehlgeschlagen: %s", getattr(hook, "__name__", hook), device.name, exc)
+            except Exception:  # noqa: BLE001 - ein Hook (z. B. unerwartete Antwort) darf den Poll nie abbrechen (AUDIT-013)
+                log.exception("Poll-Hook %s für %s: unerwarteter Fehler", getattr(hook, "__name__", hook), device.name)
         return result
 
 
@@ -97,7 +100,10 @@ async def poll_all(only: set[str] | None = None) -> None:
                         **{k: v for k, v in data.items() if k not in ("resource", "identity")},
                         "_poll_failures": 0,
                     }
-                except (RouterOSError, TimeoutError, OSError) as exc:
+                except Exception as exc:  # noqa: BLE001 - AUDIT-013: je Gerät isoliert
+                    if not isinstance(exc, (RouterOSError, TimeoutError, OSError)):
+                        # unerwartet (Antwortformat, Parser …): protokollieren, sonst wie „nicht erreichbar“ behandeln
+                        log.exception("Poll %s (%s): unerwarteter Fehler", dev.name, dev.tunnel_ip)
                     log.info("Device %s (%s) nicht erreichbar: %s", dev.name, dev.tunnel_ip, exc)
                     dev._poll_ok = False  # type: ignore[attr-defined]
                     fails = int((dev.facts or {}).get("_poll_failures") or 0) + 1
@@ -118,10 +124,24 @@ async def poll_all(only: set[str] | None = None) -> None:
                     "cpu_load": (dev.facts or {}).get("cpu_load"), "last_seen_at": dev.last_seen_at,
                 })
 
-        await asyncio.gather(*(one(d) for d in devices))
-        for post in registry.post_poll_hooks():
+        async def safe_one(dev: Device) -> None:
             try:
-                await post(db, devices)
-            except Exception:  # noqa: BLE001
-                log.exception("Post-Poll-Hook %s fehlgeschlagen", getattr(post, "__name__", post))
-        await db.commit()
+                await one(dev)
+            except Exception:  # noqa: BLE001 - nie den ganzen Flotten-Poll abbrechen (AUDIT-013)
+                log.exception("Poll %s: Fehler bei der Auswertung", dev.name)
+
+        await asyncio.gather(*(safe_one(d) for d in devices))
+        # Post-Poll-Hooks (Vor-Ort-Zugang, ZTP, WAN-Volumen …) ändern Router/Zustand: nur für Geräte, deren Sperre frei ist
+        # (kein paralleler Live-/Flotten-Poll, kein laufendes Deployment/Firmware/Script/Offboarding – AUDIT-014).
+        async with contextlib.AsyncExitStack() as stack:
+            mine = []
+            for d in devices:
+                if await stack.enter_async_context(locks.device(d.id, "post-poll")):
+                    mine.append(d)
+            if mine:
+                for post in registry.post_poll_hooks():
+                    try:
+                        await post(db, mine)
+                    except Exception:  # noqa: BLE001
+                        log.exception("Post-Poll-Hook %s fehlgeschlagen", getattr(post, "__name__", post))
+            await db.commit()

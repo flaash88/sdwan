@@ -64,6 +64,10 @@ def _run(cmd: list[str], env: dict[str, str] | None = None, timeout: int = 3600)
         res = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env={**os.environ, **(env or {})}, check=False)
     except FileNotFoundError as exc:
         raise PlatformBackupError(f"Programm fehlt: {cmd[0]}") from exc
+    except subprocess.TimeoutExpired as exc:  # AUDIT-017: sonst bliebe der Datensatz „running“ ohne Alarm
+        raise PlatformBackupError(f"{cmd[0]}: Zeitlimit {timeout} s überschritten") from exc
+    except (subprocess.SubprocessError, OSError) as exc:
+        raise PlatformBackupError(f"{cmd[0]}: {exc}") from exc
     if res.returncode != 0:
         raise PlatformBackupError(f"{cmd[0]} fehlgeschlagen: {(res.stderr or res.stdout).strip()[:500]}")
 
@@ -205,7 +209,7 @@ async def run(trigger: str = "scheduled", started_by: str | None = None, databas
                     name = f"{PREFIX}{dt.datetime.now(dt.UTC).strftime('%Y%m%dT%H%M%SZ')}{SUFFIX}"
                     target = directory / name
                     await asyncio.to_thread(encrypt, archive, target, rcpt)
-                rec.filename, rec.size, rec.sha256 = name, target.stat().st_size, _sha(target)
+                rec.filename, rec.size, rec.sha256 = name, target.stat().st_size, await asyncio.to_thread(_sha, target)
                 rec.contents = {"parts": manifest["parts"], "warnings": manifest["warnings"], "revision": revision}
                 targets: dict[str, str] = {"local": "ok"}
                 pruned = await asyncio.to_thread(prune_local, directory, s.platform_backup_keep_days)
@@ -221,6 +225,9 @@ async def run(trigger: str = "scheduled", started_by: str | None = None, databas
                     rec.error = f"Externes Ziel: {targets['remote']}"
         except (PlatformBackupError, OSError) as exc:
             rec.status, rec.error = "failed", str(exc)
+        except Exception as exc:  # noqa: BLE001 - nie „running“ zurücklassen; Alarm auch bei unerwarteten Fehlern
+            log.exception("Plattform-Sicherung fehlgeschlagen")
+            rec.status, rec.error = "failed", f"{type(exc).__name__}: {exc}"
         rec.finished_at = utcnow()
         if rec.status == "failed":
             await platform_events.fire(db, "platform_backup_failed", rec.error or "Sicherung fehlgeschlagen")
@@ -234,6 +241,29 @@ async def run(trigger: str = "scheduled", started_by: str | None = None, databas
 async def backup_job() -> None:
     """Worker-Job (täglich ``PLATFORM_BACKUP_HOUR_UTC``)."""
     await run("scheduled")
+
+
+STALE_RUNNING = dt.timedelta(hours=3)
+
+
+async def fail_stale_running() -> int:
+    """Beim Worker-Start: Sicherungen, die seit über ``STALE_RUNNING`` „running“ sind (Worker-Neustart mitten in der
+    Sicherung), als fehlgeschlagen markieren und den Plattform-Alarm auslösen (AUDIT-017)."""
+    from sqlalchemy import select
+
+    from app.db import system_session, utcnow
+    from app.models import PlatformBackup
+    from app.services import platform_events
+
+    async with system_session() as db:
+        rows = (await db.execute(select(PlatformBackup).where(PlatformBackup.status == "running",
+                                                              PlatformBackup.created_at < utcnow() - STALE_RUNNING))).scalars().all()
+        for rec in rows:
+            rec.status, rec.error, rec.finished_at = "failed", "Abgebrochen (Worker-Neustart während der Sicherung)", utcnow()
+        if rows:
+            await platform_events.fire(db, "platform_backup_failed", f"{len(rows)} Sicherung(en) abgebrochen – Worker-Neustart")
+        await db.commit()
+        return len(rows)
 
 
 async def queue_job() -> None:

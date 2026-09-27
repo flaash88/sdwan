@@ -18,6 +18,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import locks
 from app.audit import audit
 from app.config import get_settings
 from app.db import system_session, utcnow
@@ -161,6 +162,9 @@ async def run_item(db: AsyncSession, run: ScriptRun, item: ScriptRunItem) -> Non
         except Exception as exc:  # noqa: BLE001 - ohne Backup keine Änderung
             item.status, item.error, item.finished_at = "failed", f"Backup vor Ausführung fehlgeschlagen: {exc}", utcnow()
             return
+    # AUDIT-018: „läuft“ festschreiben, bevor der Router etwas ausführt – nach einem Absturz wird das Script nicht erneut
+    # gestartet (tick_run markiert „running“ als unterbrochen).
+    await db.commit()
     ok, out = await execute(dev, item.rendered)
     item.output = out
     item.status = "success" if ok else "failed"
@@ -173,8 +177,16 @@ async def tick_run(db: AsyncSession, run: ScriptRun) -> None:
     items = (await db.execute(select(ScriptRunItem).where(ScriptRunItem.run_id == run.id).order_by(ScriptRunItem.batch_no))).scalars().all()
     batch = [i for i in items if i.batch_no == run.current_batch]
     for i in batch:
-        if i.status == "queued":
-            await run_item(db, run, i)
+        if i.status == "running":  # aus einem abgebrochenen Tick (Neustart): Ergebnis unbekannt, NICHT erneut ausführen
+            i.status, i.finished_at = "failed", utcnow()
+            i.error = "Unterbrochen (Neustart des Workers) – Ergebnis unbekannt, Gerät prüfen"
+        elif i.status == "queued":
+            # AUDIT-014/016: Gerät gerade anderweitig in Arbeit -> bleibt in der Warteschlange (nächster Tick)
+            async with locks.device(i.device_id, f"script:{run.id}", ttl=EXEC_TIMEOUT_S * 2) as got:
+                if got:
+                    await run_item(db, run, i)
+    if any(i.status == "queued" for i in batch):
+        return  # Batch noch nicht fertig (gesperrte Geräte)
     failed = sum(1 for i in items if i.status == "failed")
     if failed >= run.max_failures:
         run.status, run.last_error = "paused", f"{failed} Fehler – Ausführung angehalten"

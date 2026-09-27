@@ -611,3 +611,15 @@ Die Prüfschritte stehen in `docs/LABORTEST.md`, Abschnitte 10–16.
   - Router im Werkszustand (LABORTEST Abschnitt 10).
   - Stabilität der `.id` von defconf-Regeln über einen Neustart.
 
+### Nachtrag Phase 14 – robuste defconf-Wiederherstellung
+- **Erledigt:**
+  - Fingerabdruck je deaktivierter Regel (chain, action, alle Match-Felder; normalisiert; ohne `.id`, Zähler,
+    Kommentar und `disabled`).
+  - Zuordnung zuerst über `.id`, sonst per Fingerabdruck unter den deaktivierten defconf-Regeln; Aktivieren nur
+    bei genau einem Treffer.
+  - Mehrdeutige Einträge bleiben gemerkt, werden als „nicht eindeutig zuordenbar“ angezeigt, nichts wird getan.
+  - Migration 0028 (zwei neue Spalten).
+- **Entscheidung:** Der Kommentar gehört nicht zum Fingerabdruck, wohl aber zur Zulässigkeit. Gesucht wird nur
+  unter Regeln, deren Kommentar weiterhin mit „defconf“ beginnt.
+- **Im Labor zu verifizieren:** Fingerabdruck-Zuordnung nach Export/Import (neue `.id`s).
+

@@ -125,3 +125,52 @@ async def test_zone_suggestions_from_defconf_lists(client, msp, hub):
     by = {s["list"]: s for s in res["suggestions"]}
     assert by["LAN"]["zone_id"] == z["lan"] and by["LAN"]["interfaces"] == ["bridge"] and by["LAN"]["applicable"] and by["LAN"]["defconf"]
     assert by["WAN"]["interfaces"] == ["ether1"] and by["WAN"]["applicable"] is False  # WAN-Zone folgt der WAN-Konfiguration
+
+
+def _renumber(rt) -> dict[str, str]:
+    """Simuliert einen Import/Reset: alle Filterregeln bekommen neue .ids (Reihenfolge und Inhalt bleiben)."""
+    mapping = {}
+    for i, r in enumerate(rt.tables["/ip/firewall/filter"]):
+        new = f"*F{i + 100:X}"
+        mapping[r[".id"]] = new
+        r[".id"] = new
+    return mapping
+
+
+async def test_restore_by_fingerprint_after_renumbering(client, msp, hub):
+    h, dev, _cat, z = await _setup(client, msp)
+    rt = get_router(dev["tunnel_ip"])
+    _factory(rt)
+    pol = await _policy(client, h, dev, z)
+    await client.post(f"/api/v1/policies/{pol['id']}/deploy", json={}, headers=h)
+    assert set(_state(rt).values()) == {"yes"}
+    mapping = _renumber(rt)
+    # Reihenfolge verschoben: an alter .id *D1 steht nun eine andere defconf-Regel -> Fingerabdruck passt nicht
+    first = next(r for r in rt.tables["/ip/firewall/filter"] if r[".id"] == mapping["*D2"])
+    first[".id"] = "*D1"
+    mapping["*D2"] = "*D1"
+    r = await client.post(f"/api/v1/devices/{dev['id']}/firewall/defconf/restore", headers=h)
+    res = r.json()
+    assert sorted(res["enabled"]) == sorted(rid for rid, *_ in DEFCONF) and res["missing"] == [] and res["ambiguous"] == []
+    assert res["relocated"]["*D2"] == "*D1" and res["relocated"]["*D1"] == mapping["*D1"]
+    assert set(_state(rt).values()) == {"no"}
+    assert (await client.get(f"/api/v1/devices/{dev['id']}/firewall/defconf", headers=h)).json()["disabled"] == []
+
+
+async def test_ambiguous_fingerprint_does_nothing(client, msp, hub):
+    h, dev, _cat, z = await _setup(client, msp)
+    rt = get_router(dev["tunnel_ip"])
+    _factory(rt)
+    pol = await _policy(client, h, dev, z)
+    await client.post(f"/api/v1/policies/{pol['id']}/deploy", json={}, headers=h)
+    _renumber(rt)
+    # zweite, identische deaktivierte defconf-Regel (z. B. doppelt importiert)
+    dup = dict(next(r for r in rt.tables["/ip/firewall/filter"] if r["comment"] == "defconf: accept ICMP"))
+    dup[".id"] = "*DUP"
+    rt.tables["/ip/firewall/filter"].append(dup)
+    res = (await client.post(f"/api/v1/devices/{dev['id']}/firewall/defconf/restore", headers=h)).json()
+    assert res["ambiguous"] == ["*D3"] and "*D3" not in res["enabled"]
+    icmp = [r for r in rt.tables["/ip/firewall/filter"] if r["comment"] == "defconf: accept ICMP"]
+    assert all(r["disabled"] == "yes" for r in icmp)  # nichts angefasst
+    st = (await client.get(f"/api/v1/devices/{dev['id']}/firewall/defconf", headers=h)).json()
+    assert [(x["rule_id"], x["ambiguous"]) for x in st["disabled"]] == [("*D3", True)]

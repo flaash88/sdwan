@@ -108,4 +108,8 @@ class FwDefconfDisabled(IdMixin, TenantScoped, Base):
     chain: Mapped[str | None] = mapped_column(String(40))
     action: Mapped[str | None] = mapped_column(String(40))
     comment: Mapped[str] = mapped_column(String(255))
+    # sha256 über chain, action und alle Match-Felder (normalisiert, ohne .id/Zähler/Kommentar/disabled)
+    fingerprint: Mapped[str | None] = mapped_column(String(64))
+    # None = gemerkt; "ambiguous" = beim Wiederaktivieren nicht eindeutig zuordenbar (nichts getan)
+    status: Mapped[str | None] = mapped_column(String(20))
     deployment_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("policy_deployments.id", ondelete="SET NULL"))

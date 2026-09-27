@@ -427,26 +427,26 @@ async def defconf_state(device_id: uuid.UUID, ctx: Ctx = ReadCtx) -> dict[str, A
             active = await active_defconf(api)
     except RouterOSError as exc:
         error = str(exc)
-    return {"disabled": [{"rule_id": r.rule_id, "chain": r.chain, "action": r.action, "comment": r.comment, "disabled_at": r.created_at}
+    return {"disabled": [{"rule_id": r.rule_id, "chain": r.chain, "action": r.action, "comment": r.comment, "disabled_at": r.created_at,
+                          "ambiguous": r.status == "ambiguous"}
                          for r in rows], "active": active, "error": error}
 
 
 @router.post("/devices/{device_id}/firewall/defconf/restore")
 async def defconf_restore(device_id: uuid.UUID, ctx: Ctx = TechCtx) -> dict[str, Any]:
     """Nur die von der Plattform deaktivierten defconf-Regeln wieder aktivieren (liegen dann hinter dem Default-Drop)."""
-    from app.services.fw_defconf import enable
+    from app.services.fw_defconf import apply_result, enable, records, remembered_rows
 
     dev = await get_or_404(ctx.db, Device, device_id, "Device")
-    rows = (await ctx.db.execute(select(FwDefconfDisabled).where(FwDefconfDisabled.device_id == dev.id))).scalars().all()
+    rows = await remembered_rows(ctx.db, dev.id)
     if not rows:
-        return {"enabled": [], "missing": [], "already_active": []}
+        return {"enabled": [], "missing": [], "already_active": [], "ambiguous": [], "relocated": {}}
     try:
         async with connect_device(dev) as api:
-            res = await enable(api, [{"rule_id": r.rule_id, "comment": r.comment} for r in rows])
+            res = await enable(api, records(rows))
     except RouterOSError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
-    for r in rows:
-        await ctx.db.delete(r)
+    await apply_result(ctx.db, dev.id, res)
     await ctx.audit("fw.defconf.restore", target_type="device", target_id=dev.id, details=res)
     await ctx.db.commit()
     return res

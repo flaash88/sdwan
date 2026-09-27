@@ -306,6 +306,9 @@ Vorbereitung: WAN eingerichtet (Schritt 4). Auf dem L009 existieren die defconf-
       Kunden selbst deaktivierte defconf-Regel bleibt aus. Alternativ: Button „defconf-Regeln wieder aktivieren“.
 - [ ] **Annahme prüfen:** `.id` der defconf-Regeln bleibt nach einem Neustart gleich (Wiederherstellen nach Reboot).
       Ergebnis: ______
+- [ ] Nach dem Deploy Export + `/import` (neue `.id`s), dann „defconf-Regeln wieder aktivieren“. **Erwartet:**
+      Alle Regeln werden per Fingerabdruck gefunden und aktiviert. Eine defconf-Regel doppelt anlegen (deaktiviert)
+      → diese Regel wird als „nicht eindeutig zuordenbar“ angezeigt und nicht angefasst.
 
 ## 11. Threat-Feeds (Phase 15)
 

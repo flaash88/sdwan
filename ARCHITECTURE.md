@@ -653,8 +653,14 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   - Wird dem Gerät keine Policy mit Default-Drop mehr zugewiesen, aktiviert der nächste Push genau diese Regeln
     wieder. Das passiert beim Entfernen der Zuweisung, das ohnehin neu pusht.
   - Alternativ per Button im Firewall-Tab (`POST /devices/{id}/firewall/defconf/restore`, Audit).
-  - Regeln, die inzwischen gelöscht oder im Kommentar verändert wurden, und Regeln, die der Kunde selbst
-    deaktiviert hatte, bleiben unberührt.
+  - Zuordnung beim Wiederaktivieren: zuerst über `.id` (Kommentar und Fingerabdruck müssen passen). Passt die
+    Regel dort nicht (fehlt, anderer Fingerabdruck), wird per **Fingerabdruck** unter den deaktivierten
+    defconf-Regeln gesucht. Der Fingerabdruck ist ein sha256 über chain, action und alle Match-Felder,
+    normalisiert und ohne `.id`, Zähler, Kommentar und `disabled`. Aktiviert wird nur bei genau einem Treffer,
+    z. B. nach einem Import mit neuen `.id`s. Bei mehreren Treffern wird nichts getan, und der Firewall-Tab zeigt
+    „nicht eindeutig zuordenbar“ (`status=ambiguous`).
+  - Regeln, die inzwischen gelöscht oder verändert wurden, und Regeln, die der Kunde selbst deaktiviert hatte,
+    bleiben unberührt.
   - Bei einem atomaren Rollback werden soeben deaktivierte Regeln sofort wieder aktiviert.
 * **Zonen-Vorschlag:** Die defconf-Interface-Lists `WAN`/`LAN` mit ihren Mitgliedern werden als Vorschlag für die
   Zonen WAN/LAN angeboten (`GET /devices/{id}/zones/suggestions`, Button „Vorschlag übernehmen“ im Firewall-Tab).

@@ -184,8 +184,7 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
 
         disable_defconf = set((dep.options or {}).get("disable_defconf") or [])
         drop_active = {d.id: any(has_default_drop(p) for _a, p in assigned[d.id]) for d in devices}
-        remembered = {d.id: [{"rule_id": x.rule_id, "comment": x.comment} for x in (await db.execute(
-            select(FwDefconfDisabled).where(FwDefconfDisabled.device_id == d.id))).scalars()] for d in devices}
+        remembered = {d.id: fw_defconf.records(await fw_defconf.remembered_rows(db, d.id)) for d in devices}
 
         async def one(dev: Device) -> None:
             res: dict[str, Any] = {"name": dev.name, "ok": False}
@@ -235,7 +234,7 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
                         await restore(api, snaps[dev.id])
                         done = results[str(dev.id)].pop("defconf_disabled", None)
                         if done:  # atomarer Rollback: soeben deaktivierte defconf-Regeln wieder aktivieren
-                            await fw_defconf.enable(api, [{"rule_id": r["id"], "comment": r["comment"]} for r in done])
+                            await fw_defconf.enable(api, [{"rule_id": r["id"], "comment": r["comment"], "fingerprint": r["fingerprint"]} for r in done])
                     results[str(dev.id)].update({"ok": False, "rolled_back": True, "error": "atomarer Rollback"})
                 except RouterOSError as exc:
                     results[str(dev.id)]["rollback_error"] = str(exc)
@@ -256,13 +255,10 @@ async def run_deployment(deployment_id: uuid.UUID, device_ids: list[uuid.UUID]) 
                 if rule["id"] in known:
                     continue
                 db.add(FwDefconfDisabled(tenant_id=dev.tenant_id, device_id=dev.id, rule_id=rule["id"], chain=rule.get("chain"),
-                                         action=rule.get("action"), comment=rule["comment"], deployment_id=dep.id))
-            restored = r.get("defconf_restored")
-            if restored:
-                drop = set(restored["enabled"]) | set(restored["missing"]) | set(restored["already_active"])
-                for x in (await db.execute(select(FwDefconfDisabled).where(FwDefconfDisabled.device_id == dev.id))).scalars():
-                    if x.rule_id in drop:
-                        await db.delete(x)
+                                         action=rule.get("action"), comment=rule["comment"], fingerprint=rule["fingerprint"],
+                                         deployment_id=dep.id))
+            if r.get("defconf_restored"):
+                await fw_defconf.apply_result(db, dev.id, r["defconf_restored"])
         await _post_policy_backups(db, [d for d in devices if results[str(d.id)]["ok"]], dep)
         dep.results = results
         dep.finished_at = utcnow()

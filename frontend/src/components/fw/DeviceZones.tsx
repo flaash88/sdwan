@@ -18,7 +18,7 @@ export default function DeviceZones({ device }: { device: Device }) {
   const { busy, error, run } = useAction();
   const sug = useFetch<{ suggestions: { list: string; zone_id: string; zone_name: string; interfaces: string[]; applicable: boolean; defconf: boolean; note: string | null }[] }>(
     can("technician") && device.status === "online" ? `/devices/${device.id}/zones/suggestions` : null);
-  const defconf = useFetch<{ disabled: { rule_id: string; chain: string | null; action: string | null; comment: string }[]; active: unknown[] | null }>(`/devices/${device.id}/firewall/defconf`);
+  const defconf = useFetch<{ disabled: { rule_id: string; chain: string | null; action: string | null; comment: string; ambiguous: boolean }[]; active: unknown[] | null }>(`/devices/${device.id}/firewall/defconf`);
   const open = (sug.data?.suggestions ?? []).filter((x) => x.applicable && x.interfaces.some((i) => map[i] !== x.zone_id));
   useEffect(() => { if (cur.data) setMap(Object.fromEntries(cur.data.members.map((m) => [m.interface, m.zone_id]))); }, [cur.data]);
   const zones = cat.data?.zones.filter((z) => z.source !== "wan") ?? [];
@@ -48,10 +48,10 @@ export default function DeviceZones({ device }: { device: Device }) {
         {(defconf.data?.disabled.length ?? 0) > 0 && (
           <Notice tone="orange" icon="shield" title={`Werks-Firewall (defconf): ${defconf.data!.disabled.length} Regeln von der Plattform deaktiviert`}>
             Durch die Grundregeln der Plattform abgedeckt. Beim Entfernen der letzten Policy mit Default-Drop werden sie automatisch wieder aktiviert.
-            <ul className="mt-1 font-mono text-[11.5px] text-fg2">{defconf.data!.disabled.map((r) => <li key={r.rule_id}>{r.chain} {r.action} # {r.comment}</li>)}</ul>
+            <ul className="mt-1 font-mono text-[11.5px] text-fg2">{defconf.data!.disabled.map((r) => <li key={r.rule_id}>{r.chain} {r.action} # {r.comment}{r.ambiguous && <span className="ml-2 font-sans font-medium text-red-text">nicht eindeutig zuordenbar – bitte manuell prüfen</span>}</li>)}</ul>
             {editable && <div className="mt-2"><Button size="sm" variant="secondary" disabled={busy} onClick={() => confirm("Die von der Plattform deaktivierten defconf-Regeln wieder aktivieren? Sie liegen dann hinter dem Default-Drop.") && void run(async () => {
-              const r = await api.post<{ enabled: string[]; missing: string[] }>(`/devices/${device.id}/firewall/defconf/restore`);
-              setMsg(`${r.enabled.length} defconf-Regeln wieder aktiviert${r.missing.length ? `, ${r.missing.length} nicht mehr vorhanden/verändert (nicht angefasst)` : ""}`);
+              const r = await api.post<{ enabled: string[]; missing: string[]; ambiguous: string[] }>(`/devices/${device.id}/firewall/defconf/restore`);
+              setMsg(`${r.enabled.length} defconf-Regeln wieder aktiviert${r.missing.length ? `, ${r.missing.length} nicht mehr vorhanden/verändert (nicht angefasst)` : ""}${r.ambiguous.length ? `, ${r.ambiguous.length} nicht eindeutig zuordenbar (nicht angefasst)` : ""}`);
               await defconf.reload();
             })}>defconf-Regeln wieder aktivieren</Button></div>}
           </Notice>

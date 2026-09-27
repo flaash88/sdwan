@@ -874,6 +874,46 @@ Plan und Entscheidungen: `docs/PLAN-PHASE-14-20.md`.
   Passwort, Login per GET-Parametern (QR), Upload-Ziel des `html-directory`, `walled-garden/ip dst-host`,
   Variablen der Login-Seiten.
 
+## Offboarding (Gerät aus der Verwaltung nehmen)
+
+* Gerät entfernen öffnet einen Dialog mit zwei Wegen (`POST /devices/{id}/offboard`):
+  - Admin/MSP-Admin, Bestätigung durch den exakten Gerätenamen, Audit `device.offboard` mit allen Schritten.
+  - Vorschau `GET /devices/{id}/offboarding/preview` zeigt Anzahlen je Kategorie und Warnungen, z. B.
+    „keine eigene Default-Route“ oder „kein eigenes Masquerade“.
+  - **Router bereinigen und entfernen** (`clean`, Standard, nur online) – feste Reihenfolge
+    (`services/offboarding.py`), jeder Schritt protokolliert:
+    1. Backup (Auslöser `offboarding`).
+    2. Von der Plattform deaktivierte defconf-Regeln wieder aktivieren – zuerst, damit der Router nie ohne
+       Firewall dasteht. Nicht eindeutig zuordenbare Regeln führen zum Abbruch.
+    3. Verwaltete Objekte (Kommentar `sdwan:` bzw. Name `sdwan-`) entfernen: Firewall (verwerfende Regeln zuerst),
+       NAT/Mangle ohne WAN, Address-Lists inkl. Feeds, Hotspot, WLAN (nur virtuelle APs; Radios bleiben), RADIUS,
+       Syslog, Scheduler, Scripts, VRRP, Mesh, DNS-Einträge und Zonen-Listen.
+    4. Von Fernzugriffen geänderte Dienste (www/winbox/ssh) auf den gemerkten Ursprungszustand.
+    5. Temporäre Fernzugriffs-Benutzer und die Gruppe `sdwan-remote` entfernen; offene Sitzungen werden
+       geschlossen.
+    6. Zuletzt ein einmaliger Scheduler `sdwan-offboard` auf dem Router: Start = Router-Uhr + 30 s,
+       `interval=1m` als Wiederholung, jeder Befehl in `:do {} on-error={}`.
+       - Er entfernt alles, wovon der Management-Tunnel abhängt: WAN-Netwatch, -Mangle, -NAT, -Routen,
+         Routing-Tabellen, Liste `sdwan-wan` und ZTP-LAN.
+       - Danach API-Benutzer, Gruppe `sdwan-api` und den Management-Tunnel (Adresse, Peer, Interface).
+       - Zum Schluss entfernt er sich selbst.
+       - Grund: Diese Objekte über die API zu entfernen, würde den Zugang vor dem Ende kappen.
+    - Schlägt ein Schritt vor 6 fehl, wird abgebrochen: Das Gerät bleibt in der Plattform, und der Dialog zeigt
+      das Protokoll.
+  - **Nur aus der Plattform entfernen** (`platform_only`): Der Router bleibt unverändert. Eine deutliche Warnung
+    weist darauf hin, dass verwaltete Konfiguration, API-Benutzer, Tunnel und deaktivierte defconf-Regeln bestehen
+    bleiben. Archiviert wird das letzte vorhandene Backup.
+* **Archiv** (`offboarding_archives`, Seite „Offboarding-Archiv“): Backup und Protokoll bleiben nach dem Löschen
+  90 Tage beim Mandanten als Download. Ein täglicher Job löscht sie danach.
+* Nicht automatisch zurückgestellt:
+  - DNS-Server-Einstellungen des Content-Filters (Hinweis in der Vorschau).
+  - Die Adressbeschränkung des `api`-Dienstes aus dem Onboarding (Ursprungszustand unbekannt).
+  - Importierte Zertifikate.
+* Das bisherige `DELETE /devices/{id}` bleibt unverändert für noch nicht gepairte Geräte; die Oberfläche nutzt für
+  gepairte Geräte den Offboarding-Dialog.
+* **Annahme (Labor):** Script-Syntax `remove [find where comment~"^sdwan:"]`. Der Scheduler läuft weiter, nachdem
+  API-Benutzer und Tunnel entfernt wurden.
+
 ## Frontend-Designsystem
 
 Visuelle Vorlage ist der Prototyp in `docs/design/` (`FleetApp.dc.html`). Übernommen wurden Layout,

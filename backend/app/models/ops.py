@@ -15,7 +15,7 @@ class ConfigBackup(IdMixin, TenantScoped, Base):
     __tablename__ = "config_backups"
 
     device_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("devices.id", ondelete="CASCADE"), index=True)
-    trigger: Mapped[str] = mapped_column(String(20), default="scheduled")  # scheduled | manual | pre-update | post-policy
+    trigger: Mapped[str] = mapped_column(String(20), default="scheduled")  # scheduled | manual | pre-update | post-policy | offboarding
     # E-Mail des Auslösers, "system" für geplante Backups, "unbekannt" für Altbestand (vor Migration 0018)
     created_by: Mapped[str | None] = mapped_column(String(255))
     routeros_version: Mapped[str | None] = mapped_column(String(64))
@@ -63,3 +63,22 @@ class FirmwareJobItem(IdMixin, TenantScoped, Base):
     error: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
     finished_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
+
+
+class OffboardingArchive(IdMixin, TenantScoped, Base):
+    """Nach dem Offboarding beim Mandanten aufbewahrtes Backup + Protokoll (unabhängig vom gelöschten Gerät)."""
+
+    __tablename__ = "offboarding_archives"
+
+    device_name: Mapped[str] = mapped_column(String(200))
+    serial: Mapped[str | None] = mapped_column(String(64))
+    model: Mapped[str | None] = mapped_column(String(100))
+    routeros_version: Mapped[str | None] = mapped_column(String(64))
+    mode: Mapped[str] = mapped_column(String(20))  # clean | platform_only
+    backup_created_at: Mapped[dt.datetime | None] = mapped_column(UTCDateTime())
+    content: Mapped[str | None] = mapped_column(Text)
+    sha256: Mapped[str | None] = mapped_column(String(64))
+    steps: Mapped[list] = mapped_column(JSONType, default=list)
+    created_by: Mapped[str | None] = mapped_column(String(255))
+    expires_at: Mapped[dt.datetime] = mapped_column(UTCDateTime(), index=True)
+

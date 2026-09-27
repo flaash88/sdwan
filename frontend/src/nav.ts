@@ -36,5 +36,6 @@ export const NAV: NavItem[] = [
 /** Bereich "Verwaltung" */
 export const NAV_ADMIN: NavItem[] = [
   { to: "/users", label: "Benutzer", icon: "users", role: "admin" },
+  { to: "/offboarding", label: "Offboarding-Archiv", icon: "archive", role: "admin" },
   { to: "/tenants", label: "Mandanten", icon: "building", superuser: true },
 ];

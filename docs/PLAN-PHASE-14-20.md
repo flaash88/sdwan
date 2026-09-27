@@ -623,3 +623,23 @@ Die Prüfschritte stehen in `docs/LABORTEST.md`, Abschnitte 10–16.
   unter Regeln, deren Kommentar weiterhin mit „defconf“ beginnt.
 - **Im Labor zu verifizieren:** Fingerabdruck-Zuordnung nach Export/Import (neue `.id`s).
 
+### Nachtrag – Offboarding
+- **Erledigt:**
+  - Dialog mit zwei Wegen: bereinigen (Standard, nur online) oder nur aus der Plattform entfernen (mit Warnung).
+  - Bereinigen in der geforderten Reihenfolge 1–6 mit Protokoll, Abbruch vor Schritt 6 lässt das Gerät bestehen.
+  - Offboarding-Backup 90 Tage im Archiv; Rechte Admin/MSP-Admin, Bestätigung per Gerätename, Audit.
+  - Simulator-Test: nach der Bereinigung keine `sdwan:`-Objekte mehr, defconf aktiv.
+  - Migration 0029 (neue Tabelle).
+- **Entscheidungen:**
+  - Schritt 6 läuft als einmaliger Scheduler auf dem Router. Er umfasst auch WAN-Routen/NAT/Mangle/Netwatch und
+    ZTP-LAN, weil der Management-Tunnel über das WAN läuft. Sie über die API früher zu entfernen, würde den Zugang
+    vor Schritt 6 kappen.
+  - Nicht eindeutig zuordenbare defconf-Regeln brechen das Bereinigen ab: Der Router soll nicht ohne Firewall
+    dastehen.
+  - `DELETE /devices/{id}` bleibt unverändert (für nicht gepairte Geräte); die Oberfläche nutzt für gepairte Geräte
+    den Dialog.
+- **Weggelassen:** Zurückstellen der Content-Filter-DNS-Einstellungen, der `api`-Dienst-Adresse aus dem Onboarding
+  und importierter Zertifikate (Ursprungszustand unbekannt – Hinweis bzw. Doku).
+- **Im Labor zu verifizieren:** Der Scheduler läuft durch, nachdem API-Benutzer und Tunnel entfernt wurden;
+  `find where comment~"^sdwan:"` in allen Menüs; Internetzugang des Routers danach über die eigene Konfiguration.
+

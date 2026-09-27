@@ -12,6 +12,7 @@ import RemoteSessions from "./pages/RemoteSessions";
 import Reports from "./pages/Reports";
 import Scripts, { ScriptRunPage } from "./pages/Scripts";
 import Maintenance from "./pages/Maintenance";
+import OffboardingArchive from "./pages/OffboardingArchive";
 import Wlan from "./pages/Wlan";
 import WlanPrint from "./pages/WlanPrint";
 import Hotspot from "./pages/Hotspot";
@@ -30,6 +31,7 @@ export const extraRoutes: { path: string; element: ReactNode }[] = [
   { path: "/config-search", element: <ConfigSearch /> },
   { path: "/scripts", element: <Scripts /> },
   { path: "/maintenance", element: <Maintenance /> },
+  { path: "/offboarding", element: <OffboardingArchive /> },
   { path: "/wlan", element: <Wlan /> },
   { path: "/hotspot", element: <Hotspot /> },
   { path: "/scripts/runs/:id", element: <ScriptRunPage /> },

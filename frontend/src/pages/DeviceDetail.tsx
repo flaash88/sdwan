@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Icon, type IconName } from "../components/Icon";
+import OffboardDialog from "../components/OffboardDialog";
 import PairingBox from "../components/PairingBox";
 import SelftestCard from "../components/SelftestCard";
 import { DeviceStatusBadge, rebootInfo } from "../components/fleet";
@@ -263,6 +264,7 @@ function DeviceAdmin({ device: d, reload }: { device: Device; reload: () => Prom
   const [siteId, setSiteId] = useState(d.site_id ?? "");
   const [tags, setTags] = useState(d.tags.join(", "));
   const [meshEp, setMeshEp] = useState(d.mesh_endpoint ?? "");
+  const [offboard, setOffboard] = useState(false);
   const { busy, error, run } = useAction();
   const rows: [string, string, boolean?][] = [
     ["Identity", d.identity ?? "–"], ["Seriennummer", d.serial ?? "–", true], ["RouterOS", d.routeros_version ?? "–", true],
@@ -322,11 +324,14 @@ function DeviceAdmin({ device: d, reload }: { device: Device; reload: () => Prom
                 {can("admin") && (
                   <div className="flex gap-2">
                     {d.pairing_status === "paired" && <Button type="button" variant="danger-outline" onClick={() => confirm("Gerät sperren? Der Tunnel wird getrennt.") && void run(async () => { await api.post(`/devices/${d.id}/revoke`); await reload(); })}>Sperren</Button>}
-                    <Button type="button" variant="danger" icon="trash" onClick={() => confirm("Gerät endgültig löschen?") && void run(async () => { await api.del(`/devices/${d.id}`); nav("/devices"); })}>Löschen</Button>
+                    {d.pairing_status === "paired"
+                      ? <Button type="button" variant="danger" icon="trash" onClick={() => setOffboard(true)}>Entfernen …</Button>
+                      : <Button type="button" variant="danger" icon="trash" onClick={() => confirm("Gerät endgültig löschen?") && void run(async () => { await api.del(`/devices/${d.id}`); nav("/devices"); })}>Löschen</Button>}
                   </div>
                 )}
               </div>
             </form>
+            {offboard && <OffboardDialog device={d} onClose={() => setOffboard(false)} onDone={() => nav("/devices")} />}
           </Card>
         )}
       </div>

@@ -396,6 +396,25 @@ class SimRouter:
             raise RouterOSError(f"scheduler {name} nicht vorhanden")
         for cmd in str(row.get("on-event", "")).split(";"):
             cmd = cmd.strip()
+            tolerant = False
+            m = re.match(r"^:do \{ (.*) \} on-error=\{\}$", cmd)
+            if m:  # :do { … } on-error={} – Fehler (z. B. fehlender Pfad) werden ignoriert
+                cmd, tolerant = m.group(1).strip(), True
+            m = re.match(r'^(/[a-z0-9 -]+?) remove \[find where (comment|name)(~|=)"([^"]+)"\]$', cmd)
+            if m:  # Offboarding: generisches Entfernen nach Kommentar/Name
+                path = "/" + "/".join(m.group(1).strip("/").split())
+                field, op, val = m.group(2), m.group(3), m.group(4)
+                if path not in self.tables:
+                    if tolerant:
+                        continue
+                    raise RouterOSError(f"no such command {path}")
+
+                def hit(r: dict[str, Any], field: str = field, op: str = op, val: str = val) -> bool:
+                    v = str(r.get(field, ""))
+                    return bool(re.search(val, v)) if op == "~" else v == val
+
+                self.tables[path] = [r for r in self.tables[path] if not hit(r)]
+                continue
             m = re.match(r'^/user set \[find name="([^"]+)"\] group="([^"]+)"$', cmd)
             if m:
                 for u in self.tables["/user"]:

@@ -445,6 +445,32 @@ Voraussetzung: Gäste-VLAN-Interface mit IP-Adresse und DHCP-Server am Testgerä
 - [ ] Access-Point eines anderen Herstellers am Gäste-VLAN: Portal funktioniert identisch.
 - [ ] Firewall-Editor: Policy für das Gerät ohne Gäste-Isolation → Hinweis „Gäste vom LAN isolieren“.
 
+## 17. Offboarding (zum Schluss)
+
+Voraussetzung: das Testgerät mit möglichst vielen Funktionen (Firewall-Policy mit Default-Drop auf Werks-Router,
+WAN, VRRP, Syslog, WLAN, Hotspot, offene Fernzugriffs-Sitzung).
+
+- [ ] Gerätedetail → „Entfernen …“. **Erwartet:** Die Vorschau listet die Kategorien und die Anzahl der
+      defconf-Regeln. Warnungen erscheinen, wenn der Router ohne Plattform keine Default-Route bzw. kein Masquerade
+      hätte.
+- [ ] Als Techniker ist der Button nicht vorhanden (API 403). Ohne korrekten Gerätenamen ist er gesperrt.
+- [ ] „Router bereinigen und entfernen“. **Erwartet:** Schritte 1–6 grün. Danach auf dem Router (Konsole/WinBox
+      lokal):
+      - `/ip firewall filter print where comment~"defconf"` → aktiv.
+      - Nach ca. 1 Minute: `print where comment~"sdwan"` in allen Menüs leer.
+      - `/user print`, `/user group print`, `/interface wireguard print` → keine sdwan-Einträge.
+      - Der Scheduler `sdwan-offboard` hat sich entfernt.
+      - Dienste www/winbox/ssh stehen wie vor dem Fernzugriff.
+- [ ] **Annahme prüfen:** Der Scheduler läuft vollständig durch, obwohl der API-Benutzer und der Tunnel in seinem
+      eigenen Lauf entfernt werden. Ergebnis: ______
+- [ ] Router hat weiterhin Internet über die eigene (defconf-)Konfiguration, LAN-Clients ebenfalls.
+- [ ] Offboarding-Archiv: Eintrag mit Protokoll, Backup-Download funktioniert.
+- [ ] Abbruch testen: Während des Bereinigens den Tunnel trennen (z. B. WAN kurz ziehen). **Erwartet:** Das
+      Protokoll zeigt den fehlgeschlagenen Schritt, das Gerät bleibt in der Plattform, defconf ist bereits wieder
+      aktiv.
+- [ ] Zweites Gerät „Nur aus der Plattform entfernen“. **Erwartet:** Deutliche Warnung. Der Router ist danach
+      unverändert (sdwan-Objekte, API-Benutzer und Tunnel bestehen weiter).
+
 ---
 
 ## Ergebnis
@@ -467,3 +493,4 @@ Voraussetzung: Gäste-VLAN-Interface mit IP-Adresse und DHCP-Server am Testgerä
 | 14 Wartung/Speedtest/Syslog | ☐ ok ☐ Abweichung | |
 | 15 WLAN | ☐ ok ☐ Abweichung | |
 | 16 Gäste-Portal | ☐ ok ☐ Abweichung | |
+| 17 Offboarding | ☐ ok ☐ Abweichung | |

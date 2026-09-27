@@ -9,7 +9,7 @@ import { useFetch } from "../lib/useFetch";
 interface Backup { id: string; trigger: string; created_by: string | null; sha256: string; routeros_version: string | null; size: number; pinned: boolean; note: string | null; created_at: string; added: number; removed: number; previous_id: string | null }
 interface Diff { from: string | null; to: string; added: number; removed: number; lines: string[] }
 
-const TRIGGER: Record<string, string> = { scheduled: "Geplant", manual: "Manuell", "pre-update": "Vor Firmware-Update", "post-policy": "Nach Policy-Push", "pre-script": "Vor Script" };
+const TRIGGER: Record<string, string> = { scheduled: "Geplant", manual: "Manuell", "pre-update": "Vor Firmware-Update", "post-policy": "Nach Policy-Push", "pre-script": "Vor Script", offboarding: "Offboarding" };
 const why = (b: Backup) => [TRIGGER[b.trigger] ?? b.trigger, b.note].filter(Boolean).join(" · ");
 const COLS = "grid-cols-[64px_150px_minmax(150px,1.2fr)_minmax(120px,1fr)_130px_110px_70px_100px_40px]";
 
